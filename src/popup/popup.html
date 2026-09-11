@@ -53,7 +53,27 @@
     </section>
 
     <section id="watchlist" class="panel" role="tabpanel" aria-labelledby="tab-watchlist" hidden>
-      <p class="empty" data-i18n="emptyWatchlist">Watchlist is empty</p>
+      <form id="watchlist-add-form" class="add-row">
+        <input
+          id="watchlist-input"
+          class="add-row__input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Channel URL, @handle, or name"
+          data-i18n-placeholder="watchlistAddPlaceholder"
+          aria-label="Channel URL, @handle, or name"
+        />
+        <button id="watchlist-add-btn" class="btn btn--primary" type="submit" data-i18n="watchlistAdd">
+          Add
+        </button>
+        <span id="watchlist-spinner" class="spinner" hidden></span>
+      </form>
+      <p id="watchlist-error" class="banner banner--error" role="status" hidden></p>
+      <div id="watchlist-results" class="list" hidden></div>
+      <p id="watchlist-no-results" class="banner" data-i18n="watchlistNoResults" hidden>No channels found</p>
+      <div id="watchlist-list" class="list"></div>
+      <p id="watchlist-empty" class="empty" data-i18n="emptyWatchlist">Watchlist is empty</p>
     </section>
 
     <section id="settings" class="panel" role="tabpanel" aria-labelledby="tab-settings" hidden>

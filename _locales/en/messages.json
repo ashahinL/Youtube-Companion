@@ -44,5 +44,87 @@
         "example": "3"
       }
     }
+  },
+  "watchlistAdd": {
+    "message": "Add",
+    "description": "Button that adds a channel from the Watchlist input, or from a search result."
+  },
+  "watchlistAddPlaceholder": {
+    "message": "Channel URL, @handle, or name",
+    "description": "Placeholder and accessible name for the Watchlist add/search input."
+  },
+  "watchlistAdded": {
+    "message": "Added",
+    "description": "Shown on a search result that is already in the Watchlist, in place of the Add button."
+  },
+  "watchlistNoResults": {
+    "message": "No channels found",
+    "description": "Shown under the Watchlist add box when a name search returns no hits."
+  },
+  "watchlistAlreadyAdded": {
+    "message": "Already in your list",
+    "description": "Inline error when adding a channel that is already on the Watchlist."
+  },
+  "watchlistNotAChannel": {
+    "message": "That is not a channel",
+    "description": "Inline error when the Watchlist input does not resolve to a YouTube channel."
+  },
+  "watchlistError": {
+    "message": "Something went wrong: $ERROR$",
+    "description": "Inline error for an unexpected worker failure. $ERROR$ is the worker's error text.",
+    "placeholders": {
+      "error": {
+        "content": "$1",
+        "example": "network error"
+      }
+    }
+  },
+  "watchlistSubscribers": {
+    "message": "$COUNT$ subscribers",
+    "description": "Subscriber count on a channel search result. $COUNT$ is a compact number such as 1.4M.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1.4M"
+      }
+    }
+  },
+  "watchlistRemove": {
+    "message": "Remove",
+    "description": "Accessible name of the control that starts removing a channel from the Watchlist."
+  },
+  "watchlistRemovePrompt": {
+    "message": "Remove?",
+    "description": "Inline confirmation prompt on a Watchlist row before the channel is deleted."
+  },
+  "watchlistRemoveConfirm": {
+    "message": "Remove",
+    "description": "Confirms the inline removal of a Watchlist channel."
+  },
+  "watchlistRemoveCancel": {
+    "message": "Cancel",
+    "description": "Cancels the inline removal of a Watchlist channel."
+  },
+  "watchlistFavoriteAdd": {
+    "message": "Add to favourites",
+    "description": "Accessible name of the star when the channel is not a favourite."
+  },
+  "watchlistFavoriteRemove": {
+    "message": "Remove from favourites",
+    "description": "Accessible name of the star when the channel is already a favourite."
+  },
+  "watchlistOpenChannel": {
+    "message": "Open $TITLE$",
+    "description": "Accessible name of a Watchlist row. $TITLE$ is the channel title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
+  },
+  "watchlistChannelError": {
+    "message": "Could not update this channel",
+    "description": "Accessible name of the warning marker on a Watchlist row whose last fetch failed. The worker's error text is in the tooltip."
   }
 }

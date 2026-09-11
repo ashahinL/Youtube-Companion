@@ -16,8 +16,37 @@ function attrs(tag) {
   return out;
 }
 
+function stripColorRoots(css) {
+  let i = 0;
+  let out = '';
+  const n = css.length;
+  while (i < n) {
+    const slice = css.slice(i);
+    const media = slice.match(/^@media\s*\(prefers-color-scheme:[^{]*\{/);
+    const root = slice.match(/^:root\s*\{/);
+    if (media || root) {
+      const open = (media || root)[0].length;
+      let depth = 1;
+      let j = i + open;
+      while (j < n && depth) {
+        if (css[j] === '{') depth++;
+        else if (css[j] === '}') depth--;
+        j++;
+      }
+      i = j;
+      continue;
+    }
+    out += css[i];
+    i++;
+  }
+  return out;
+}
+
 export default async function run(t) {
   const html = fs.readFileSync(path.join(POPUP, 'popup.html'), 'utf8');
+  const css = fs.readFileSync(path.join(POPUP, 'popup.css'), 'utf8');
+  const js = fs.readFileSync(path.join(POPUP, 'popup.js'), 'utf8');
+  const worker = fs.readFileSync(path.join(ROOT, 'src/background/service-worker.js'), 'utf8');
   const en = JSON.parse(fs.readFileSync(path.join(ROOT, '_locales/en/messages.json'), 'utf8'));
 
   t.section('tabs');
@@ -43,6 +72,15 @@ export default async function run(t) {
     );
   }
 
+  t.section('watchlist');
+
+  const watchlist = html.match(/<section\b[^>]*\bid="watchlist"[^>]*>[\s\S]*?<\/section>/);
+  t.check('watchlist panel exists', !!watchlist);
+  const w = watchlist ? watchlist[0] : '';
+  t.check('has add input', /id="watchlist-input"/.test(w));
+  t.check('has add button', /id="watchlist-add-btn"/.test(w));
+  t.check('has list container', /id="watchlist-list"/.test(w));
+
   t.section('i18n');
 
   const keys = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
@@ -56,4 +94,34 @@ export default async function run(t) {
   t.check('references popup.js', /src="popup\.js"/.test(html));
   t.check('popup.css exists', fs.existsSync(path.join(POPUP, 'popup.css')));
   t.check('popup.js exists', fs.existsSync(path.join(POPUP, 'popup.js')));
+
+  t.section('popup.js rules');
+
+  t.check('no confirm(', !/\bconfirm\s*\(/.test(js));
+  t.check('no alert(', !/\balert\s*\(/.test(js));
+  t.check('no prompt(', !/\bprompt\s*\(/.test(js));
+  t.check('no direct fetch(', !/\bfetch\s*\(/.test(js));
+
+  t.section('popup.css colours');
+
+  const rest = stripColorRoots(css);
+  const hex = rest.match(/#[0-9a-fA-F]{3,8}\b/g) || [];
+  t.check(
+    'no hex colour outside :root / prefers-color-scheme',
+    hex.length === 0,
+    JSON.stringify(hex),
+  );
+
+  t.section('message types');
+
+  const sent = [...js.matchAll(/\btype:\s*['"](\w+)['"]/g)].map((m) => m[1]);
+  const implemented = new Set([...worker.matchAll(/case\s+['"](\w+)['"]/g)].map((m) => m[1]));
+  t.check('popup sends at least one message', sent.length > 0, String(sent.length));
+  for (const type of sent) {
+    t.check(
+      `popup message type "${type}" is implemented by the worker`,
+      implemented.has(type),
+      [...implemented].join(','),
+    );
+  }
 }
