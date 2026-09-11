@@ -8,48 +8,17 @@ import { normalizeChannelInput, thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
 import { buildBackup } from '../lib/backup.js';
+import {
+  resolveLocale,
+  loadMessages,
+  translate,
+  applyTo,
+  applyDirection,
+} from '../lib/i18n.js';
 
-const FALLBACK = {
-  watchlistAdd: 'Add',
-  watchlistAddPlaceholder: 'Channel URL, @handle, or name',
-  watchlistAdded: 'Added',
-  watchlistNoResults: 'No channels found',
-  watchlistAlreadyAdded: 'Already in your list',
-  watchlistNotAChannel: 'That is not a channel',
-  watchlistError: 'Something went wrong: $ERROR$',
-  watchlistSubscribers: '$COUNT$ subscribers',
-  watchlistRemove: 'Remove',
-  watchlistRemovePrompt: 'Remove?',
-  watchlistRemoveConfirm: 'Remove',
-  watchlistRemoveCancel: 'Cancel',
-  watchlistFavoriteAdd: 'Add to favourites',
-  watchlistFavoriteRemove: 'Remove from favourites',
-  watchlistOpenChannel: 'Open $TITLE$',
-  watchlistChannelError: 'Could not update this channel',
-  emptyWatchlist: 'Watchlist is empty',
-  emptyFeeds: 'No channels yet',
-  emptyFeedWaiting: 'Nothing has arrived yet',
-  emptyFeedFilter: 'No videos match "$QUERY$"',
-  feedFilterPlaceholder: 'Filter by title or channel',
-  feedRefresh: 'Refresh',
-  feedLastSweep: 'Last check $TIME$',
-  feedSweepRunning: 'A check is already running',
-  feedEmptyAdd: 'Add a channel',
-  feedFilterClear: 'Clear filter',
-  feedTagLive: 'LIVE',
-  feedTagShort: 'SHORT',
-  feedTagPremiere: 'PREMIERE',
-  feedTagPremiereAt: 'PREMIERE $TIME$',
-  feedViews: '$COUNT$ views',
-  feedOpenVideo: 'Open $TITLE$',
-  settingsImportAdded: 'Added $ADDED$ channels, $SKIPPED$ already present.',
-  settingsImportReplaced: 'Replaced with $ADDED$ channels.',
-  settingsExportDone: 'Exported $COUNT$ channels.',
-  settingsFooterChannels: '$COUNT$ channels',
-  settingsFooterFeed: '$COUNT$ videos',
-  settingsFooterNever: 'Never checked',
-  settingsFooterVersion: 'Version $VERSION$',
-};
+let messages = {};
+let locale = 'en';
+let appliedLocale = null;
 
 const view = {
   settings: {},
@@ -93,37 +62,33 @@ document.querySelector('.tabs')?.addEventListener('keydown', (event) => {
   const i = tabs.indexOf(document.activeElement);
   if (i < 0) return;
   event.preventDefault();
-  const delta = event.key === 'ArrowRight' ? 1 : -1;
+  // Read the computed direction, not the chosen language, so a later RTL
+  // language still reverses ArrowRight to previous without a code change.
+  const rtl = getComputedStyle(document.documentElement).direction === 'rtl';
+  const delta = event.key === 'ArrowRight' ? (rtl ? -1 : 1) : (rtl ? 1 : -1);
   const next = tabs[(i + delta + tabs.length) % tabs.length];
   next.focus();
   activate(next);
 });
 
-function msg(key, substitutions) {
-  try {
-    const got = chrome.i18n?.getMessage?.(key, substitutions);
-    if (got) return got;
-  } catch {
-    // Fall through to the English copy baked into this file.
-  }
-  let text = FALLBACK[key] || '';
-  const subs = substitutions == null ? [] : [].concat(substitutions);
-  let i = 0;
-  text = text.replace(/\$[A-Z]+\$/g, () => (i < subs.length ? String(subs[i++]) : ''));
-  return text;
+function t(key, substitutions) {
+  return translate(messages, key, substitutions);
+}
+
+async function applyI18n(setting) {
+  const next = resolveLocale(setting, navigator.language);
+  messages = await loadMessages(next);
+  locale = next;
+  if (appliedLocale === next) return;
+  applyDirection(document, next);
+  applyTo(document, messages);
+  appliedLocale = next;
 }
 
 // The popup never talks to youtube.com. Every network action is a
 // message to the worker, which is the only place that fetches.
 function send(message) {
   return chrome.runtime.sendMessage(message);
-}
-
-function activeLocale() {
-  const loc = view.settings?.ui?.locale;
-  if (loc === 'en' || loc === 'ar') return loc;
-  const ui = (chrome.i18n?.getUILanguage?.() || navigator.language || 'en').toLowerCase();
-  return ui.startsWith('ar') ? 'ar' : 'en';
 }
 
 function applySnapshot(snap) {
@@ -174,9 +139,16 @@ function extensionVersion() {
 
 function formatError(error) {
   const code = String(error || '');
-  if (code === 'already added') return msg('watchlistAlreadyAdded');
-  if (code === 'not a channel') return msg('watchlistNotAChannel');
-  return msg('watchlistError', [code]);
+  if (code === 'already added') return t('watchlistAlreadyAdded');
+  if (code === 'not a channel') return t('watchlistNotAChannel');
+  return t('watchlistError', [code]);
+}
+
+function ltrRun(el) {
+  // @handles and timestamps like 17:14 are LTR; without isolation they
+  // scramble inside Arabic text.
+  el.dir = 'ltr';
+  return el;
 }
 
 function isChannelRef(input) {
@@ -238,12 +210,12 @@ function searchRow(result, locale) {
 
   const meta = document.createElement('div');
   meta.className = 'channel-row__meta';
-  if (result.handle) meta.appendChild(textEl('span', '', result.handle));
+  if (result.handle) meta.appendChild(ltrRun(textEl('span', 'handle', result.handle)));
   if (Number(result.subscribers) > 0) {
     meta.appendChild(textEl(
       'span',
       '',
-      msg('watchlistSubscribers', [compactCount(result.subscribers, locale)]),
+      t('watchlistSubscribers', [compactCount(result.subscribers, locale)]),
     ));
   }
   text.appendChild(meta);
@@ -253,14 +225,12 @@ function searchRow(result, locale) {
   const actions = document.createElement('div');
   actions.className = 'channel-row__actions';
   if (result.inList) {
-    const mark = textEl('span', 'added-mark', `✓ ${msg('watchlistAdded')}`);
-    mark.dataset.i18n = 'watchlistAdded';
+    const mark = textEl('span', 'added-mark', `✓ ${t('watchlistAdded')}`);
     actions.appendChild(mark);
   } else {
-    const add = buttonEl('btn btn--primary', msg('watchlistAdd'), () => {
+    const add = buttonEl('btn btn--primary', t('watchlistAdd'), () => {
       void addChannel(result.id, { fromSearch: true });
     });
-    add.dataset.i18n = 'watchlistAdd';
     actions.appendChild(add);
   }
   row.appendChild(actions);
@@ -275,7 +245,7 @@ function channelRow(ch, locale) {
   const main = document.createElement('button');
   main.type = 'button';
   main.className = 'channel-row__main';
-  main.setAttribute('aria-label', msg('watchlistOpenChannel', [title]));
+  main.setAttribute('aria-label', t('watchlistOpenChannel', [title]));
   main.addEventListener('click', () => openChannelWindow(ch.id));
   main.appendChild(avatarEl(ch.avatar));
 
@@ -285,7 +255,7 @@ function channelRow(ch, locale) {
 
   const meta = document.createElement('div');
   meta.className = 'channel-row__meta';
-  if (ch.handle) meta.appendChild(textEl('span', '', ch.handle));
+  if (ch.handle) meta.appendChild(ltrRun(textEl('span', 'handle', ch.handle)));
 
   const at = Number(ch.lastVideoAt) || 0;
   // 0 means we have never seen a video, not "a very old one".
@@ -298,7 +268,7 @@ function channelRow(ch, locale) {
   if (ch.lastError && ch.lastError.message) {
     const warn = textEl('span', 'channel-row__warn', '⚠');
     warn.title = String(ch.lastError.message);
-    warn.setAttribute('aria-label', msg('watchlistChannelError'));
+    warn.setAttribute('aria-label', t('watchlistChannelError'));
     meta.appendChild(warn);
   }
 
@@ -312,17 +282,14 @@ function channelRow(ch, locale) {
   if (view.pendingRemoveId === ch.id) {
     // A modal dialog blocks the popup and can wedge the extension, so
     // removal confirms on the row itself.
-    const prompt = textEl('span', 'confirm-prompt', msg('watchlistRemovePrompt'));
-    prompt.dataset.i18n = 'watchlistRemovePrompt';
-    const yes = buttonEl('btn btn--primary', msg('watchlistRemoveConfirm'), () => {
+    const prompt = textEl('span', 'confirm-prompt', t('watchlistRemovePrompt'));
+    const yes = buttonEl('btn btn--primary', t('watchlistRemoveConfirm'), () => {
       void removeChannel(ch.id);
     });
-    yes.dataset.i18n = 'watchlistRemoveConfirm';
-    const no = buttonEl('btn', msg('watchlistRemoveCancel'), () => {
+    const no = buttonEl('btn', t('watchlistRemoveCancel'), () => {
       view.pendingRemoveId = null;
       render();
     });
-    no.dataset.i18n = 'watchlistRemoveCancel';
     actions.appendChild(prompt);
     actions.appendChild(yes);
     actions.appendChild(no);
@@ -332,15 +299,15 @@ function channelRow(ch, locale) {
     });
     fav.classList.toggle('is-on', !!ch.favorite);
     fav.setAttribute('aria-pressed', ch.favorite ? 'true' : 'false');
-    fav.setAttribute('aria-label', msg(ch.favorite ? 'watchlistFavoriteRemove' : 'watchlistFavoriteAdd'));
+    fav.setAttribute('aria-label', t(ch.favorite ? 'watchlistFavoriteRemove' : 'watchlistFavoriteAdd'));
     fav.title = fav.getAttribute('aria-label');
 
     const remove = buttonEl('icon-btn', '×', () => {
       view.pendingRemoveId = ch.id;
       render();
     });
-    remove.setAttribute('aria-label', msg('watchlistRemove'));
-    remove.title = msg('watchlistRemove');
+    remove.setAttribute('aria-label', t('watchlistRemove'));
+    remove.title = t('watchlistRemove');
 
     actions.appendChild(fav);
     actions.appendChild(remove);
@@ -352,18 +319,18 @@ function channelRow(ch, locale) {
 
 function feedTag(item, locale) {
   if (item.k === 'live') {
-    return textEl('span', 'feed-tag feed-tag--live', msg('feedTagLive'));
+    return textEl('span', 'feed-tag feed-tag--live', t('feedTagLive'));
   }
   if (item.k === 'short') {
-    return textEl('span', 'feed-tag feed-tag--short', msg('feedTagShort'));
+    return textEl('span', 'feed-tag feed-tag--short', t('feedTagShort'));
   }
   if (item.k === 'premiere') {
     const st = Number(item.st) || 0;
     const now = Date.now();
-    let text = msg('feedTagPremiere');
+    let text = t('feedTagPremiere');
     if (st > now) {
       const when = relativeTime(st, now, locale);
-      if (when) text = msg('feedTagPremiereAt', [when]);
+      if (when) text = t('feedTagPremiereAt', [when]);
     }
     return textEl('span', 'feed-tag feed-tag--premiere', text);
   }
@@ -389,7 +356,7 @@ function feedRow(item, locale, channel) {
   row.className = 'feed-row';
   row.tabIndex = 0;
   const title = item.t || '';
-  row.setAttribute('aria-label', msg('feedOpenVideo', [title]));
+  row.setAttribute('aria-label', t('feedOpenVideo', [title]));
   row.addEventListener('click', () => openVideo(item));
   row.addEventListener('keydown', (event) => {
     if (event.target !== row) return;
@@ -408,7 +375,7 @@ function feedRow(item, locale, channel) {
   // Duration rides on the thumbnail rather than the meta line. Four parts on
   // one line do not fit 400px, and this is the one with a natural home.
   const dur = (item.k === 'live' || item.k === 'premiere') ? '' : duration(item.d);
-  if (dur) thumb.appendChild(textEl('span', 'feed-row__duration', dur));
+  if (dur) thumb.appendChild(ltrRun(textEl('span', 'feed-row__duration', dur)));
   row.appendChild(thumb);
 
   const body = document.createElement('div');
@@ -428,7 +395,7 @@ function feedRow(item, locale, channel) {
     chBtn.type = 'button';
     chBtn.className = 'feed-row__channel';
     chBtn.textContent = channelName;
-    chBtn.setAttribute('aria-label', msg('watchlistOpenChannel', [channelName]));
+    chBtn.setAttribute('aria-label', t('watchlistOpenChannel', [channelName]));
     chBtn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -448,7 +415,7 @@ function feedRow(item, locale, channel) {
   const views = Number(item.vw);
   if (Number.isFinite(views) && views > 0) {
     const count = compactCount(views, locale);
-    if (count) metaNodes.push(textEl('span', 'feed-row__views', msg('feedViews', [count])));
+    if (count) metaNodes.push(textEl('span', 'feed-row__views', t('feedViews', [count])));
   }
 
   if (metaNodes.length) {
@@ -505,15 +472,15 @@ function renderFeeds(locale) {
   spinner.hidden = !view.sweeping;
   bar.classList.toggle('is-busy', view.sweeping);
   bar.setAttribute('aria-busy', view.sweeping ? 'true' : 'false');
-  refreshBtn.setAttribute('aria-label', msg('feedRefresh'));
-  refreshBtn.title = msg('feedRefresh');
+  refreshBtn.setAttribute('aria-label', t('feedRefresh'));
+  refreshBtn.title = t('feedRefresh');
 
   const lastAt = Number(view.pollState?.lastPollAt) || 0;
   if (lastAt) {
     const rel = relativeTime(lastAt, Date.now(), locale);
     if (rel) {
       lastEl.hidden = false;
-      lastEl.textContent = msg('feedLastSweep', [rel]);
+      lastEl.textContent = t('feedLastSweep', [rel]);
       lastEl.title = absoluteTime(lastAt, locale);
     } else {
       lastEl.hidden = true;
@@ -529,7 +496,7 @@ function renderFeeds(locale) {
   if (view.feedNotice) {
     noticeEl.hidden = false;
     noticeEl.textContent = view.feedNotice;
-    noticeEl.classList.toggle('banner--error', view.feedNotice !== msg('feedSweepRunning'));
+    noticeEl.classList.toggle('banner--error', view.feedNotice !== t('feedSweepRunning'));
   } else {
     noticeEl.hidden = true;
     noticeEl.textContent = '';
@@ -558,12 +525,11 @@ function renderFeeds(locale) {
   listEl.hidden = !hasChannels || !hasShown;
 
   if (!emptyFilter.hidden && missEl) {
-    missEl.textContent = msg('emptyFeedFilter', [(filterEl.value || '').trim()]);
+    missEl.textContent = t('emptyFeedFilter', [(filterEl.value || '').trim()]);
   }
 }
 
 function render() {
-  const locale = activeLocale();
   renderFeeds(locale);
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
@@ -651,18 +617,18 @@ function renderSettings(locale) {
   const feedEl = document.getElementById('settings-stat-feed');
   const lastEl = document.getElementById('settings-stat-last');
   const verEl = document.getElementById('settings-stat-version');
-  if (chEl) chEl.textContent = msg('settingsFooterChannels', [String(nCh)]);
-  if (feedEl) feedEl.textContent = msg('settingsFooterFeed', [String(nFeed)]);
+  if (chEl) chEl.textContent = t('settingsFooterChannels', [String(nCh)]);
+  if (feedEl) feedEl.textContent = t('settingsFooterFeed', [String(nFeed)]);
   if (lastEl) {
     const lastAt = Number(view.pollState?.lastPollAt) || 0;
     if (lastAt) {
       const rel = relativeTime(lastAt, Date.now(), locale);
-      lastEl.textContent = rel ? msg('feedLastSweep', [rel]) : msg('settingsFooterNever');
+      lastEl.textContent = rel ? t('feedLastSweep', [rel]) : t('settingsFooterNever');
       const abs = absoluteTime(lastAt, locale);
       if (abs) lastEl.title = abs;
       else lastEl.removeAttribute('title');
     } else {
-      lastEl.textContent = msg('settingsFooterNever');
+      lastEl.textContent = t('settingsFooterNever');
       lastEl.removeAttribute('title');
     }
   }
@@ -670,7 +636,7 @@ function renderSettings(locale) {
     const version = extensionVersion();
     if (version) {
       verEl.hidden = false;
-      verEl.textContent = msg('settingsFooterVersion', [version]);
+      verEl.textContent = t('settingsFooterVersion', [version]);
     } else {
       verEl.hidden = true;
       verEl.textContent = '';
@@ -766,7 +732,7 @@ async function requestSweep() {
     const res = await send({ type: 'sweep', scope: 'all' });
     if (res && res.ok === false) {
       view.feedNotice = res.error === 'already running'
-        ? msg('feedSweepRunning')
+        ? t('feedSweepRunning')
         : formatError(res.error);
     }
     await refreshState();
@@ -801,11 +767,6 @@ function bindFeeds() {
     const tab = document.getElementById('tab-watchlist');
     if (tab) activate(tab);
   });
-  const placeholder = msg('feedFilterPlaceholder');
-  if (placeholder) {
-    filter.placeholder = placeholder;
-    filter.setAttribute('aria-label', placeholder);
-  }
 }
 
 // Settings writes go through the worker so it can rebuild poll alarms
@@ -820,6 +781,7 @@ async function patchSettings(patch) {
   } catch (err) {
     view.backupNotice = { text: formatError(err?.message || err), error: true };
   }
+  await applyI18n(view.settings?.ui?.locale);
   render();
 }
 
@@ -836,7 +798,7 @@ function exportBackup() {
   // Revoking in the same turn can cancel the download in some browsers.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   view.backupNotice = {
-    text: msg('settingsExportDone', [String((data.channels || []).length)]),
+    text: t('settingsExportDone', [String((data.channels || []).length)]),
     error: false,
   };
   render();
@@ -858,11 +820,12 @@ async function importBackup(mode) {
       view.importStage = 'idle';
     } else {
       if (res.state) applySnapshot(res.state);
+      await applyI18n(view.settings?.ui?.locale);
       const added = Number(res.added) || 0;
       const skipped = Number(res.skipped) || 0;
       const text = mode === 'replace'
-        ? msg('settingsImportReplaced', [String(added)])
-        : msg('settingsImportAdded', [String(added), String(skipped)]);
+        ? t('settingsImportReplaced', [String(added)])
+        : t('settingsImportAdded', [String(added), String(skipped)]);
       view.backupNotice = { text, error: false };
       view.pendingImportText = '';
       view.importStage = 'idle';
@@ -947,24 +910,20 @@ function bindWatchlist() {
     view.error = '';
     render();
   });
-  const placeholder = msg('watchlistAddPlaceholder');
-  if (placeholder) {
-    input.placeholder = placeholder;
-    input.setAttribute('aria-label', placeholder);
-  }
 }
 
 bindWatchlist();
 bindFeeds();
 bindSettings();
-render();
 
 void (async () => {
+  await applyI18n('auto');
   view.busy = true;
   render();
   try {
     const snap = await send({ type: 'popupOpened' });
     if (!applySnapshot(snap)) view.error = formatError(snap?.error);
+    await applyI18n(view.settings?.ui?.locale);
   } catch (err) {
     view.error = formatError(err?.message || err);
   } finally {

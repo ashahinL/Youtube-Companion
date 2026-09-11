@@ -5,18 +5,17 @@
 
 import { thumbUrl } from '../lib/yt.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
+import {
+  resolveLocale,
+  loadMessages,
+  translate,
+  applyTo,
+  applyDirection,
+} from '../lib/i18n.js';
 
-const FALLBACK = {
-  channelWindowTitle: 'Channel',
-  channelLoadMore: 'Load more',
-  channelEmpty: 'No videos',
-  channelLastRefresh: 'Updated $TIME$',
-  channelMissing: 'This channel is not in your watchlist',
-  feedRefresh: 'Refresh',
-  feedViews: '$COUNT$ views',
-  feedOpenVideo: 'Open $TITLE$',
-  watchlistError: 'Something went wrong: $ERROR$',
-};
+let messages = {};
+let locale = 'en';
+let appliedLocale = null;
 
 const view = {
   channelId: '',
@@ -31,18 +30,25 @@ const view = {
 
 let refreshTimer = null;
 
-function msg(key, substitutions) {
-  try {
-    const got = chrome.i18n?.getMessage?.(key, substitutions);
-    if (got) return got;
-  } catch {
-    // Fall through to the English copy baked into this file.
-  }
-  let text = FALLBACK[key] || '';
-  const subs = substitutions == null ? [] : [].concat(substitutions);
-  let i = 0;
-  text = text.replace(/\$[A-Z]+\$/g, () => (i < subs.length ? String(subs[i++]) : ''));
-  return text;
+function t(key, substitutions) {
+  return translate(messages, key, substitutions);
+}
+
+async function applyI18n(setting) {
+  const next = resolveLocale(setting, navigator.language);
+  messages = await loadMessages(next);
+  locale = next;
+  if (appliedLocale === next) return;
+  applyDirection(document, next);
+  applyTo(document, messages);
+  appliedLocale = next;
+}
+
+function ltrRun(el) {
+  // @handles and timestamps like 17:14 are LTR; without isolation they
+  // scramble inside Arabic text.
+  el.dir = 'ltr';
+  return el;
 }
 
 // This page never talks to youtube.com. Every network action is a
@@ -51,16 +57,9 @@ function send(message) {
   return chrome.runtime.sendMessage(message);
 }
 
-function activeLocale() {
-  const loc = view.settings?.ui?.locale;
-  if (loc === 'en' || loc === 'ar') return loc;
-  const ui = (chrome.i18n?.getUILanguage?.() || navigator.language || 'en').toLowerCase();
-  return ui.startsWith('ar') ? 'ar' : 'en';
-}
-
 function formatError(error) {
   const code = String(error || '');
-  return msg('watchlistError', [code]);
+  return t('watchlistError', [code]);
 }
 
 function textEl(tag, className, text) {
@@ -68,13 +67,6 @@ function textEl(tag, className, text) {
   if (className) el.className = className;
   el.textContent = text;
   return el;
-}
-
-function applyStaticI18n() {
-  for (const el of document.querySelectorAll('[data-i18n]')) {
-    const text = msg(el.dataset.i18n);
-    if (text) el.textContent = text;
-  }
 }
 
 function channelIdFromUrl() {
@@ -117,7 +109,7 @@ function videoRow(item, locale) {
   row.className = 'feed-row';
   row.tabIndex = 0;
   const title = item.title || '';
-  row.setAttribute('aria-label', msg('feedOpenVideo', [title]));
+  row.setAttribute('aria-label', t('feedOpenVideo', [title]));
   row.addEventListener('click', () => openVideo(item));
   row.addEventListener('keydown', (event) => {
     if (event.target !== row) return;
@@ -133,7 +125,7 @@ function videoRow(item, locale) {
   img.src = thumbUrl(item.v, 'mq');
   thumb.appendChild(img);
   const dur = duration(item.d);
-  if (dur) thumb.appendChild(textEl('span', 'feed-row__duration', dur));
+  if (dur) thumb.appendChild(ltrRun(textEl('span', 'feed-row__duration', dur)));
   row.appendChild(thumb);
 
   const body = document.createElement('div');
@@ -146,7 +138,7 @@ function videoRow(item, locale) {
     metaNodes.push(textEl('span', 'feed-row__views', item.viewsText));
   } else if (Number.isFinite(views) && views > 0) {
     const count = compactCount(views, locale);
-    if (count) metaNodes.push(textEl('span', 'feed-row__views', msg('feedViews', [count])));
+    if (count) metaNodes.push(textEl('span', 'feed-row__views', t('feedViews', [count])));
   }
   // Age here is YouTube's relative string ("6 days ago"), not a
   // timestamp. Passing it through relativeTime would invent a time.
@@ -164,7 +156,6 @@ function videoRow(item, locale) {
 }
 
 function render() {
-  const locale = activeLocale();
   const titleEl = document.getElementById('channel-title');
   const handleEl = document.getElementById('channel-handle');
   const avatar = document.getElementById('channel-avatar');
@@ -178,10 +169,11 @@ function render() {
   const moreBtn = document.getElementById('channel-load-more');
 
   const ch = view.channel;
-  const title = ch?.title || ch?.handle || ch?.id || view.channelId || msg('channelWindowTitle');
+  const title = ch?.title || ch?.handle || ch?.id || view.channelId || t('channelWindowTitle');
   document.title = title;
   titleEl.textContent = title;
   handleEl.textContent = ch?.handle || '';
+  ltrRun(handleEl);
 
   if (ch?.avatar) {
     avatar.src = ch.avatar;
@@ -198,15 +190,15 @@ function render() {
   moreBtn.disabled = locked;
   spinner.hidden = !view.busy;
   document.body.setAttribute('aria-busy', view.busy ? 'true' : 'false');
-  refreshBtn.setAttribute('aria-label', msg('feedRefresh'));
-  refreshBtn.title = msg('feedRefresh');
+  refreshBtn.setAttribute('aria-label', t('feedRefresh'));
+  refreshBtn.title = t('feedRefresh');
 
   const lastAt = Number(view.lastRefreshAt) || 0;
   if (lastAt) {
     const rel = relativeTime(lastAt, Date.now(), locale);
     if (rel) {
       lastEl.hidden = false;
-      lastEl.textContent = msg('channelLastRefresh', [rel]);
+      lastEl.textContent = t('channelLastRefresh', [rel]);
       lastEl.title = absoluteTime(lastAt, locale);
     } else {
       lastEl.hidden = true;
@@ -244,6 +236,7 @@ async function loadChannelMeta() {
   if (snap.settings) view.settings = snap.settings;
   const channels = Array.isArray(snap.channels) ? snap.channels : [];
   view.channel = channels.find((c) => c.id === view.channelId) || null;
+  await applyI18n(view.settings?.ui?.locale);
   syncTimer(view.settings?.channelWindow?.refreshMinutes);
   return { ok: true };
 }
@@ -251,7 +244,7 @@ async function loadChannelMeta() {
 async function loadVideos({ reset }) {
   if (view.busy) return;
   if (!view.channelId) {
-    view.error = msg('channelMissing');
+    view.error = t('channelMissing');
     render();
     return;
   }
@@ -299,8 +292,10 @@ function bind() {
   });
 }
 
-applyStaticI18n();
 bind();
 view.channelId = channelIdFromUrl();
-render();
-void loadVideos({ reset: true });
+void (async () => {
+  await applyI18n('auto');
+  render();
+  await loadVideos({ reset: true });
+})();

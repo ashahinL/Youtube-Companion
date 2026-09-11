@@ -4,7 +4,7 @@
     "description": "Extension name in chrome://extensions, the store listing, and the popup title."
   },
   "extDescription": {
-    "message": "اشتراكات يوتيوب بلا حساب: موجز مدمج مرتب زمنياً لكل قناة تضيفها، ونافذة لكل قناة، وتنبيهات سطح المكتب عند الرفع الجديد.",
+    "message": "اشتراكات يوتيوب بلا حساب، مع موجز مدمج وتنبيهات عند الرفع الجديد.",
     "description": "Extension description shown in chrome://extensions and the store listing."
   },
   "extActionTitle": {
@@ -24,7 +24,7 @@
     "description": "Popup tab label for settings."
   },
   "emptyFeeds": {
-    "message": "لا قنوات بعد",
+    "message": "لا توجد قنوات بعد",
     "description": "Empty state on the Feeds tab when no channels have been added."
   },
   "emptyWatchlist": {
@@ -54,7 +54,7 @@
     "description": "Shown on a search result that is already in the Watchlist, in place of the Add button."
   },
   "watchlistNoResults": {
-    "message": "لا قنوات مطابقة",
+    "message": "لم يُعثر على قنوات",
     "description": "Shown under the Watchlist add box when a name search returns no hits."
   },
   "watchlistAlreadyAdded": {
@@ -66,7 +66,7 @@
     "description": "Inline error when the Watchlist input does not resolve to a YouTube channel."
   },
   "watchlistError": {
-    "message": "تعذّر ذلك: $ERROR$",
+    "message": "حدث خطأ: $ERROR$",
     "description": "Inline error for an unexpected worker failure. $ERROR$ is the worker's error text.",
     "placeholders": {
       "error": {
@@ -218,11 +218,11 @@
     "description": "Button that loads the next page of videos in the per-channel window."
   },
   "channelEmpty": {
-    "message": "لا فيديوهات",
+    "message": "لا توجد فيديوهات",
     "description": "Empty state in the per-channel window when the channel has no videos."
   },
   "channelLastRefresh": {
-    "message": "آخر تحديث $TIME$",
+    "message": "حُدِّث $TIME$",
     "description": "Time of the last refresh of the per-channel video list. $TIME$ is a relative timestamp such as 2h ago.",
     "placeholders": {
       "time": {
@@ -304,7 +304,7 @@
     "description": "Settings group heading for feed retention and shorts."
   },
   "settingsFeedMaxBefore": {
-    "message": "أبقِ أحدث",
+    "message": "احتفظ بأحدث",
     "description": "Label before the feed retention input."
   },
   "settingsFeedMaxAfter": {
@@ -320,7 +320,7 @@
     "description": "Switch that includes YouTube Shorts in the feed and badge."
   },
   "settingsShowShortsTitle": {
-    "message": "الإيقاف يخفي القصيرة من الموجز ومن شارة شريط الأدوات.",
+    "message": "الإيقاف يخفي المقاطع القصيرة من الموجز ومن شارة شريط الأدوات.",
     "description": "Tooltip on the show-shorts switch."
   },
   "settingsChannelWindow": {

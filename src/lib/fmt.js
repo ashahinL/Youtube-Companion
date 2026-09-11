@@ -11,6 +11,8 @@ const MONTH = 30 * DAY;
 const YEAR = 365 * DAY;
 
 function asLocale(locale) {
+  // Callers pass the active UI locale so Arabic gets Arabic numerals
+  // and relative times through Intl.
   return locale || 'en';
 }
 

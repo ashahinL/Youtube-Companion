@@ -59,6 +59,27 @@ export default async function run(t) {
   for (const key of keys) {
     t.check(`data-i18n="${key}" exists in en`, key in en);
   }
+  const titleKeys = [...html.matchAll(/data-i18n-title="([^"]+)"/g)].map((m) => m[1]);
+  for (const key of titleKeys) {
+    t.check(`data-i18n-title="${key}" exists in en`, key in en);
+  }
+  const labelKeys = [...html.matchAll(/data-i18n-label="([^"]+)"/g)].map((m) => m[1]);
+  for (const key of labelKeys) {
+    t.check(`data-i18n-label="${key}" exists in en`, key in en);
+  }
+  t.check('channel.js imports i18n.js', /from ['"]\.\.\/lib\/i18n\.js['"]/.test(js));
+  t.check(
+    'relativeTime is passed the active locale',
+    /relativeTime\([^;]*\blocale\b/.test(js),
+  );
+  t.check(
+    'compactCount is passed the active locale',
+    /compactCount\([^;]*\blocale\b/.test(js),
+  );
+  t.check(
+    'absoluteTime is passed the active locale',
+    /absoluteTime\([^;]*\blocale\b/.test(js),
+  );
 
   t.section('channel.js rules');
 
@@ -84,6 +105,23 @@ export default async function run(t) {
     hex.length === 0,
     JSON.stringify(hex),
   );
+
+  const physical = [
+    ['left', /(?:^|[\s;{])left\s*:/m],
+    ['right', /(?:^|[\s;{])right\s*:/m],
+    ['margin-left', /margin-left\s*:/],
+    ['margin-right', /margin-right\s*:/],
+    ['padding-left', /padding-left\s*:/],
+    ['padding-right', /padding-right\s*:/],
+    ['text-align: left', /text-align\s*:\s*left/],
+    ['text-align: right', /text-align\s*:\s*right/],
+    ['border-left', /border-left(?:-[\w]+)?\s*:/],
+    ['border-right', /border-right(?:-[\w]+)?\s*:/],
+    ['translateX', /translateX\s*\(/],
+  ];
+  for (const [name, re] of physical) {
+    t.check(`channel.css has no ${name}`, !re.test(css));
+  }
 
   t.section('message types');
 

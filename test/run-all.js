@@ -15,6 +15,7 @@ const SUITES = [
   ['manifest + locales', './skeleton.test.js'],
   ['popup shell',        './popup.test.js'],
   ['formatting',         './fmt.test.js'],
+  ['i18n',               './i18n.test.js'],
   ['yt wire layer',      './yt.test.js'],
   ['settings',           './settings.test.js'],
   ['store',              './store.test.js'],
