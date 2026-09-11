@@ -105,11 +105,44 @@ export default async function run(t) {
     JSON.stringify(emptyIds),
   );
 
+  t.section('settings');
+
+  const settings = html.match(/<section\b[^>]*\bid="settings"[^>]*>[\s\S]*?<\/section>/);
+  t.check('settings panel exists', !!settings);
+  const s = settings ? settings[0] : '';
+  const groupIds = [
+    'settings-notifications',
+    'settings-checking',
+    'settings-feed',
+    'settings-channel-window',
+    'settings-language',
+    'settings-backup',
+  ];
+  for (const id of groupIds) {
+    t.check(`has settings group ${id}`, new RegExp(`id="${id}"`).test(s), id);
+  }
+  t.check('import offers merge', /id="settings-import-merge"/.test(s));
+  t.check('import offers replace', /id="settings-import-replace"/.test(s));
+  t.check(
+    'replace has a separate confirm control',
+    /id="settings-import-replace-confirm"/.test(s),
+  );
+  t.check(
+    'merge and replace are distinct controls',
+    /id="settings-import-merge"/.test(s)
+      && /id="settings-import-replace"/.test(s)
+      && /id="settings-import-replace-confirm"/.test(s),
+  );
+
   t.section('i18n');
 
   const keys = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
   for (const key of keys) {
     t.check(`data-i18n="${key}" exists in en`, key in en);
+  }
+  const titleKeys = [...html.matchAll(/data-i18n-title="([^"]+)"/g)].map((m) => m[1]);
+  for (const key of titleKeys) {
+    t.check(`data-i18n-title="${key}" exists in en`, key in en);
   }
 
   t.section('assets');
@@ -191,6 +224,13 @@ export default async function run(t) {
   for (const type of sent) {
     t.check(
       `popup message type "${type}" is implemented by the worker`,
+      implemented.has(type),
+      [...implemented].join(','),
+    );
+  }
+  for (const type of ['updateSettings', 'importBackup']) {
+    t.check(
+      `worker implements "${type}"`,
       implemented.has(type),
       [...implemented].join(','),
     );

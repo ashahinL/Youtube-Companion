@@ -488,3 +488,115 @@ body {
   background: var(--tag-short);
   color: var(--on-tag-short);
 }
+
+.group {
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+}
+
+.group__legend {
+  padding: 0 0 7px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-block: 5px;
+  padding-inline: 0;
+  cursor: pointer;
+}
+
+.row--inline {
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.row input[type='checkbox'] {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-note {
+  margin: 0 0 8px;
+  padding-inline-start: 24px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.settings-num {
+  width: 56px;
+  padding-block: 4px;
+  padding-inline: 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-select {
+  flex: 1;
+  min-width: 0;
+  padding-block: 4px;
+  padding-inline: 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-num:focus,
+.settings-select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.backup__row {
+  display: flex;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+.backup__row .btn {
+  flex: 1;
+}
+
+.backup__choice p {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.backup__confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 8px;
+}
+
+.settings-footer {
+  margin-block-start: 8px;
+  padding-block-start: 12px;
+  border-top: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.7;
+}
+
+.settings-footer p {
+  margin: 0;
+}

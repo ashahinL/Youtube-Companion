@@ -7,6 +7,7 @@
 import { normalizeChannelInput, thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
+import { buildBackup } from '../lib/backup.js';
 
 const FALLBACK = {
   watchlistAdd: 'Add',
@@ -41,6 +42,13 @@ const FALLBACK = {
   feedTagPremiereAt: 'PREMIERE $TIME$',
   feedViews: '$COUNT$ views',
   feedOpenVideo: 'Open $TITLE$',
+  settingsImportAdded: 'Added $ADDED$ channels, $SKIPPED$ already present.',
+  settingsImportReplaced: 'Replaced with $ADDED$ channels.',
+  settingsExportDone: 'Exported $COUNT$ channels.',
+  settingsFooterChannels: '$COUNT$ channels',
+  settingsFooterFeed: '$COUNT$ videos',
+  settingsFooterNever: 'Never checked',
+  settingsFooterVersion: 'Version $VERSION$',
 };
 
 const view = {
@@ -54,6 +62,10 @@ const view = {
   pendingRemoveId: null,
   sweeping: false,
   feedNotice: '',
+  backupNotice: null,
+  importStage: 'idle',
+  importBusy: false,
+  pendingImportText: '',
 };
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -135,6 +147,29 @@ function syncSearchInList() {
   if (!Array.isArray(view.searchResults)) return;
   const ids = new Set(view.channels.map((c) => c.id));
   view.searchResults = view.searchResults.map((r) => ({ ...r, inList: ids.has(r.id) }));
+}
+
+function readPath(obj, path) {
+  return path.split('.').reduce((acc, key) => acc?.[key], obj);
+}
+
+function buildPatch(path, value) {
+  const keys = path.split('.');
+  const patch = {};
+  let cursor = patch;
+  for (let i = 0; i < keys.length; i++) {
+    if (i === keys.length - 1) cursor[keys[i]] = value;
+    else cursor = cursor[keys[i]] = {};
+  }
+  return patch;
+}
+
+function extensionVersion() {
+  try {
+    return chrome.runtime.getManifest?.()?.version || '';
+  } catch {
+    return '';
+  }
 }
 
 function formatError(error) {
@@ -570,6 +605,77 @@ function render() {
   listEl.replaceChildren();
   for (const ch of channels) listEl.appendChild(channelRow(ch, locale));
   emptyEl.hidden = channels.length > 0;
+  renderSettings(locale);
+}
+
+function renderSettings(locale) {
+  const s = view.settings || {};
+  for (const input of document.querySelectorAll('#settings [data-setting]')) {
+    const value = readPath(s, input.dataset.setting);
+    if (input.type === 'checkbox') input.checked = !!value;
+    else input.value = value ?? '';
+  }
+
+  const locked = view.importBusy;
+  const exportBtn = document.getElementById('settings-export');
+  const importBtn = document.getElementById('settings-import');
+  const mergeBtn = document.getElementById('settings-import-merge');
+  const replaceBtn = document.getElementById('settings-import-replace');
+  const confirmBtn = document.getElementById('settings-import-replace-confirm');
+  const cancelBtn = document.getElementById('settings-import-replace-cancel');
+  for (const btn of [exportBtn, importBtn, mergeBtn, replaceBtn, confirmBtn, cancelBtn]) {
+    if (btn) btn.disabled = locked;
+  }
+
+  const choice = document.getElementById('settings-import-choice');
+  const confirm = document.getElementById('settings-import-confirm');
+  if (choice) choice.hidden = view.importStage !== 'choose';
+  if (confirm) confirm.hidden = view.importStage !== 'confirm';
+
+  const status = document.getElementById('settings-backup-status');
+  if (status) {
+    if (view.backupNotice) {
+      status.hidden = false;
+      status.textContent = view.backupNotice.text;
+      status.classList.toggle('banner--error', !!view.backupNotice.error);
+    } else {
+      status.hidden = true;
+      status.textContent = '';
+      status.classList.remove('banner--error');
+    }
+  }
+
+  const nCh = view.channels.length;
+  const nFeed = view.feed.length;
+  const chEl = document.getElementById('settings-stat-channels');
+  const feedEl = document.getElementById('settings-stat-feed');
+  const lastEl = document.getElementById('settings-stat-last');
+  const verEl = document.getElementById('settings-stat-version');
+  if (chEl) chEl.textContent = msg('settingsFooterChannels', [String(nCh)]);
+  if (feedEl) feedEl.textContent = msg('settingsFooterFeed', [String(nFeed)]);
+  if (lastEl) {
+    const lastAt = Number(view.pollState?.lastPollAt) || 0;
+    if (lastAt) {
+      const rel = relativeTime(lastAt, Date.now(), locale);
+      lastEl.textContent = rel ? msg('feedLastSweep', [rel]) : msg('settingsFooterNever');
+      const abs = absoluteTime(lastAt, locale);
+      if (abs) lastEl.title = abs;
+      else lastEl.removeAttribute('title');
+    } else {
+      lastEl.textContent = msg('settingsFooterNever');
+      lastEl.removeAttribute('title');
+    }
+  }
+  if (verEl) {
+    const version = extensionVersion();
+    if (version) {
+      verEl.hidden = false;
+      verEl.textContent = msg('settingsFooterVersion', [version]);
+    } else {
+      verEl.hidden = true;
+      verEl.textContent = '';
+    }
+  }
 }
 
 async function withBusy(fn) {
@@ -702,6 +808,131 @@ function bindFeeds() {
   }
 }
 
+// Settings writes go through the worker so it can rebuild poll alarms
+// and the badge from the new values. A storage write from here would
+// leave both stale until the next restart.
+async function patchSettings(patch) {
+  try {
+    const snap = await send({ type: 'updateSettings', patch });
+    if (!applySnapshot(snap)) {
+      view.backupNotice = { text: formatError(snap?.error), error: true };
+    }
+  } catch (err) {
+    view.backupNotice = { text: formatError(err?.message || err), error: true };
+  }
+  render();
+}
+
+function exportBackup() {
+  const data = buildBackup({ settings: view.settings, channels: view.channels });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `youtube-companion-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Revoking in the same turn can cancel the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  view.backupNotice = {
+    text: msg('settingsExportDone', [String((data.channels || []).length)]),
+    error: false,
+  };
+  render();
+}
+
+async function importBackup(mode) {
+  if (view.importBusy || !view.pendingImportText) return;
+  view.importBusy = true;
+  view.backupNotice = null;
+  render();
+  try {
+    const res = await send({
+      type: 'importBackup',
+      data: view.pendingImportText,
+      mode,
+    });
+    if (!res || res.ok === false) {
+      view.backupNotice = { text: String(res?.error || formatError('')), error: true };
+      view.importStage = 'idle';
+    } else {
+      if (res.state) applySnapshot(res.state);
+      const added = Number(res.added) || 0;
+      const skipped = Number(res.skipped) || 0;
+      const text = mode === 'replace'
+        ? msg('settingsImportReplaced', [String(added)])
+        : msg('settingsImportAdded', [String(added), String(skipped)]);
+      view.backupNotice = { text, error: false };
+      view.pendingImportText = '';
+      view.importStage = 'idle';
+    }
+  } catch (err) {
+    view.backupNotice = { text: formatError(err?.message || err), error: true };
+    view.importStage = 'idle';
+  } finally {
+    view.importBusy = false;
+    render();
+  }
+}
+
+function bindSettings() {
+  const panel = document.getElementById('settings');
+  panel.addEventListener('change', (event) => {
+    const el = event.target;
+    if (!(el instanceof HTMLElement)) return;
+    const path = el.dataset.setting;
+    if (!path) return;
+    let next;
+    if (el.type === 'checkbox') next = el.checked;
+    else if (el.type === 'number') {
+      next = Number(el.value);
+      if (!Number.isFinite(next)) return;
+    } else next = el.value;
+    void patchSettings(buildPatch(path, next));
+  });
+
+  document.getElementById('settings-export').addEventListener('click', () => {
+    exportBackup();
+  });
+
+  const fileInput = document.getElementById('settings-import-file');
+  document.getElementById('settings-import').addEventListener('click', () => {
+    fileInput.click();
+  });
+  fileInput.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      view.pendingImportText = await file.text();
+      view.importStage = 'choose';
+      view.backupNotice = null;
+    } catch (err) {
+      view.pendingImportText = '';
+      view.importStage = 'idle';
+      view.backupNotice = { text: formatError(err?.message || err), error: true };
+    }
+    render();
+  });
+
+  document.getElementById('settings-import-merge').addEventListener('click', () => {
+    void importBackup('merge');
+  });
+  document.getElementById('settings-import-replace').addEventListener('click', () => {
+    if (!view.pendingImportText) return;
+    view.importStage = 'confirm';
+    render();
+  });
+  document.getElementById('settings-import-replace-confirm').addEventListener('click', () => {
+    void importBackup('replace');
+  });
+  document.getElementById('settings-import-replace-cancel').addEventListener('click', () => {
+    view.importStage = 'choose';
+    render();
+  });
+}
+
 function bindWatchlist() {
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
@@ -725,6 +956,7 @@ function bindWatchlist() {
 
 bindWatchlist();
 bindFeeds();
+bindSettings();
 render();
 
 void (async () => {

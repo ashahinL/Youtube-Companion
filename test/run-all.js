@@ -18,6 +18,7 @@ const SUITES = [
   ['yt wire layer',      './yt.test.js'],
   ['settings',           './settings.test.js'],
   ['store',              './store.test.js'],
+  ['backup',             './backup.test.js'],
   ['service worker',     './worker.test.js'],
   ['channel window',     './channel.test.js'],
 ];

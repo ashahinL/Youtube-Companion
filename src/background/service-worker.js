@@ -13,14 +13,17 @@ import {
   fetchChannelVideos,
   classifyVideo,
 } from '../lib/yt.js';
-import { readSettings, onSettingsChanged } from '../lib/settings.js';
+import { readSettings, writeSettings, onSettingsChanged } from '../lib/settings.js';
+import { parseBackup, mergeBackup } from '../lib/backup.js';
 import {
   readChannels,
+  writeChannels,
   addChannel,
   updateChannel,
   removeChannel,
   setFavorite,
   readFeed,
+  saveFeed,
   applyFeedMerge,
   newSinceCount,
   readVideoMeta,
@@ -483,6 +486,50 @@ export async function handleMessage(msg, _sender) {
         });
       case 'openChannelWindow':
         return await openChannelWindow(msg.id);
+      case 'updateSettings': {
+        // Alarms and the badge both derive from settings (poll periods,
+        // showShorts). Writing storage from the popup would leave them stale.
+        await writeSettings(msg.patch || {});
+        await syncAlarms();
+        await refreshBadge();
+        return await collectState();
+      }
+      case 'importBackup': {
+        const raw = msg.data;
+        let text;
+        if (typeof raw === 'string') text = raw;
+        else {
+          try {
+            text = JSON.stringify(raw ?? null);
+          } catch {
+            return { ok: false, error: 'That file is not valid JSON.' };
+          }
+        }
+        const parsed = parseBackup(text);
+        if (!parsed.ok) return { ok: false, error: parsed.error };
+        const current = await collectState();
+        const mode = msg.mode === 'replace' ? 'replace' : 'merge';
+        const result = mergeBackup(
+          { settings: current.settings, channels: current.channels },
+          parsed.data,
+          mode,
+        );
+        await writeSettings(result.settings);
+        await writeChannels(result.channels);
+        // The file has no feed. Rows whose channel is gone would otherwise
+        // keep showing until something else dropped them.
+        const keep = new Set(result.channels.map((ch) => ch.id));
+        const feed = (await readFeed()).filter((item) => keep.has(item.c));
+        await saveFeed(feed);
+        await syncAlarms();
+        await refreshBadge();
+        return {
+          ok: true,
+          added: result.added,
+          skipped: result.skipped,
+          state: await collectState(),
+        };
+      }
       default:
         return { ok: false, error: 'unknown message' };
     }

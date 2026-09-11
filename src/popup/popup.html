@@ -114,7 +114,191 @@
     </section>
 
     <section id="settings" class="panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
-      <p class="empty" data-i18n="emptySettings">No settings yet</p>
+      <fieldset class="group" id="settings-notifications">
+        <legend class="group__legend" data-i18n="settingsNotifications">Notifications</legend>
+        <label
+          class="row"
+          title="Master switch for desktop alerts on new uploads."
+          data-i18n-title="settingsAlertsEnabledTitle"
+        >
+          <input type="checkbox" data-setting="alerts.enabled" />
+          <span data-i18n="settingsAlertsEnabled">Enable notifications</span>
+        </label>
+        <label
+          class="row"
+          title="Favourites always alert while notifications are on. This switch is only for the rest."
+          data-i18n-title="settingsNotifyNormalTitle"
+        >
+          <input type="checkbox" data-setting="alerts.notifyNormal" />
+          <span data-i18n="settingsNotifyNormal">Notify for non-favourite channels</span>
+        </label>
+        <p class="settings-note" data-i18n="settingsNotifyNormalNote">
+          Favourites always alert while notifications are on.
+        </p>
+        <label
+          class="row"
+          title="When off, alerts use the extension icon instead."
+          data-i18n-title="settingsUseAvatarTitle"
+        >
+          <input type="checkbox" data-setting="alerts.useAvatarIcon" />
+          <span data-i18n="settingsUseAvatar">Use the channel's avatar as the alert icon</span>
+        </label>
+      </fieldset>
+
+      <fieldset class="group" id="settings-checking">
+        <legend class="group__legend" data-i18n="settingsChecking">Checking</legend>
+        <label
+          class="row row--inline"
+          title="YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache."
+          data-i18n-title="settingsPollAllTitle"
+        >
+          <span data-i18n="settingsPollAllBefore">Check all channels every</span>
+          <input class="settings-num" type="number" step="1" data-setting="poll.intervalMinutes" />
+          <span data-i18n="settingsPollAllAfter">minutes</span>
+        </label>
+        <label
+          class="row row--inline"
+          title="0 turns this extra check off. YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache."
+          data-i18n-title="settingsPollFavTitle"
+        >
+          <span data-i18n="settingsPollFavBefore">Check favourites every</span>
+          <input class="settings-num" type="number" step="1" data-setting="poll.favoriteIntervalMinutes" />
+          <span data-i18n="settingsPollFavAfter">minutes</span>
+        </label>
+        <p class="settings-note" data-i18n="settingsPollCacheNote">
+          YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.
+        </p>
+      </fieldset>
+
+      <fieldset class="group" id="settings-feed">
+        <legend class="group__legend" data-i18n="settingsFeed">Feed</legend>
+        <label
+          class="row row--inline"
+          title="Oldest videos fall off the feed when this cap is reached."
+          data-i18n-title="settingsFeedMaxTitle"
+        >
+          <span data-i18n="settingsFeedMaxBefore">Keep the newest</span>
+          <input class="settings-num" type="number" step="1" data-setting="feed.maxItems" />
+          <span data-i18n="settingsFeedMaxAfter">videos</span>
+        </label>
+        <label
+          class="row"
+          title="Off hides shorts from the feed and from the toolbar badge."
+          data-i18n-title="settingsShowShortsTitle"
+        >
+          <input type="checkbox" data-setting="feed.showShorts" />
+          <span data-i18n="settingsShowShorts">Show shorts</span>
+        </label>
+      </fieldset>
+
+      <fieldset class="group" id="settings-channel-window">
+        <legend class="group__legend" data-i18n="settingsChannelWindow">Channel window</legend>
+        <label
+          class="row row--inline"
+          title="0 means the channel window only refreshes when you press the button."
+          data-i18n-title="settingsWindowRefreshTitle"
+        >
+          <span data-i18n="settingsWindowRefreshBefore">Refresh every</span>
+          <input class="settings-num" type="number" step="1" data-setting="channelWindow.refreshMinutes" />
+          <span data-i18n="settingsWindowRefreshAfter">minutes</span>
+        </label>
+        <label
+          class="row row--inline"
+          title="Width of the per-channel window, in pixels."
+          data-i18n-title="settingsWindowWidthTitle"
+        >
+          <span data-i18n="settingsWindowWidth">Width</span>
+          <input class="settings-num" type="number" step="1" data-setting="channelWindow.width" />
+        </label>
+        <label
+          class="row row--inline"
+          title="Height of the per-channel window, in pixels."
+          data-i18n-title="settingsWindowHeightTitle"
+        >
+          <span data-i18n="settingsWindowHeight">Height</span>
+          <input class="settings-num" type="number" step="1" data-setting="channelWindow.height" />
+        </label>
+      </fieldset>
+
+      <fieldset class="group" id="settings-language">
+        <legend class="group__legend" data-i18n="settingsLanguage">Language</legend>
+        <label
+          class="row row--inline"
+          title="Auto follows the browser language."
+          data-i18n-title="settingsLocaleTitle"
+        >
+          <span data-i18n="settingsLocale">Language</span>
+          <select class="settings-select" data-setting="ui.locale">
+            <option value="auto" data-i18n="settingsLocaleAuto">Auto</option>
+            <option value="en" data-i18n="settingsLocaleEn">English</option>
+            <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset class="group" id="settings-backup">
+        <legend class="group__legend" data-i18n="settingsBackup">Backup</legend>
+        <div class="backup">
+          <div class="backup__row">
+            <button
+              id="settings-export"
+              class="btn"
+              type="button"
+              title="Download your settings and channel list as a JSON file."
+              data-i18n="settingsExport"
+              data-i18n-title="settingsExportTitle"
+            >
+              Export
+            </button>
+            <button
+              id="settings-import"
+              class="btn"
+              type="button"
+              title="Restore a previously exported file. Merge adds new channels; Replace overwrites everything."
+              data-i18n="settingsImport"
+              data-i18n-title="settingsImportTitle"
+            >
+              Import
+            </button>
+            <input id="settings-import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <div id="settings-import-choice" class="backup__choice" hidden>
+            <p data-i18n="settingsImportPrompt">How should this file be applied?</p>
+            <div class="backup__row">
+              <button id="settings-import-merge" class="btn" type="button" data-i18n="settingsImportMerge">
+                Merge
+              </button>
+              <button id="settings-import-replace" class="btn" type="button" data-i18n="settingsImportReplace">
+                Replace
+              </button>
+            </div>
+          </div>
+          <div id="settings-import-confirm" class="backup__confirm" hidden>
+            <span class="confirm-prompt" data-i18n="settingsImportReplacePrompt">
+              Replace all channels and settings with this file?
+            </span>
+            <button
+              id="settings-import-replace-confirm"
+              class="btn btn--primary"
+              type="button"
+              data-i18n="settingsImportReplaceConfirm"
+            >
+              Replace everything
+            </button>
+            <button id="settings-import-replace-cancel" class="btn" type="button" data-i18n="settingsImportReplaceCancel">
+              Cancel
+            </button>
+          </div>
+          <p id="settings-backup-status" class="banner" role="status" hidden></p>
+        </div>
+      </fieldset>
+
+      <footer class="settings-footer">
+        <p id="settings-stat-channels"></p>
+        <p id="settings-stat-feed"></p>
+        <p id="settings-stat-last"></p>
+        <p id="settings-stat-version"></p>
+      </footer>
     </section>
 
     <script type="module" src="popup.js"></script>

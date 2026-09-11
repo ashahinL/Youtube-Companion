@@ -31,10 +31,6 @@
     "message": "قائمة المتابعة فارغة",
     "description": "Empty state on the Watchlist tab when no channels have been added."
   },
-  "emptySettings": {
-    "message": "لا إعدادات بعد",
-    "description": "Empty state on the Settings tab."
-  },
   "nNewVideos": {
     "message": "$COUNT$ فيديوهات جديدة",
     "description": "Desktop notification body when a channel uploaded more than one video since the last check. $COUNT$ is the number of new videos.",
@@ -238,5 +234,261 @@
   "channelMissing": {
     "message": "هذه القناة ليست في قائمة المتابعة",
     "description": "Shown when the per-channel window has no channel id, or the id is not on the Watchlist."
+  },
+  "settingsNotifications": {
+    "message": "الإشعارات",
+    "description": "Settings group heading for desktop alert controls."
+  },
+  "settingsAlertsEnabled": {
+    "message": "تفعيل الإشعارات",
+    "description": "Master switch for desktop alerts on new uploads."
+  },
+  "settingsAlertsEnabledTitle": {
+    "message": "المفتاح الرئيسي لتنبيهات سطح المكتب عند الرفع الجديد.",
+    "description": "Tooltip on the master notifications switch."
+  },
+  "settingsNotifyNormal": {
+    "message": "نبّه للقنوات غير المفضلة",
+    "description": "Switch that lets non-favourite channels raise desktop alerts."
+  },
+  "settingsNotifyNormalTitle": {
+    "message": "المفضلة تُنبَّه دائماً ما دامت الإشعارات مفعّلة. هذا المفتاح لبقية القنوات فقط.",
+    "description": "Tooltip on the non-favourite notification switch."
+  },
+  "settingsNotifyNormalNote": {
+    "message": "المفضلة تُنبَّه دائماً ما دامت الإشعارات مفعّلة.",
+    "description": "Visible note under the non-favourite notification switch."
+  },
+  "settingsUseAvatar": {
+    "message": "استخدم صورة القناة كأيقونة للتنبيه",
+    "description": "Switch that uses the channel avatar on desktop alerts."
+  },
+  "settingsUseAvatarTitle": {
+    "message": "عند الإيقاف تُستخدم أيقونة الإضافة بدل صورة القناة.",
+    "description": "Tooltip on the alert-icon switch."
+  },
+  "settingsChecking": {
+    "message": "الفحص",
+    "description": "Settings group heading for poll interval controls."
+  },
+  "settingsPollAllBefore": {
+    "message": "افحص كل القنوات كل",
+    "description": "Label before the all-channels poll interval input."
+  },
+  "settingsPollAllAfter": {
+    "message": "دقيقة",
+    "description": "Label after the all-channels poll interval input."
+  },
+  "settingsPollAllTitle": {
+    "message": "يخزّن يوتيوب الموجز لمدة 15 دقيقة، لذا الفاصل الأقصر لا يفيد إلا لأن الطلب يتجاوز ذلك التخزين.",
+    "description": "Tooltip on the all-channels poll interval."
+  },
+  "settingsPollFavBefore": {
+    "message": "افحص المفضلة كل",
+    "description": "Label before the favourites poll interval input."
+  },
+  "settingsPollFavAfter": {
+    "message": "دقيقة",
+    "description": "Label after the favourites poll interval input."
+  },
+  "settingsPollFavTitle": {
+    "message": "0 يوقف هذا الفحص الإضافي. يخزّن يوتيوب الموجز لمدة 15 دقيقة، لذا الفاصل الأقصر لا يفيد إلا لأن الطلب يتجاوز ذلك التخزين.",
+    "description": "Tooltip on the favourites poll interval."
+  },
+  "settingsPollCacheNote": {
+    "message": "يخزّن يوتيوب الموجز لمدة 15 دقيقة، لذا الفاصل الأقصر لا يفيد إلا لأن الطلب يتجاوز ذلك التخزين.",
+    "description": "Visible note under the poll interval controls."
+  },
+  "settingsFeed": {
+    "message": "الموجز",
+    "description": "Settings group heading for feed retention and shorts."
+  },
+  "settingsFeedMaxBefore": {
+    "message": "أبقِ أحدث",
+    "description": "Label before the feed retention input."
+  },
+  "settingsFeedMaxAfter": {
+    "message": "فيديوهات",
+    "description": "Label after the feed retention input."
+  },
+  "settingsFeedMaxTitle": {
+    "message": "تسقط أقدم الفيديوهات من الموجز عند بلوغ هذا الحد.",
+    "description": "Tooltip on the feed retention input."
+  },
+  "settingsShowShorts": {
+    "message": "إظهار الفيديوهات القصيرة",
+    "description": "Switch that includes YouTube Shorts in the feed and badge."
+  },
+  "settingsShowShortsTitle": {
+    "message": "الإيقاف يخفي القصيرة من الموجز ومن شارة شريط الأدوات.",
+    "description": "Tooltip on the show-shorts switch."
+  },
+  "settingsChannelWindow": {
+    "message": "نافذة القناة",
+    "description": "Settings group heading for the per-channel window."
+  },
+  "settingsWindowRefreshBefore": {
+    "message": "حدّث كل",
+    "description": "Label before the channel-window refresh interval input."
+  },
+  "settingsWindowRefreshAfter": {
+    "message": "دقيقة",
+    "description": "Label after the channel-window refresh interval input."
+  },
+  "settingsWindowRefreshTitle": {
+    "message": "0 يعني أن نافذة القناة لا تتحدّث إلا عند الضغط على الزر.",
+    "description": "Tooltip on the channel-window refresh interval."
+  },
+  "settingsWindowWidth": {
+    "message": "العرض",
+    "description": "Label for the per-channel window width input."
+  },
+  "settingsWindowWidthTitle": {
+    "message": "عرض نافذة القناة بالبكسل.",
+    "description": "Tooltip on the per-channel window width input."
+  },
+  "settingsWindowHeight": {
+    "message": "الارتفاع",
+    "description": "Label for the per-channel window height input."
+  },
+  "settingsWindowHeightTitle": {
+    "message": "ارتفاع نافذة القناة بالبكسل.",
+    "description": "Tooltip on the per-channel window height input."
+  },
+  "settingsLanguage": {
+    "message": "اللغة",
+    "description": "Settings group heading for the UI language."
+  },
+  "settingsLocale": {
+    "message": "اللغة",
+    "description": "Label for the UI language select."
+  },
+  "settingsLocaleTitle": {
+    "message": "تلقائي يتبع لغة المتصفح.",
+    "description": "Tooltip on the UI language select."
+  },
+  "settingsLocaleAuto": {
+    "message": "تلقائي",
+    "description": "Language option that follows the browser language."
+  },
+  "settingsLocaleEn": {
+    "message": "English",
+    "description": "Language option that pins the UI to English."
+  },
+  "settingsLocaleAr": {
+    "message": "العربية",
+    "description": "Language option that pins the UI to Arabic."
+  },
+  "settingsBackup": {
+    "message": "النسخة الاحتياطية",
+    "description": "Settings group heading for export and import."
+  },
+  "settingsExport": {
+    "message": "تصدير",
+    "description": "Button that downloads a JSON backup of settings and channels."
+  },
+  "settingsExportTitle": {
+    "message": "نزّل إعداداتك وقائمة القنوات كملف JSON.",
+    "description": "Tooltip on the export button."
+  },
+  "settingsImport": {
+    "message": "استيراد",
+    "description": "Button that starts restoring a JSON backup file."
+  },
+  "settingsImportTitle": {
+    "message": "استعد ملفاً مُصدَّراً سابقاً. الدمج يضيف القنوات الجديدة؛ الاستبدال يكتب فوق كل شيء.",
+    "description": "Tooltip on the import button."
+  },
+  "settingsImportPrompt": {
+    "message": "كيف يُطبَّق هذا الملف؟",
+    "description": "Prompt shown after a backup file is chosen, before Merge or Replace."
+  },
+  "settingsImportMerge": {
+    "message": "دمج",
+    "description": "Applies a backup by adding channels that are not already present."
+  },
+  "settingsImportReplace": {
+    "message": "استبدال",
+    "description": "Starts replacing all channels and settings with the backup file."
+  },
+  "settingsImportReplacePrompt": {
+    "message": "استبدال كل القنوات والإعدادات بهذا الملف؟",
+    "description": "Inline confirmation prompt before a destructive Replace import."
+  },
+  "settingsImportReplaceConfirm": {
+    "message": "استبدال الكل",
+    "description": "Confirms replacing all channels and settings with the backup file."
+  },
+  "settingsImportReplaceCancel": {
+    "message": "إلغاء",
+    "description": "Cancels a Replace import and returns to Merge or Replace."
+  },
+  "settingsImportAdded": {
+    "message": "أُضيفت $ADDED$ قنوات، و$SKIPPED$ موجودة مسبقاً.",
+    "description": "Status after a Merge import. $ADDED$ is new channels; $SKIPPED$ were already in the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "3"
+      },
+      "skipped": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
+  "settingsImportReplaced": {
+    "message": "استُبدل بـ $ADDED$ قنوات.",
+    "description": "Status after a Replace import. $ADDED$ is how many channels the file contained.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "settingsExportDone": {
+    "message": "صُدِّرَت $COUNT$ قنوات.",
+    "description": "Status after a backup file is downloaded. $COUNT$ is the number of channels written.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "settingsFooterChannels": {
+    "message": "$COUNT$ قنوات",
+    "description": "Settings footer line with the number of watched channels. $COUNT$ is the count.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "settingsFooterFeed": {
+    "message": "$COUNT$ فيديوهات",
+    "description": "Settings footer line with the number of feed items. $COUNT$ is the count.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "40"
+      }
+    }
+  },
+  "settingsFooterNever": {
+    "message": "لم يُفحص بعد",
+    "description": "Settings footer line when no sweep has run yet."
+  },
+  "settingsFooterVersion": {
+    "message": "الإصدار $VERSION$",
+    "description": "Settings footer line with the extension version from the manifest. $VERSION$ is the version string.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.1.0"
+      }
+    }
   }
 }

@@ -31,10 +31,6 @@
     "message": "Watchlist is empty",
     "description": "Empty state on the Watchlist tab when no channels have been added."
   },
-  "emptySettings": {
-    "message": "No settings yet",
-    "description": "Empty state on the Settings tab."
-  },
   "nNewVideos": {
     "message": "$COUNT$ new videos",
     "description": "Desktop notification body when a channel uploaded more than one video since the last check. $COUNT$ is the number of new videos.",
@@ -238,5 +234,261 @@
   "channelMissing": {
     "message": "This channel is not in your watchlist",
     "description": "Shown when the per-channel window has no channel id, or the id is not on the Watchlist."
+  },
+  "settingsNotifications": {
+    "message": "Notifications",
+    "description": "Settings group heading for desktop alert controls."
+  },
+  "settingsAlertsEnabled": {
+    "message": "Enable notifications",
+    "description": "Master switch for desktop alerts on new uploads."
+  },
+  "settingsAlertsEnabledTitle": {
+    "message": "Master switch for desktop alerts on new uploads.",
+    "description": "Tooltip on the master notifications switch."
+  },
+  "settingsNotifyNormal": {
+    "message": "Notify for non-favourite channels",
+    "description": "Switch that lets non-favourite channels raise desktop alerts."
+  },
+  "settingsNotifyNormalTitle": {
+    "message": "Favourites always alert while notifications are on. This switch is only for the rest.",
+    "description": "Tooltip on the non-favourite notification switch."
+  },
+  "settingsNotifyNormalNote": {
+    "message": "Favourites always alert while notifications are on.",
+    "description": "Visible note under the non-favourite notification switch."
+  },
+  "settingsUseAvatar": {
+    "message": "Use the channel's avatar as the alert icon",
+    "description": "Switch that uses the channel avatar on desktop alerts."
+  },
+  "settingsUseAvatarTitle": {
+    "message": "When off, alerts use the extension icon instead.",
+    "description": "Tooltip on the alert-icon switch."
+  },
+  "settingsChecking": {
+    "message": "Checking",
+    "description": "Settings group heading for poll interval controls."
+  },
+  "settingsPollAllBefore": {
+    "message": "Check all channels every",
+    "description": "Label before the all-channels poll interval input."
+  },
+  "settingsPollAllAfter": {
+    "message": "minutes",
+    "description": "Label after the all-channels poll interval input."
+  },
+  "settingsPollAllTitle": {
+    "message": "YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.",
+    "description": "Tooltip on the all-channels poll interval."
+  },
+  "settingsPollFavBefore": {
+    "message": "Check favourites every",
+    "description": "Label before the favourites poll interval input."
+  },
+  "settingsPollFavAfter": {
+    "message": "minutes",
+    "description": "Label after the favourites poll interval input."
+  },
+  "settingsPollFavTitle": {
+    "message": "0 turns this extra check off. YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.",
+    "description": "Tooltip on the favourites poll interval."
+  },
+  "settingsPollCacheNote": {
+    "message": "YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.",
+    "description": "Visible note under the poll interval controls."
+  },
+  "settingsFeed": {
+    "message": "Feed",
+    "description": "Settings group heading for feed retention and shorts."
+  },
+  "settingsFeedMaxBefore": {
+    "message": "Keep the newest",
+    "description": "Label before the feed retention input."
+  },
+  "settingsFeedMaxAfter": {
+    "message": "videos",
+    "description": "Label after the feed retention input."
+  },
+  "settingsFeedMaxTitle": {
+    "message": "Oldest videos fall off the feed when this cap is reached.",
+    "description": "Tooltip on the feed retention input."
+  },
+  "settingsShowShorts": {
+    "message": "Show shorts",
+    "description": "Switch that includes YouTube Shorts in the feed and badge."
+  },
+  "settingsShowShortsTitle": {
+    "message": "Off hides shorts from the feed and from the toolbar badge.",
+    "description": "Tooltip on the show-shorts switch."
+  },
+  "settingsChannelWindow": {
+    "message": "Channel window",
+    "description": "Settings group heading for the per-channel window."
+  },
+  "settingsWindowRefreshBefore": {
+    "message": "Refresh every",
+    "description": "Label before the channel-window refresh interval input."
+  },
+  "settingsWindowRefreshAfter": {
+    "message": "minutes",
+    "description": "Label after the channel-window refresh interval input."
+  },
+  "settingsWindowRefreshTitle": {
+    "message": "0 means the channel window only refreshes when you press the button.",
+    "description": "Tooltip on the channel-window refresh interval."
+  },
+  "settingsWindowWidth": {
+    "message": "Width",
+    "description": "Label for the per-channel window width input."
+  },
+  "settingsWindowWidthTitle": {
+    "message": "Width of the per-channel window, in pixels.",
+    "description": "Tooltip on the per-channel window width input."
+  },
+  "settingsWindowHeight": {
+    "message": "Height",
+    "description": "Label for the per-channel window height input."
+  },
+  "settingsWindowHeightTitle": {
+    "message": "Height of the per-channel window, in pixels.",
+    "description": "Tooltip on the per-channel window height input."
+  },
+  "settingsLanguage": {
+    "message": "Language",
+    "description": "Settings group heading for the UI language."
+  },
+  "settingsLocale": {
+    "message": "Language",
+    "description": "Label for the UI language select."
+  },
+  "settingsLocaleTitle": {
+    "message": "Auto follows the browser language.",
+    "description": "Tooltip on the UI language select."
+  },
+  "settingsLocaleAuto": {
+    "message": "Auto",
+    "description": "Language option that follows the browser language."
+  },
+  "settingsLocaleEn": {
+    "message": "English",
+    "description": "Language option that pins the UI to English."
+  },
+  "settingsLocaleAr": {
+    "message": "العربية",
+    "description": "Language option that pins the UI to Arabic."
+  },
+  "settingsBackup": {
+    "message": "Backup",
+    "description": "Settings group heading for export and import."
+  },
+  "settingsExport": {
+    "message": "Export",
+    "description": "Button that downloads a JSON backup of settings and channels."
+  },
+  "settingsExportTitle": {
+    "message": "Download your settings and channel list as a JSON file.",
+    "description": "Tooltip on the export button."
+  },
+  "settingsImport": {
+    "message": "Import",
+    "description": "Button that starts restoring a JSON backup file."
+  },
+  "settingsImportTitle": {
+    "message": "Restore a previously exported file. Merge adds new channels; Replace overwrites everything.",
+    "description": "Tooltip on the import button."
+  },
+  "settingsImportPrompt": {
+    "message": "How should this file be applied?",
+    "description": "Prompt shown after a backup file is chosen, before Merge or Replace."
+  },
+  "settingsImportMerge": {
+    "message": "Merge",
+    "description": "Applies a backup by adding channels that are not already present."
+  },
+  "settingsImportReplace": {
+    "message": "Replace",
+    "description": "Starts replacing all channels and settings with the backup file."
+  },
+  "settingsImportReplacePrompt": {
+    "message": "Replace all channels and settings with this file?",
+    "description": "Inline confirmation prompt before a destructive Replace import."
+  },
+  "settingsImportReplaceConfirm": {
+    "message": "Replace everything",
+    "description": "Confirms replacing all channels and settings with the backup file."
+  },
+  "settingsImportReplaceCancel": {
+    "message": "Cancel",
+    "description": "Cancels a Replace import and returns to Merge or Replace."
+  },
+  "settingsImportAdded": {
+    "message": "Added $ADDED$ channels, $SKIPPED$ already present.",
+    "description": "Status after a Merge import. $ADDED$ is new channels; $SKIPPED$ were already in the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "3"
+      },
+      "skipped": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
+  "settingsImportReplaced": {
+    "message": "Replaced with $ADDED$ channels.",
+    "description": "Status after a Replace import. $ADDED$ is how many channels the file contained.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "settingsExportDone": {
+    "message": "Exported $COUNT$ channels.",
+    "description": "Status after a backup file is downloaded. $COUNT$ is the number of channels written.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "settingsFooterChannels": {
+    "message": "$COUNT$ channels",
+    "description": "Settings footer line with the number of watched channels. $COUNT$ is the count.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "settingsFooterFeed": {
+    "message": "$COUNT$ videos",
+    "description": "Settings footer line with the number of feed items. $COUNT$ is the count.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "40"
+      }
+    }
+  },
+  "settingsFooterNever": {
+    "message": "Never checked",
+    "description": "Settings footer line when no sweep has run yet."
+  },
+  "settingsFooterVersion": {
+    "message": "Version $VERSION$",
+    "description": "Settings footer line with the extension version from the manifest. $VERSION$ is the version string.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "0.1.0"
+      }
+    }
   }
 }
