@@ -50,9 +50,9 @@ Built in the order of DESIGN.md §11. Update this table as each one lands.
 | 3 | `lib/settings.js`, `lib/store.js` | **done** |
 | 4 | Worker: alarms, sweep, silent seed, notifications, badge | **done** |
 | 5 | Watchlist tab: add by URL, add by search, favourite, remove | **done** |
-| 6 | Feeds tab: render, tags, filter, refresh, click-through | **next** |
-| 7 | Channel window | not started |
-| 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | not started |
+| 6 | Feeds tab: render, tags, filter, refresh, click-through | **done** |
+| 7 | Channel window | **done** |
+| 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **next** |
 | 9 | i18n + Arabic + RTL over finished markup | not started |
 | 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | later stage, after 1-9 |
 
