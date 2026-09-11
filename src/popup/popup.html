@@ -49,7 +49,44 @@
     </nav>
 
     <section id="feeds" class="panel" role="tabpanel" aria-labelledby="tab-feeds">
-      <p class="empty" data-i18n="emptyFeeds">No channels yet</p>
+      <div class="feed-bar">
+        <input
+          id="feed-filter"
+          class="add-row__input"
+          type="text"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Filter by title or channel"
+          data-i18n-placeholder="feedFilterPlaceholder"
+          aria-label="Filter by title or channel"
+        />
+        <button
+          id="feed-refresh"
+          class="icon-btn"
+          type="button"
+          aria-label="Refresh"
+        >
+          ↻
+        </button>
+        <span id="feed-refresh-spinner" class="spinner" hidden></span>
+      </div>
+      <p id="feed-last-poll" class="banner" hidden></p>
+      <p id="feed-notice" class="banner" role="status" hidden></p>
+      <div id="feed-list" class="list"></div>
+      <div id="feed-empty-no-channels" class="empty">
+        <p data-i18n="emptyFeeds">No channels yet</p>
+        <button id="feed-goto-watchlist" class="btn btn--primary" type="button" data-i18n="feedEmptyAdd">
+          Add a channel
+        </button>
+      </div>
+      <div id="feed-empty-no-items" class="empty" hidden>
+        <p data-i18n="emptyFeedWaiting">Nothing has arrived yet</p>
+        <button id="feed-waiting-refresh" class="btn" type="button" data-i18n="feedRefresh">Refresh</button>
+      </div>
+      <div id="feed-empty-filter" class="empty" hidden>
+        <p id="feed-filter-miss"></p>
+        <button id="feed-filter-clear" class="btn" type="button" data-i18n="feedFilterClear">Clear filter</button>
+      </div>
     </section>
 
     <section id="watchlist" class="panel" role="tabpanel" aria-labelledby="tab-watchlist" hidden>

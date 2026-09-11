@@ -1,11 +1,12 @@
 /**
- * Popup: three tabs. The Watchlist tab adds, searches, favourites and
- * removes channels. The worker owns all network; this page only renders.
+ * Popup: three tabs. Feeds is the merged timeline; the Watchlist tab
+ * adds, searches, favourites and removes channels. The worker owns all
+ * network; this page only renders.
  */
 
-import { normalizeChannelInput } from '../lib/yt.js';
+import { normalizeChannelInput, thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
-import { relativeTime, compactCount, absoluteTime } from '../lib/fmt.js';
+import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
 
 const FALLBACK = {
   watchlistAdd: 'Add',
@@ -25,6 +26,21 @@ const FALLBACK = {
   watchlistOpenChannel: 'Open $TITLE$',
   watchlistChannelError: 'Could not update this channel',
   emptyWatchlist: 'Watchlist is empty',
+  emptyFeeds: 'No channels yet',
+  emptyFeedWaiting: 'Nothing has arrived yet',
+  emptyFeedFilter: 'No videos match "$QUERY$"',
+  feedFilterPlaceholder: 'Filter by title or channel',
+  feedRefresh: 'Refresh',
+  feedLastSweep: 'Last check $TIME$',
+  feedSweepRunning: 'A check is already running',
+  feedEmptyAdd: 'Add a channel',
+  feedFilterClear: 'Clear filter',
+  feedTagLive: 'LIVE',
+  feedTagShort: 'SHORT',
+  feedTagPremiere: 'PREMIERE',
+  feedTagPremiereAt: 'PREMIERE $TIME$',
+  feedViews: '$COUNT$ views',
+  feedOpenVideo: 'Open $TITLE$',
 };
 
 const view = {
@@ -36,6 +52,8 @@ const view = {
   error: '',
   busy: false,
   pendingRemoveId: null,
+  sweeping: false,
+  feedNotice: '',
 };
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -296,8 +314,224 @@ function channelRow(ch, locale) {
   return row;
 }
 
+function feedTag(item, locale) {
+  if (item.k === 'live') {
+    return textEl('span', 'feed-tag feed-tag--live', msg('feedTagLive'));
+  }
+  if (item.k === 'short') {
+    return textEl('span', 'feed-tag feed-tag--short', msg('feedTagShort'));
+  }
+  if (item.k === 'premiere') {
+    const st = Number(item.st) || 0;
+    const now = Date.now();
+    let text = msg('feedTagPremiere');
+    if (st > now) {
+      const when = relativeTime(st, now, locale);
+      if (when) text = msg('feedTagPremiereAt', [when]);
+    }
+    return textEl('span', 'feed-tag feed-tag--premiere', text);
+  }
+  return null;
+}
+
+function openVideo(item) {
+  const id = String(item.v || '');
+  if (!id) return;
+  const url = item.k === 'short'
+    ? `https://www.youtube.com/shorts/${id}`
+    : `https://www.youtube.com/watch?v=${id}`;
+  try {
+    const opening = chrome.tabs.create({ url, active: true });
+    Promise.resolve(opening).then(() => window.close(), () => {});
+  } catch {
+    // Leave the popup open if the tab could not be created.
+  }
+}
+
+function feedRow(item, locale, channel) {
+  const row = document.createElement('div');
+  row.className = 'feed-row';
+  row.tabIndex = 0;
+  const title = item.t || '';
+  row.setAttribute('aria-label', msg('feedOpenVideo', [title]));
+  row.addEventListener('click', () => openVideo(item));
+  row.addEventListener('keydown', (event) => {
+    if (event.target !== row) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    openVideo(item);
+  });
+
+  // Pin the thumbnail box so a slow image cannot reflow the list.
+  const thumb = document.createElement('div');
+  thumb.className = 'feed-row__thumb';
+  const img = document.createElement('img');
+  img.alt = title;
+  img.src = thumbUrl(item.v, 'mq');
+  thumb.appendChild(img);
+  row.appendChild(thumb);
+
+  const body = document.createElement('div');
+  body.className = 'feed-row__body';
+
+  const headline = document.createElement('div');
+  headline.className = 'feed-row__headline';
+  headline.appendChild(textEl('span', 'feed-row__title', title));
+  const tag = feedTag(item, locale);
+  if (tag) headline.appendChild(tag);
+  body.appendChild(headline);
+
+  const metaNodes = [];
+  const channelName = channel?.title || channel?.handle || '';
+  if (channelName) {
+    const chBtn = document.createElement('button');
+    chBtn.type = 'button';
+    chBtn.className = 'feed-row__channel';
+    chBtn.textContent = channelName;
+    chBtn.setAttribute('aria-label', msg('watchlistOpenChannel', [channelName]));
+    chBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openChannelWindow();
+    });
+    metaNodes.push(chBtn);
+  }
+
+  const at = Number(item.at) || 0;
+  if (at) {
+    const age = textEl('span', '', relativeTime(at, Date.now(), locale));
+    const abs = absoluteTime(at, locale);
+    if (abs) age.title = abs;
+    metaNodes.push(age);
+  }
+
+  const views = Number(item.vw);
+  if (Number.isFinite(views) && views > 0) {
+    const count = compactCount(views, locale);
+    if (count) metaNodes.push(textEl('span', '', msg('feedViews', [count])));
+  }
+
+  const dur = (item.k === 'live' || item.k === 'premiere') ? '' : duration(item.d);
+  if (dur) metaNodes.push(textEl('span', '', dur));
+
+  if (metaNodes.length) {
+    const meta = document.createElement('div');
+    meta.className = 'feed-row__meta';
+    metaNodes.forEach((node, i) => {
+      if (i) {
+        const dot = textEl('span', 'feed-row__dot', '·');
+        dot.setAttribute('aria-hidden', 'true');
+        meta.appendChild(dot);
+      }
+      meta.appendChild(node);
+    });
+    body.appendChild(meta);
+  }
+
+  row.appendChild(body);
+  return row;
+}
+
+function visibleFeedItems() {
+  const showShorts = !!view.settings?.feed?.showShorts;
+  // Shorts stay in storage; the view drops them when the setting is off.
+  const items = [];
+  for (const item of view.feed) {
+    if (!item || !item.v) continue;
+    if (!showShorts && item.k === 'short') continue;
+    items.push(item);
+  }
+  items.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+  return items;
+}
+
+function matchesFeedFilter(item, channel, q) {
+  if (!q) return true;
+  const title = String(item.t || '').toLowerCase();
+  const name = String(channel?.title || channel?.handle || '').toLowerCase();
+  return title.includes(q) || name.includes(q);
+}
+
+function renderFeeds(locale) {
+  const filterEl = document.getElementById('feed-filter');
+  const refreshBtn = document.getElementById('feed-refresh');
+  const spinner = document.getElementById('feed-refresh-spinner');
+  const lastEl = document.getElementById('feed-last-poll');
+  const noticeEl = document.getElementById('feed-notice');
+  const listEl = document.getElementById('feed-list');
+  const emptyNone = document.getElementById('feed-empty-no-channels');
+  const emptyWait = document.getElementById('feed-empty-no-items');
+  const emptyFilter = document.getElementById('feed-empty-filter');
+  const missEl = document.getElementById('feed-filter-miss');
+  const emptyRefresh = document.getElementById('feed-waiting-refresh');
+  const bar = filterEl.parentElement;
+
+  const locked = view.sweeping;
+  refreshBtn.disabled = locked;
+  if (emptyRefresh) emptyRefresh.disabled = locked;
+  spinner.hidden = !view.sweeping;
+  bar.classList.toggle('is-busy', view.sweeping);
+  bar.setAttribute('aria-busy', view.sweeping ? 'true' : 'false');
+  refreshBtn.setAttribute('aria-label', msg('feedRefresh'));
+  refreshBtn.title = msg('feedRefresh');
+
+  const lastAt = Number(view.pollState?.lastPollAt) || 0;
+  if (lastAt) {
+    const rel = relativeTime(lastAt, Date.now(), locale);
+    if (rel) {
+      lastEl.hidden = false;
+      lastEl.textContent = msg('feedLastSweep', [rel]);
+      lastEl.title = absoluteTime(lastAt, locale);
+    } else {
+      lastEl.hidden = true;
+      lastEl.textContent = '';
+      lastEl.removeAttribute('title');
+    }
+  } else {
+    lastEl.hidden = true;
+    lastEl.textContent = '';
+    lastEl.removeAttribute('title');
+  }
+
+  if (view.feedNotice) {
+    noticeEl.hidden = false;
+    noticeEl.textContent = view.feedNotice;
+    noticeEl.classList.toggle('banner--error', view.feedNotice !== msg('feedSweepRunning'));
+  } else {
+    noticeEl.hidden = true;
+    noticeEl.textContent = '';
+    noticeEl.classList.remove('banner--error');
+  }
+
+  const channelsById = new Map(view.channels.map((ch) => [ch.id, ch]));
+  // The feed has no read state: opening a video never hides it, and
+  // nothing is marked. Newest first, always the full list.
+  const items = visibleFeedItems();
+  const q = (filterEl.value || '').trim().toLowerCase();
+  const shown = q
+    ? items.filter((item) => matchesFeedFilter(item, channelsById.get(item.c), q))
+    : items;
+
+  listEl.replaceChildren();
+  for (const item of shown) {
+    listEl.appendChild(feedRow(item, locale, channelsById.get(item.c)));
+  }
+
+  const hasChannels = view.channels.length > 0;
+  const hasShown = shown.length > 0;
+  emptyNone.hidden = hasChannels;
+  emptyWait.hidden = !(hasChannels && !hasShown && !q);
+  emptyFilter.hidden = !(hasChannels && !hasShown && q);
+  listEl.hidden = !hasChannels || !hasShown;
+
+  if (!emptyFilter.hidden && missEl) {
+    missEl.textContent = msg('emptyFeedFilter', [(filterEl.value || '').trim()]);
+  }
+}
+
 function render() {
   const locale = activeLocale();
+  renderFeeds(locale);
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
   const addBtn = document.getElementById('watchlist-add-btn');
@@ -419,6 +653,57 @@ async function submitAdd(raw) {
   else await runSearch(input);
 }
 
+async function requestSweep() {
+  if (view.sweeping) return;
+  view.sweeping = true;
+  view.feedNotice = '';
+  render();
+  try {
+    const res = await send({ type: 'sweep', scope: 'all' });
+    if (res && res.ok === false) {
+      view.feedNotice = res.error === 'already running'
+        ? msg('feedSweepRunning')
+        : formatError(res.error);
+    }
+    await refreshState();
+  } catch (err) {
+    view.feedNotice = formatError(err?.message || err);
+  } finally {
+    view.sweeping = false;
+    render();
+  }
+}
+
+function bindFeeds() {
+  const filter = document.getElementById('feed-filter');
+  const refresh = document.getElementById('feed-refresh');
+  const gotoWatchlist = document.getElementById('feed-goto-watchlist');
+  const emptyRefresh = document.getElementById('feed-waiting-refresh');
+  const emptyClear = document.getElementById('feed-filter-clear');
+
+  filter.addEventListener('input', () => render());
+  refresh.addEventListener('click', () => {
+    void requestSweep();
+  });
+  emptyRefresh.addEventListener('click', () => {
+    void requestSweep();
+  });
+  emptyClear.addEventListener('click', () => {
+    filter.value = '';
+    render();
+    filter.focus();
+  });
+  gotoWatchlist.addEventListener('click', () => {
+    const tab = document.getElementById('tab-watchlist');
+    if (tab) activate(tab);
+  });
+  const placeholder = msg('feedFilterPlaceholder');
+  if (placeholder) {
+    filter.placeholder = placeholder;
+    filter.setAttribute('aria-label', placeholder);
+  }
+}
+
 function bindWatchlist() {
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
@@ -441,6 +726,7 @@ function bindWatchlist() {
 }
 
 bindWatchlist();
+bindFeeds();
 render();
 
 void (async () => {

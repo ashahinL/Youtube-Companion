@@ -81,6 +81,30 @@ export default async function run(t) {
   t.check('has add button', /id="watchlist-add-btn"/.test(w));
   t.check('has list container', /id="watchlist-list"/.test(w));
 
+  t.section('feeds');
+
+  const feeds = html.match(/<section\b[^>]*\bid="feeds"[^>]*>[\s\S]*?<\/section>/);
+  t.check('feeds panel exists', !!feeds);
+  const f = feeds ? feeds[0] : '';
+  t.check('has filter input', /id="feed-filter"/.test(f));
+  t.check('has refresh control', /id="feed-refresh"/.test(f));
+  t.check('has list container', /id="feed-list"/.test(f));
+
+  const emptyIds = [...f.matchAll(/id="(feed-empty-[^"]+)"/g)].map((m) => m[1]);
+  t.check(
+    'has three empty-state elements',
+    emptyIds.length === 3,
+    JSON.stringify(emptyIds),
+  );
+  t.check(
+    'empty states are distinct',
+    new Set(emptyIds).size === 3 &&
+      emptyIds.includes('feed-empty-no-channels') &&
+      emptyIds.includes('feed-empty-no-items') &&
+      emptyIds.includes('feed-empty-filter'),
+    JSON.stringify(emptyIds),
+  );
+
   t.section('i18n');
 
   const keys = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
@@ -116,6 +140,29 @@ export default async function run(t) {
     hex.length === 0,
     JSON.stringify(hex),
   );
+
+  const rootBlocks = [];
+  {
+    const re = /:root\s*\{/g;
+    let m;
+    while ((m = re.exec(css))) {
+      let depth = 1;
+      let j = m.index + m[0].length;
+      while (j < css.length && depth) {
+        if (css[j] === '{') depth++;
+        else if (css[j] === '}') depth--;
+        j++;
+      }
+      rootBlocks.push(css.slice(m.index, j));
+    }
+  }
+  t.check('has dark and light :root blocks', rootBlocks.length >= 2, String(rootBlocks.length));
+  const darkRoot = rootBlocks[0] || '';
+  const lightRoot = rootBlocks[1] || '';
+  for (const name of ['--tag-live', '--tag-premiere', '--tag-short']) {
+    t.check(`dark :root declares ${name}`, darkRoot.includes(`${name}:`), darkRoot.includes(name) ? name : 'missing');
+    t.check(`light :root declares ${name}`, lightRoot.includes(`${name}:`), lightRoot.includes(name) ? name : 'missing');
+  }
 
   t.section('message types');
 

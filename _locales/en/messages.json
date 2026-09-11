@@ -126,5 +126,91 @@
   "watchlistChannelError": {
     "message": "Could not update this channel",
     "description": "Accessible name of the warning marker on a Watchlist row whose last fetch failed. The worker's error text is in the tooltip."
+  },
+  "feedFilterPlaceholder": {
+    "message": "Filter by title or channel",
+    "description": "Placeholder and accessible name for the Feeds tab text filter."
+  },
+  "feedRefresh": {
+    "message": "Refresh",
+    "description": "Accessible name of the Feeds refresh control, and the label of the refresh button in the empty-feed state."
+  },
+  "feedLastSweep": {
+    "message": "Last check $TIME$",
+    "description": "Time of the last sweep, shown above the feed. $TIME$ is a relative timestamp such as 2h ago.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "2h ago"
+      }
+    }
+  },
+  "feedSweepRunning": {
+    "message": "A check is already running",
+    "description": "Inline notice on the Feeds tab when a refresh is requested while a sweep is already in progress."
+  },
+  "feedEmptyAdd": {
+    "message": "Add a channel",
+    "description": "Button on the Feeds empty state that switches to the Watchlist tab when no channels have been added."
+  },
+  "emptyFeedWaiting": {
+    "message": "Nothing has arrived yet",
+    "description": "Empty state on the Feeds tab when channels exist but the feed has no videos yet."
+  },
+  "feedFilterClear": {
+    "message": "Clear filter",
+    "description": "Button that clears the Feeds text filter when it matched no videos."
+  },
+  "emptyFeedFilter": {
+    "message": "No videos match \"$QUERY$\"",
+    "description": "Empty state on the Feeds tab when the text filter matched nothing. $QUERY$ is the filter text.",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "iphone"
+      }
+    }
+  },
+  "feedTagLive": {
+    "message": "LIVE",
+    "description": "Tag on a feed row that is a live stream."
+  },
+  "feedTagShort": {
+    "message": "SHORT",
+    "description": "Tag on a feed row that is a YouTube Short."
+  },
+  "feedTagPremiere": {
+    "message": "PREMIERE",
+    "description": "Tag on a feed row that is a premiere with no upcoming start time to show."
+  },
+  "feedTagPremiereAt": {
+    "message": "PREMIERE $TIME$",
+    "description": "Tag on a premiere whose start time is still in the future. $TIME$ is a relative timestamp such as in 3h.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "in 3h"
+      }
+    }
+  },
+  "feedViews": {
+    "message": "$COUNT$ views",
+    "description": "View count on a feed row. $COUNT$ is a compact number such as 1.4M.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1.4M"
+      }
+    }
+  },
+  "feedOpenVideo": {
+    "message": "Open $TITLE$",
+    "description": "Accessible name of a feed row. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "iPhone 18 Pro/Duo Impressions: Mogged"
+      }
+    }
   }
 }
