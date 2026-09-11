@@ -101,6 +101,11 @@ export default async function run(t) {
   t.check('no alert(', !/\balert\s*\(/.test(js));
   t.check('no prompt(', !/\bprompt\s*\(/.test(js));
   t.check('no direct fetch(', !/\bfetch\s*\(/.test(js));
+  // Channel and video titles are untrusted remote text. They reach the DOM
+  // through textContent only; an innerHTML assignment would make them markup.
+  t.check('no innerHTML assignment', !/\.innerHTML\s*(=|\+=)/.test(js));
+  t.check('no insertAdjacentHTML', !/insertAdjacentHTML/.test(js));
+  t.check('no outerHTML assignment', !/\.outerHTML\s*(=|\+=)/.test(js));
 
   t.section('popup.css colours');
 
