@@ -471,6 +471,17 @@ body {
   unicode-bidi: isolate;
 }
 
+/* Channel names and video titles are whatever language their channel writes
+ * in. Left to inherit the page direction, an English name inside an Arabic
+ * page truncates from its own start, so "Marques Brownlee" clipped to
+ * "s Brownlee". Plaintext gives each string its own direction from its first
+ * strong character, so the ellipsis lands at the end of the name either way. */
+.feed-row__title,
+.feed-row__channel,
+.watch-row__title {
+  unicode-bidi: plaintext;
+}
+
 .feed-row__meta > * + *::before {
   content: '·';
   margin-inline-end: 6px;

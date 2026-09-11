@@ -41,7 +41,8 @@ Quick map of the spec:
 
 ## Where the work is
 
-Built in the order of DESIGN.md §11. Update this table as each one lands.
+Built in the order of DESIGN.md §11. Jobs 1-9 are done and the extension is
+loadable; job 10 is the remaining one. Update this table as each one lands.
 
 | # | Job | State |
 |---|---|---|
@@ -52,8 +53,8 @@ Built in the order of DESIGN.md §11. Update this table as each one lands.
 | 5 | Watchlist tab: add by URL, add by search, favourite, remove | **done** |
 | 6 | Feeds tab: render, tags, filter, refresh, click-through | **done** |
 | 7 | Channel window | **done** |
-| 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **next** |
-| 9 | i18n + Arabic + RTL over finished markup | not started |
+| 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
+| 9 | i18n + Arabic + RTL over finished markup | **done** |
 | 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | later stage, after 1-9 |
 
 **Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3.
