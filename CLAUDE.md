@@ -47,8 +47,8 @@ Built in the order of DESIGN.md §11. Update this table as each one lands.
 |---|---|---|
 | 1 | Skeleton: manifest, package.json, locales, test harness, 3-tab popup shell | **done** |
 | 2 | `lib/yt.js` + fixtures — every endpoint and parser | **done** |
-| 3 | `lib/settings.js`, `lib/store.js` | **next** |
-| 4 | Worker: alarms, sweep, silent seed, notifications, badge | not started |
+| 3 | `lib/settings.js`, `lib/store.js` | **done** |
+| 4 | Worker: alarms, sweep, silent seed, notifications, badge | **next** |
 | 5 | Watchlist tab: add by URL, add by search, favourite, remove | not started |
 | 6 | Feeds tab: render, tags, filter, refresh, click-through | not started |
 | 7 | Channel window | not started |
