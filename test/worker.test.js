@@ -615,6 +615,10 @@ export default async function run(t) {
         ]),
       },
     });
+    // Pin the language: the collapsed text follows the user's choice, so
+    // leaving it on 'auto' would make this assertion depend on the machine
+    // the suite happens to run on.
+    await writeSettings({ ui: { locale: 'en' } });
     await runSweep({ scope: 'all' });
     t.check('three new items produce ONE notification', mock.notifications.length === 1, String(mock.notifications.length));
     t.check(
@@ -832,6 +836,33 @@ export default async function run(t) {
     t.check('listener delivers getState', viaListener.channels?.[0]?.id === MKBHD);
 
     t.check('badge colour was set once', mock.badgeColor === '#cc0000', String(mock.badgeColor));
+
+    t.section('the alert follows the chosen language, not the browser');
+
+    await writeSettings({ ui: { locale: 'ar' } });
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'arabic000001', t: 'One', at: AT.older },
+          { v: 'arabic000002', t: 'Two', at: AT.newest },
+        ]),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    const arabicNote = mock.notifications[mock.notifications.length - 1];
+    t.check(
+      'an Arabic collapsed alert is not the English string',
+      mock.notifications.length === 1 && arabicNote.message !== '2 new videos',
+      arabicNote?.message,
+    );
+    t.check(
+      'and it carries Arabic script',
+      /[\u0600-\u06FF]/.test(arabicNote?.message || ''),
+      arabicNote?.message,
+    );
+    await writeSettings({ ui: { locale: 'en' } });
   } finally {
     mock.restore();
     if (previousFetch === undefined) delete globalThis.fetch;

@@ -15,6 +15,7 @@ import {
 } from '../lib/yt.js';
 import { readSettings, writeSettings, onSettingsChanged } from '../lib/settings.js';
 import { parseBackup, mergeBackup } from '../lib/backup.js';
+import { resolveLocale, loadMessages, translate } from '../lib/i18n.js';
 import {
   readChannels,
   writeChannels,
@@ -122,10 +123,20 @@ function newestAt(feed, channelId) {
   return max;
 }
 
-function nNewVideosText(n) {
-  const i18n = chromeApi()?.i18n;
-  const msg = i18n?.getMessage?.('nNewVideos', [String(n)]);
-  return msg || `${n} new videos`;
+/* Chrome's own lookup follows the browser language, which would leave a user
+ * who chose Arabic with an Arabic interface and English alerts. The worker
+ * resolves the same setting the interface does. */
+async function nNewVideosText(n, settings) {
+  const locale = resolveLocale(settings?.ui?.locale, globalThis.navigator?.language);
+  try {
+    const map = await loadMessages(locale);
+    const text = translate(map, 'nNewVideos', [String(n)]);
+    if (text && text !== 'nNewVideos') return text;
+  } catch {
+    // A missing or unreadable message file must not cost the user the alert.
+  }
+  const fallback = chromeApi()?.i18n?.getMessage?.('nNewVideos', [String(n)]);
+  return fallback || `${n} new videos`;
 }
 
 function iconUrlFor(channel, settings) {
@@ -229,7 +240,7 @@ async function notifyChannel(channel, items, settings) {
   const newest = newestOf(items);
   if (!newest) return;
   const title = channel.title || channel.handle || channel.id;
-  const message = items.length === 1 ? newest.t : nNewVideosText(items.length);
+  const message = items.length === 1 ? newest.t : await nNewVideosText(items.length, settings);
   const id = notificationIdFor(channel.id);
   notificationVideos.set(id, newest.v);
   await chromeApi().notifications.create(id, {
