@@ -10,3 +10,4 @@ The parser suite runs against these; it must never touch the network.
 | browse.videos-tab.mrbeast.json | Videos tab, no shorts, ids under contentId |
 | player.live.json | a live stream: isLive true, lengthSeconds "0", liveBroadcastDetails present |
 | player.normal-video.json | a normal video, captured with NO ?key= parameter |
+| player.premiere.synthetic.json | SYNTHETIC, not captured — upcoming premiere player response, derived from player.live.json |

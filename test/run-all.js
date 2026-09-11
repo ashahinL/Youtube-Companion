@@ -14,6 +14,7 @@ const mode = args.has('--json') ? 'json' : (args.has('--summary') ? 'summary' : 
 const SUITES = [
   ['manifest + locales', './skeleton.test.js'],
   ['popup shell',        './popup.test.js'],
+  ['yt wire layer',      './yt.test.js'],
 ];
 
 const results = [];

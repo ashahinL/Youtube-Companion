@@ -46,8 +46,8 @@ Built in the order of DESIGN.md §11. Update this table as each one lands.
 | # | Job | State |
 |---|---|---|
 | 1 | Skeleton: manifest, package.json, locales, test harness, 3-tab popup shell | **done** |
-| 2 | `lib/yt.js` + fixtures — every endpoint and parser | **next** |
-| 3 | `lib/settings.js`, `lib/store.js` | not started |
+| 2 | `lib/yt.js` + fixtures — every endpoint and parser | **done** |
+| 3 | `lib/settings.js`, `lib/store.js` | **next** |
 | 4 | Worker: alarms, sweep, silent seed, notifications, badge | not started |
 | 5 | Watchlist tab: add by URL, add by search, favourite, remove | not started |
 | 6 | Feeds tab: render, tags, filter, refresh, click-through | not started |
@@ -120,8 +120,9 @@ The full list is [DESIGN.md §12](DESIGN.md). The ones that have teeth:
 - **The channel feed has no `ETag` and no 304 path**, and is cached for 900
   seconds. A poll without `cache: 'no-cache'` returns identical bytes and looks
   like "nothing new" for 15 minutes.
-- **`"videoId"` does not appear in a `browse` response** — the id is
-  `contentId`. A grep for the obvious key finds zero matches.
+- **The row id in a `browse` response is `contentId`, not `videoId`.**
+  `videoId` is there 210 times on nested endpoint objects, so harvesting it
+  returns each video several times. Read `contentId` off the lockup.
 - **The first `"channelId":"UC..."` in channel HTML belongs to a different
   channel.** Use `resolve_url`; if you ever must parse HTML, trust only
   `<link rel="canonical">` or `"externalId"`.
