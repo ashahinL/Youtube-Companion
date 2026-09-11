@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title data-i18n="channelWindowTitle">Channel</title>
+    <link rel="stylesheet" href="channel.css" />
+  </head>
+  <body>
+    <header class="channel-head">
+      <img id="channel-avatar" class="avatar" alt="" hidden />
+      <span id="channel-avatar-ph" class="avatar" aria-hidden="true"></span>
+      <div class="channel-head__text">
+        <h1 id="channel-title" class="channel-head__title"></h1>
+        <p id="channel-handle" class="channel-head__meta"></p>
+      </div>
+      <div class="channel-head__refresh">
+        <button
+          id="channel-refresh"
+          class="icon-btn"
+          type="button"
+          aria-label="Refresh"
+        >
+          ↻
+        </button>
+        <span id="channel-refresh-spinner" class="spinner" hidden></span>
+      </div>
+    </header>
+    <p id="channel-last-refresh" class="banner channel-status" hidden></p>
+    <p id="channel-error" class="banner banner--error channel-status" role="status" hidden></p>
+    <div class="channel-body">
+      <div id="channel-list" class="list"></div>
+      <p id="channel-empty" class="empty" data-i18n="channelEmpty" hidden>No videos</p>
+      <button id="channel-load-more" class="btn" type="button" data-i18n="channelLoadMore" hidden>
+        Load more
+      </button>
+    </div>
+    <script type="module" src="channel.js"></script>
+  </body>
+</html>

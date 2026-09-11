@@ -212,5 +212,31 @@
         "example": "iPhone 18 Pro/Duo Impressions: Mogged"
       }
     }
+  },
+  "channelWindowTitle": {
+    "message": "القناة",
+    "description": "Fallback document title of the per-channel window before the channel name is known."
+  },
+  "channelLoadMore": {
+    "message": "تحميل المزيد",
+    "description": "Button that loads the next page of videos in the per-channel window."
+  },
+  "channelEmpty": {
+    "message": "لا فيديوهات",
+    "description": "Empty state in the per-channel window when the channel has no videos."
+  },
+  "channelLastRefresh": {
+    "message": "آخر تحديث $TIME$",
+    "description": "Time of the last refresh of the per-channel video list. $TIME$ is a relative timestamp such as 2h ago.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "2h ago"
+      }
+    }
+  },
+  "channelMissing": {
+    "message": "هذه القناة ليست في قائمة المتابعة",
+    "description": "Shown when the per-channel window has no channel id, or the id is not on the Watchlist."
   }
 }

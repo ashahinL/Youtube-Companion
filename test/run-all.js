@@ -19,6 +19,7 @@ const SUITES = [
   ['settings',           './settings.test.js'],
   ['store',              './store.test.js'],
   ['service worker',     './worker.test.js'],
+  ['channel window',     './channel.test.js'],
 ];
 
 const results = [];

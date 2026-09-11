@@ -184,8 +184,9 @@ function buttonEl(className, label, onClick) {
   return btn;
 }
 
-function openChannelWindow() {
-  // The per-channel window opens from here.
+function openChannelWindow(id) {
+  if (!id) return;
+  void send({ type: 'openChannelWindow', id });
 }
 
 function searchRow(result, locale) {
@@ -240,7 +241,7 @@ function channelRow(ch, locale) {
   main.type = 'button';
   main.className = 'channel-row__main';
   main.setAttribute('aria-label', msg('watchlistOpenChannel', [title]));
-  main.addEventListener('click', openChannelWindow);
+  main.addEventListener('click', () => openChannelWindow(ch.id));
   main.appendChild(avatarEl(ch.avatar));
 
   const text = document.createElement('div');
@@ -396,7 +397,7 @@ function feedRow(item, locale, channel) {
     chBtn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openChannelWindow();
+      openChannelWindow(channel.id);
     });
     metaNodes.push(chBtn);
   }

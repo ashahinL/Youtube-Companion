@@ -1,0 +1,82 @@
+@import url('../popup/popup.css');
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.channel-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding-block: 12px;
+  padding-inline: 14px;
+  border-block-end: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.channel-head .avatar {
+  width: 44px;
+  height: 44px;
+}
+
+.channel-head__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.channel-head__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-head__meta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-head__refresh {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.channel-status {
+  padding-block: 8px 0;
+  padding-inline: 14px;
+}
+
+.channel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-block: 10px 16px;
+  padding-inline: 12px;
+}
+
+#channel-load-more {
+  display: block;
+  margin-block-start: 8px;
+  margin-inline: auto;
+}
+
+#channel-refresh:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

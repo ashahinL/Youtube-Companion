@@ -1,8 +1,8 @@
 /**
  * Background service worker.
  *
- * Owns all network, alarms, notifications and the badge. The popup never
- * fetches — it asks this file and renders what comes back.
+ * Owns all network, alarms, notifications and the badge. The popup and
+ * the channel window never fetch — they ask this file and render.
  */
 
 import {
@@ -46,6 +46,10 @@ const CHANNEL_FETCH_DELAY_MS = 250;
 let sweepActive = false;
 
 const notificationVideos = new Map();
+
+// Asking again for a channel that already has a window must focus it.
+// Two windows on the same cid would fight over refresh.
+const channelWindows = new Map();
 
 function chromeApi() {
   return globalThis.chrome;
@@ -379,6 +383,37 @@ export async function addChannelByInput(input) {
   return { ok: true, channel };
 }
 
+export function onChannelWindowRemoved(windowId) {
+  for (const [cid, wid] of channelWindows) {
+    if (wid === windowId) channelWindows.delete(cid);
+  }
+}
+
+export async function openChannelWindow(id) {
+  const cid = String(id || '').trim();
+  if (!cid) return { ok: false, error: 'missing id' };
+
+  const existing = channelWindows.get(cid);
+  if (existing != null) {
+    try {
+      await chromeApi().windows.update(existing, { focused: true });
+      return { ok: true, windowId: existing };
+    } catch {
+      channelWindows.delete(cid);
+    }
+  }
+
+  const settings = await readSettings();
+  const win = await chromeApi().windows.create({
+    url: `src/channel/channel.html?cid=${encodeURIComponent(cid)}`,
+    type: 'popup',
+    width: settings.channelWindow.width,
+    height: settings.channelWindow.height,
+  });
+  if (win && win.id != null) channelWindows.set(cid, win.id);
+  return { ok: true, windowId: win?.id };
+}
+
 export async function handleMessage(msg, _sender) {
   try {
     const type = msg && msg.type;
@@ -414,6 +449,8 @@ export async function handleMessage(msg, _sender) {
           ...ytOpts(),
           continuation: msg.continuation,
         });
+      case 'openChannelWindow':
+        return await openChannelWindow(msg.id);
       default:
         return { ok: false, error: 'unknown message' };
     }
@@ -455,6 +492,9 @@ chromeApi().runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 onSettingsChanged(() => {
   syncAlarms().catch(() => {});
+});
+chromeApi().windows.onRemoved.addListener((windowId) => {
+  onChannelWindowRemoved(windowId);
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 

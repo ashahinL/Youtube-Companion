@@ -164,6 +164,25 @@ export default async function run(t) {
     t.check(`light :root declares ${name}`, lightRoot.includes(`${name}:`), lightRoot.includes(name) ? name : 'missing');
   }
 
+  t.section('channel window wiring');
+
+  t.check(
+    'openChannelWindow sends openChannelWindow',
+    /function openChannelWindow\s*\(\s*id\s*\)\s*\{[\s\S]*?type:\s*['"]openChannelWindow['"]/.test(js),
+  );
+  t.check(
+    'watchlist row opens the channel window by id',
+    /openChannelWindow\(\s*ch\.id\s*\)/.test(js),
+  );
+  t.check(
+    'feed channel name opens the channel window by id',
+    /openChannelWindow\(\s*channel\.id\s*\)/.test(js),
+  );
+  t.check(
+    'openChannelWindow is not an empty stub',
+    !/The per-channel window opens from here/.test(js),
+  );
+
   t.section('message types');
 
   const sent = [...js.matchAll(/\btype:\s*['"](\w+)['"]/g)].map((m) => m[1]);

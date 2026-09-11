@@ -1,8 +1,8 @@
 /**
  * In-memory chrome.storage.local for Node suites. Deep-clones on the way
  * in and out so a test holding a reference cannot mutate the store behind
- * the code's back. Also records alarms, notifications, badge, tabs, and
- * runtime calls so the worker suite can assert on them.
+ * the code's back. Also records alarms, notifications, badge, tabs,
+ * windows, and runtime calls so the worker suite can assert on them.
  */
 
 function clone(value) {
@@ -57,6 +57,10 @@ export function installChromeMock(initial = {}) {
     badgeTexts: [],
     badgeColor: null,
     tabsCreated: [],
+    windowsCreated: [],
+    windowsUpdated: [],
+    windowRemovedListeners: [],
+    nextWindowId: 1,
     runtimeListeners: {
       onInstalled: [],
       onStartup: [],
@@ -213,6 +217,28 @@ export function installChromeMock(initial = {}) {
       },
     },
 
+    windows: {
+      async create(opts) {
+        const win = { id: handle.nextWindowId++, focused: true, ...(opts || {}) };
+        handle.windowsCreated.push({ ...win });
+        return { ...win };
+      },
+      async update(id, info) {
+        const rec = { id, ...(info || {}) };
+        handle.windowsUpdated.push({ ...rec });
+        return rec;
+      },
+      onRemoved: {
+        addListener(fn) {
+          if (typeof fn === 'function') handle.windowRemovedListeners.push(fn);
+        },
+        removeListener(fn) {
+          const i = handle.windowRemovedListeners.indexOf(fn);
+          if (i >= 0) handle.windowRemovedListeners.splice(i, 1);
+        },
+      },
+    },
+
     runtime: {
       lastError: undefined,
       getURL(path) {
@@ -253,6 +279,8 @@ export function installChromeMock(initial = {}) {
     handle.notifications.length = 0;
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
+    handle.windowsCreated.length = 0;
+    handle.windowsUpdated.length = 0;
     for (const key of Object.keys(alarms)) delete alarms[key];
     handle.badgeText = '';
   };
@@ -264,6 +292,10 @@ export function installChromeMock(initial = {}) {
   handle.fireAlarm = (name) => {
     const alarm = alarms[name] || { name };
     return Promise.all(handle.alarmListeners.map((fn) => fn(alarm)));
+  };
+
+  handle.fireWindowRemoved = (id) => {
+    for (const fn of handle.windowRemovedListeners) fn(id);
   };
 
   return handle;
