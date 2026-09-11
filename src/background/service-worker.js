@@ -49,7 +49,27 @@ const notificationVideos = new Map();
 
 // Asking again for a channel that already has a window must focus it.
 // Two windows on the same cid would fight over refresh.
-const channelWindows = new Map();
+/* Which channel each open window is showing, keyed by channel id.
+ * This lives in chrome.storage.session rather than a module variable because
+ * the worker is killed without warning: a map held in memory is gone by the
+ * time the user clicks the same channel again, and they would get a second
+ * window. Session storage survives that and is cleared on browser restart,
+ * by which time no window it described still exists. */
+const CHANNEL_WINDOWS_KEY = 'channelWindows';
+
+async function readChannelWindows() {
+  const area = chromeApi().storage?.session;
+  if (!area) return {};
+  const got = await area.get(CHANNEL_WINDOWS_KEY);
+  const map = got?.[CHANNEL_WINDOWS_KEY];
+  return map && typeof map === 'object' ? map : {};
+}
+
+async function writeChannelWindows(map) {
+  const area = chromeApi().storage?.session;
+  if (!area) return;
+  await area.set({ [CHANNEL_WINDOWS_KEY]: map });
+}
 
 function chromeApi() {
   return globalThis.chrome;
@@ -383,23 +403,32 @@ export async function addChannelByInput(input) {
   return { ok: true, channel };
 }
 
-export function onChannelWindowRemoved(windowId) {
-  for (const [cid, wid] of channelWindows) {
-    if (wid === windowId) channelWindows.delete(cid);
+export async function onChannelWindowRemoved(windowId) {
+  const map = await readChannelWindows();
+  let changed = false;
+  for (const [cid, wid] of Object.entries(map)) {
+    if (wid === windowId) {
+      delete map[cid];
+      changed = true;
+    }
   }
+  if (changed) await writeChannelWindows(map);
 }
 
 export async function openChannelWindow(id) {
   const cid = String(id || '').trim();
   if (!cid) return { ok: false, error: 'missing id' };
 
-  const existing = channelWindows.get(cid);
+  const map = await readChannelWindows();
+  const existing = map[cid];
   if (existing != null) {
     try {
       await chromeApi().windows.update(existing, { focused: true });
       return { ok: true, windowId: existing };
     } catch {
-      channelWindows.delete(cid);
+      // The window is gone and we were never told, so forget it and open anew.
+      delete map[cid];
+      await writeChannelWindows(map);
     }
   }
 
@@ -410,7 +439,10 @@ export async function openChannelWindow(id) {
     width: settings.channelWindow.width,
     height: settings.channelWindow.height,
   });
-  if (win && win.id != null) channelWindows.set(cid, win.id);
+  if (win && win.id != null) {
+    map[cid] = win.id;
+    await writeChannelWindows(map);
+  }
   return { ok: true, windowId: win?.id };
 }
 
@@ -494,7 +526,7 @@ onSettingsChanged(() => {
   syncAlarms().catch(() => {});
 });
 chromeApi().windows.onRemoved.addListener((windowId) => {
-  onChannelWindowRemoved(windowId);
+  void onChannelWindowRemoved(windowId);
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 

@@ -145,7 +145,7 @@ export default async function run(t) {
     );
 
     mock.fireWindowRemoved(created.id);
-    onChannelWindowRemoved(created.id);
+    await onChannelWindowRemoved(created.id);
     const third = await handleMessage({ type: 'openChannelWindow', id: CID });
     t.check('third open after close reports ok', third.ok === true, JSON.stringify(third));
     t.check(
@@ -157,6 +157,23 @@ export default async function run(t) {
       'third open is a new window id',
       mock.windowsCreated[1].id !== created.id,
       String(mock.windowsCreated[1]?.id),
+    );
+
+    // A mapping written straight into session storage, with nothing in memory,
+    // stands in for the worker having been killed and restarted since the
+    // window was opened. It must still be honoured.
+    const before = mock.windowsCreated.length;
+    await globalThis.chrome.storage.session.set({ channelWindows: { UCsurvivor: 4242 } });
+    const survived = await handleMessage({ type: 'openChannelWindow', id: 'UCsurvivor' });
+    t.check(
+      'a mapping only in session storage still focuses rather than reopening',
+      survived.ok === true && survived.windowId === 4242,
+      JSON.stringify(survived),
+    );
+    t.check(
+      'and creates no window',
+      mock.windowsCreated.length === before,
+      `${mock.windowsCreated.length} vs ${before}`,
     );
 
     const missing = await handleMessage({ type: 'openChannelWindow' });

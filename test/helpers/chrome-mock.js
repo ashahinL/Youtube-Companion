@@ -70,6 +70,8 @@ export function installChromeMock(initial = {}) {
     notificationClickListeners: [],
   };
 
+  const sessionStore = {};
+
   function fire(changes) {
     for (const fn of [...listeners]) fn(changes, 'local');
   }
@@ -137,6 +139,43 @@ export function installChromeMock(initial = {}) {
         removeListener(fn) {
           const i = listeners.indexOf(fn);
           if (i >= 0) listeners.splice(i, 1);
+        },
+      },
+
+      /* chrome.storage.session is backed separately: it survives the service
+       * worker being killed but is cleared when the browser restarts, which is
+       * exactly the lifetime open-window bookkeeping wants. */
+      session: {
+        async get(keys) {
+          if (keys === null || keys === undefined) return clone(sessionStore);
+          if (typeof keys === 'string') {
+            return keys in sessionStore ? { [keys]: clone(sessionStore[keys]) } : {};
+          }
+          if (Array.isArray(keys)) {
+            const out = {};
+            for (const key of keys) {
+              if (key in sessionStore) out[key] = clone(sessionStore[key]);
+            }
+            return out;
+          }
+          if (keys && typeof keys === 'object') {
+            const out = {};
+            for (const [key, fallback] of Object.entries(keys)) {
+              out[key] = key in sessionStore ? clone(sessionStore[key]) : clone(fallback);
+            }
+            return out;
+          }
+          return clone(sessionStore);
+        },
+        async set(items) {
+          if (!items || typeof items !== 'object') return;
+          for (const [key, value] of Object.entries(items)) sessionStore[key] = clone(value);
+        },
+        async remove(keys) {
+          for (const key of [].concat(keys)) delete sessionStore[key];
+        },
+        async clear() {
+          for (const key of Object.keys(sessionStore)) delete sessionStore[key];
         },
       },
     },
