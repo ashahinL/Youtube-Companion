@@ -8,6 +8,10 @@
   --accent: #ff0000;
   --on-accent: #ffffff;
   --radius: 9px;
+  /* The duration badge sits on a photograph, not on the page, so it stays
+   * dark-on-light in both themes rather than following them. */
+  --thumb-badge-bg: rgb(0 0 0 / 0.8);
+  --thumb-badge-text: #ffffff;
   --tag-live: #e11d2e;
   --on-tag-live: #ffffff;
   --tag-premiere: #e6a317;
@@ -18,6 +22,7 @@
 
 @media (prefers-color-scheme: light) {
   :root {
+    /* badge tokens deliberately do not flip; see :root */
     --bg: #ffffff;
     --surface: #f6f6f8;
     --surface-hover: #eeeef2;
@@ -355,6 +360,7 @@ body {
 
 /* Pin the box so a late-loading thumbnail cannot reflow the list. */
 .feed-row__thumb {
+  position: relative;
   flex: none;
   width: 96px;
   height: 54px;
@@ -396,7 +402,10 @@ body {
 
 .feed-row__meta {
   display: flex;
-  flex-wrap: wrap;
+  /* One line, always. Wrapping put a leading separator at the start of the
+   * second line, and the parts after the channel name are short and fixed —
+   * so the channel name is the one that gives way. */
+  flex-wrap: nowrap;
   align-items: center;
   gap: 6px;
   margin-block-start: 2px;
@@ -420,8 +429,38 @@ body {
   text-decoration: underline;
 }
 
-.feed-row__dot {
+.feed-row__meta > * {
   flex: none;
+  white-space: nowrap;
+}
+
+.feed-row__meta > .feed-row__channel {
+  /* The name is the only part that can be long, so it is the one that gives
+   * way when the row runs out of room. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.feed-row__duration {
+  position: absolute;
+  inset-block-end: 3px;
+  inset-inline-end: 3px;
+  padding-block: 0;
+  padding-inline: 4px;
+  border-radius: 4px;
+  background: var(--thumb-badge-bg);
+  color: var(--thumb-badge-text);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  line-height: 15px;
+}
+
+.feed-row__meta > * + *::before {
+  content: '·';
+  margin-inline-end: 6px;
+  color: var(--text-dim);
 }
 
 .feed-tag {

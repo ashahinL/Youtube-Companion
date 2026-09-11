@@ -8,6 +8,7 @@
     "test": "node test/run-all.js --summary",
     "test:verbose": "node test/run-all.js",
     "test:json": "node test/run-all.js --json",
-    "check": "node test/check-syntax.js"
+    "check": "node test/check-syntax.js",
+    "test:live": "node test/live.js"
   }
 }

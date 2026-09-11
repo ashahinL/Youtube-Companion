@@ -369,6 +369,10 @@ function feedRow(item, locale, channel) {
   img.alt = title;
   img.src = thumbUrl(item.v, 'mq');
   thumb.appendChild(img);
+  // Duration rides on the thumbnail rather than the meta line. Four parts on
+  // one line do not fit 400px, and this is the one with a natural home.
+  const dur = (item.k === 'live' || item.k === 'premiere') ? '' : duration(item.d);
+  if (dur) thumb.appendChild(textEl('span', 'feed-row__duration', dur));
   row.appendChild(thumb);
 
   const body = document.createElement('div');
@@ -408,23 +412,16 @@ function feedRow(item, locale, channel) {
   const views = Number(item.vw);
   if (Number.isFinite(views) && views > 0) {
     const count = compactCount(views, locale);
-    if (count) metaNodes.push(textEl('span', '', msg('feedViews', [count])));
+    if (count) metaNodes.push(textEl('span', 'feed-row__views', msg('feedViews', [count])));
   }
-
-  const dur = (item.k === 'live' || item.k === 'premiere') ? '' : duration(item.d);
-  if (dur) metaNodes.push(textEl('span', '', dur));
 
   if (metaNodes.length) {
     const meta = document.createElement('div');
     meta.className = 'feed-row__meta';
-    metaNodes.forEach((node, i) => {
-      if (i) {
-        const dot = textEl('span', 'feed-row__dot', '·');
-        dot.setAttribute('aria-hidden', 'true');
-        meta.appendChild(dot);
-      }
-      meta.appendChild(node);
-    });
+    // The separator is drawn by CSS on each part after the first, so that a
+    // meta line wrapping onto a second row carries its dot down with the part
+    // it belongs to instead of stranding one at the end of the line.
+    metaNodes.forEach((node) => meta.appendChild(node));
     body.appendChild(meta);
   }
 
