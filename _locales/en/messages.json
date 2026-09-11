@@ -34,5 +34,15 @@
   "emptySettings": {
     "message": "No settings yet",
     "description": "Empty state on the Settings tab."
+  },
+  "nNewVideos": {
+    "message": "$COUNT$ new videos",
+    "description": "Desktop notification body when a channel uploaded more than one video since the last check. $COUNT$ is the number of new videos.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
   }
 }

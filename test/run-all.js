@@ -17,6 +17,7 @@ const SUITES = [
   ['yt wire layer',      './yt.test.js'],
   ['settings',           './settings.test.js'],
   ['store',              './store.test.js'],
+  ['service worker',     './worker.test.js'],
 ];
 
 const results = [];
