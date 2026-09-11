@@ -54,7 +54,7 @@ Built in the order of DESIGN.md §11. Update this table as each one lands.
 | 7 | Channel window | not started |
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | not started |
 | 9 | i18n + Arabic + RTL over finished markup | not started |
-| 10 | Build the Audio tab (see DESIGN.md §13) | later stage, after 1-9 |
+| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | later stage, after 1-9 |
 
 **Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3.
 Read it before touching the audio-mode code, and keep that discussion in the
