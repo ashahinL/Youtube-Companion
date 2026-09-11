@@ -1,0 +1,59 @@
+/**
+ * Popup shell. Text and file-existence assertions only — there is no DOM
+ * here, so popup.js is never imported.
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const POPUP = path.join(ROOT, 'src/popup');
+
+function attrs(tag) {
+  const out = {};
+  for (const m of tag.matchAll(/([\w:-]+)="([^"]*)"/g)) out[m[1]] = m[2];
+  return out;
+}
+
+export default async function run(t) {
+  const html = fs.readFileSync(path.join(POPUP, 'popup.html'), 'utf8');
+  const en = JSON.parse(fs.readFileSync(path.join(ROOT, '_locales/en/messages.json'), 'utf8'));
+
+  t.section('tabs');
+
+  const tabButtons = [...html.matchAll(/<button\b[^>]*>/gi)]
+    .map((m) => attrs(m[0]))
+    .filter((a) => a.role === 'tab');
+  t.check('has exactly three role="tab" buttons', tabButtons.length === 3, String(tabButtons.length));
+
+  const dataTabs = tabButtons.map((a) => a['data-tab']);
+  for (const name of ['feeds', 'watchlist', 'settings']) {
+    t.check(`has a tab with data-tab="${name}"`, dataTabs.includes(name), JSON.stringify(dataTabs));
+  }
+
+  t.section('panels');
+
+  const panels = [...html.matchAll(/<[^>]*\brole="tabpanel"[^>]*>/gi)].map((m) => attrs(m[0]));
+  for (const name of ['feeds', 'watchlist', 'settings']) {
+    t.check(
+      `has a tabpanel whose id is ${name}`,
+      panels.some((p) => p.id === name),
+      JSON.stringify(panels.map((p) => p.id)),
+    );
+  }
+
+  t.section('i18n');
+
+  const keys = [...html.matchAll(/data-i18n="([^"]+)"/g)].map((m) => m[1]);
+  for (const key of keys) {
+    t.check(`data-i18n="${key}" exists in en`, key in en);
+  }
+
+  t.section('assets');
+
+  t.check('references popup.css', /href="popup\.css"/.test(html));
+  t.check('references popup.js', /src="popup\.js"/.test(html));
+  t.check('popup.css exists', fs.existsSync(path.join(POPUP, 'popup.css')));
+  t.check('popup.js exists', fs.existsSync(path.join(POPUP, 'popup.js')));
+}

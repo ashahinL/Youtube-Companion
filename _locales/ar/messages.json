@@ -1,0 +1,38 @@
+{
+  "extName": {
+    "message": "رفيق يوتيوب",
+    "description": "Extension name in chrome://extensions, the store listing, and the popup title."
+  },
+  "extDescription": {
+    "message": "اشتراكات يوتيوب بلا حساب: موجز مدمج مرتب زمنياً لكل قناة تضيفها، ونافذة لكل قناة، وتنبيهات سطح المكتب عند الرفع الجديد.",
+    "description": "Extension description shown in chrome://extensions and the store listing."
+  },
+  "extActionTitle": {
+    "message": "رفيق يوتيوب",
+    "description": "Toolbar button tooltip (action.default_title)."
+  },
+  "tabFeeds": {
+    "message": "الموجز",
+    "description": "Popup tab label for the merged video feed."
+  },
+  "tabWatchlist": {
+    "message": "قائمة المتابعة",
+    "description": "Popup tab label for the channel list."
+  },
+  "tabSettings": {
+    "message": "الإعدادات",
+    "description": "Popup tab label for settings."
+  },
+  "emptyFeeds": {
+    "message": "لا قنوات بعد",
+    "description": "Empty state on the Feeds tab when no channels have been added."
+  },
+  "emptyWatchlist": {
+    "message": "قائمة المتابعة فارغة",
+    "description": "Empty state on the Watchlist tab when no channels have been added."
+  },
+  "emptySettings": {
+    "message": "لا إعدادات بعد",
+    "description": "Empty state on the Settings tab."
+  }
+}

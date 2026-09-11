@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title data-i18n="extName">YouTube Companion</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <nav class="tabs" role="tablist">
+      <button
+        class="tab tab--active"
+        id="tab-feeds"
+        data-tab="feeds"
+        data-i18n="tabFeeds"
+        type="button"
+        role="tab"
+        aria-selected="true"
+        aria-controls="feeds"
+        tabindex="0"
+      >
+        Feeds
+      </button>
+      <button
+        class="tab"
+        id="tab-watchlist"
+        data-tab="watchlist"
+        data-i18n="tabWatchlist"
+        type="button"
+        role="tab"
+        aria-selected="false"
+        aria-controls="watchlist"
+        tabindex="-1"
+      >
+        Watchlist
+      </button>
+      <button
+        class="tab"
+        id="tab-settings"
+        data-tab="settings"
+        data-i18n="tabSettings"
+        type="button"
+        role="tab"
+        aria-selected="false"
+        aria-controls="settings"
+        tabindex="-1"
+      >
+        Settings
+      </button>
+    </nav>
+
+    <section id="feeds" class="panel" role="tabpanel" aria-labelledby="tab-feeds">
+      <p class="empty" data-i18n="emptyFeeds">No channels yet</p>
+    </section>
+
+    <section id="watchlist" class="panel" role="tabpanel" aria-labelledby="tab-watchlist" hidden>
+      <p class="empty" data-i18n="emptyWatchlist">Watchlist is empty</p>
+    </section>
+
+    <section id="settings" class="panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <p class="empty" data-i18n="emptySettings">No settings yet</p>
+    </section>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

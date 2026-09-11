@@ -1,0 +1,38 @@
+{
+  "extName": {
+    "message": "YouTube Companion",
+    "description": "Extension name in chrome://extensions, the store listing, and the popup title."
+  },
+  "extDescription": {
+    "message": "Account-free YouTube subscriptions with a merged feed and alerts on new uploads.",
+    "description": "Extension description shown in chrome://extensions and the store listing."
+  },
+  "extActionTitle": {
+    "message": "YouTube Companion",
+    "description": "Toolbar button tooltip (action.default_title)."
+  },
+  "tabFeeds": {
+    "message": "Feeds",
+    "description": "Popup tab label for the merged video feed."
+  },
+  "tabWatchlist": {
+    "message": "Watchlist",
+    "description": "Popup tab label for the channel list."
+  },
+  "tabSettings": {
+    "message": "Settings",
+    "description": "Popup tab label for settings."
+  },
+  "emptyFeeds": {
+    "message": "No channels yet",
+    "description": "Empty state on the Feeds tab when no channels have been added."
+  },
+  "emptyWatchlist": {
+    "message": "Watchlist is empty",
+    "description": "Empty state on the Watchlist tab when no channels have been added."
+  },
+  "emptySettings": {
+    "message": "No settings yet",
+    "description": "Empty state on the Settings tab."
+  }
+}

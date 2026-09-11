@@ -1,0 +1,93 @@
+:root {
+  --bg: #0f0f14;
+  --surface: #17171f;
+  --surface-hover: #1e1e28;
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #f1f1f4;
+  --text-dim: rgba(241, 241, 244, 0.55);
+  --accent: #ff0000;
+  --radius: 9px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --surface: #f6f6f8;
+    --surface-hover: #eeeef2;
+    --border: rgba(0, 0, 0, 0.1);
+    --text: #16161a;
+    --text-dim: rgba(22, 22, 26, 0.58);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* An author `display` otherwise beats the UA's [hidden] rule, leaving
+ * `el.hidden = true` visible. Make hidden win. */
+[hidden] {
+  display: none !important;
+}
+
+/* Chrome sizes a toolbar popup by shrink-wrapping the document, so the width has
+ * to be pinned on BOTH elements: leaving `html` auto lets the canvas stretch to
+ * the window, and body's background propagates into it — a 400px column of UI
+ * with a wide dark void beside it.
+ *
+ * Nothing here may become a scroll container, either. `overflow-y: auto` forces
+ * `overflow-x` to compute to `auto` as well, which makes the document's preferred
+ * width indeterminate and drops Chrome onto its fallback popup size (800x600).
+ * Tall content needs no help: the popup scrolls natively once it hits its own
+ * ~600px ceiling. */
+html {
+  width: 400px;
+}
+
+body {
+  width: 400px;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding-inline: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.tab--active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.panel {
+  padding: 14px 16px 18px;
+}
+
+.empty {
+  margin: 40px 16px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
+}
