@@ -588,6 +588,7 @@ export default async function run(t) {
     const fetch = recordFetch((url, opts) => {
       t.check('feed URL', url === `https://www.youtube.com/feeds/videos.xml?channel_id=${mkbhdId}`, url);
       t.check("feed passes cache: 'no-cache'", opts.cache === 'no-cache', String(opts.cache));
+      t.check("feed omits credentials", opts.credentials === 'omit', String(opts.credentials));
       return textRes(rssMkbhd);
     });
     const got = await fetchChannelFeed(mkbhdId, { fetch });
@@ -614,6 +615,7 @@ export default async function run(t) {
       t.check('resolve_url body url', body.url === 'https://www.youtube.com/@mkbhd', body.url);
       t.check('innertube clientName WEB', body.context.client.clientName === 'WEB');
       t.check('Content-Type is json', opts.headers['Content-Type'] === 'application/json');
+      t.check("resolve_url omits credentials", opts.credentials === 'omit', String(opts.credentials));
       return jsonRes(resolveJson);
     });
     const id = await resolveChannelId('@mkbhd', { fetch });
@@ -701,6 +703,7 @@ export default async function run(t) {
     });
     t.check('isShort 200 not redirected is true', (await isShort('5mU6SRS2Bxo', { fetch })) === true);
     t.check('isShort used HEAD', fetch.calls[0].opts.method === 'HEAD');
+    t.check("isShort omits credentials", fetch.calls[0].opts.credentials === 'omit', String(fetch.calls[0].opts.credentials));
   }
 
   {

@@ -61,6 +61,8 @@ export function installChromeMock(initial = {}) {
     windowsUpdated: [],
     windowRemovedListeners: [],
     nextWindowId: 1,
+    dnrRules: [],
+    dnrUpdates: [],
     runtimeListeners: {
       onInstalled: [],
       onStartup: [],
@@ -278,7 +280,20 @@ export function installChromeMock(initial = {}) {
       },
     },
 
+    declarativeNetRequest: {
+      async updateDynamicRules({ addRules = [], removeRuleIds = [] } = {}) {
+        const remove = new Set(removeRuleIds);
+        handle.dnrRules = handle.dnrRules.filter((rule) => !remove.has(rule.id));
+        for (const rule of addRules) handle.dnrRules.push(clone(rule));
+        handle.dnrUpdates.push({
+          addRules: clone(addRules),
+          removeRuleIds: [...removeRuleIds],
+        });
+      },
+    },
+
     runtime: {
+      id: 'youtube-companion-test',
       lastError: undefined,
       getURL(path) {
         return 'chrome-extension://youtube-companion/' + String(path || '').replace(/^\//, '');

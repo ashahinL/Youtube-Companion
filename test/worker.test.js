@@ -319,6 +319,31 @@ export default async function run(t) {
   }
 
   try {
+    t.section('youtube origin rewrite');
+
+    const originRule = mock.dnrRules.find((r) => r.id === 1);
+    t.check('installs a DNR origin rule on boot', !!originRule, JSON.stringify(mock.dnrRules));
+    const originHeader = originRule?.action?.requestHeaders?.find(
+      (h) => String(h.header).toLowerCase() === 'origin',
+    );
+    t.check(
+      'rewrites Origin to https://www.youtube.com',
+      originHeader?.operation === 'set' && originHeader?.value === 'https://www.youtube.com',
+      JSON.stringify(originHeader),
+    );
+    t.check(
+      'rule is scoped to this extension',
+      Array.isArray(originRule?.condition?.initiatorDomains)
+        && originRule.condition.initiatorDomains.includes('youtube-companion-test'),
+      JSON.stringify(originRule?.condition),
+    );
+    t.check(
+      'rule targets www.youtube.com',
+      Array.isArray(originRule?.condition?.requestDomains)
+        && originRule.condition.requestDomains.includes('www.youtube.com'),
+      JSON.stringify(originRule?.condition?.requestDomains),
+    );
+
     t.section('syncAlarms');
 
     await wipe();
@@ -790,6 +815,32 @@ export default async function run(t) {
     t.check(
       'addChannel seed landed the item',
       (await readFeed()).some((row) => row.v === 'beastseed01'),
+    );
+
+    const LTT = 'UCXuqSBlHAE6Xw-yeJA0Tunw';
+    installFetch({
+      resolveId: LTT,
+      browse: headerJson(LTT, 'Linus Tech Tips', '@LinusTechTips', 'https://yt3.ggpht.com/ltt'),
+      feeds: {
+        [LTT]: rssXml(LTT, 'Linus Tech Tips', [
+          { v: 'lttseed00001', t: 'LTT seed', at: AT.newest },
+        ]),
+      },
+    });
+    const badgeFn = globalThis.chrome.action.setBadgeText;
+    globalThis.chrome.action.setBadgeText = async () => {
+      throw new Error('badge failed');
+    };
+    const addedDespiteSweep = await handleMessage({ type: 'addChannel', input: '@LinusTechTips' });
+    globalThis.chrome.action.setBadgeText = badgeFn;
+    t.check(
+      'addChannel still ok when the seed sweep throws',
+      addedDespiteSweep.ok === true && addedDespiteSweep.channel?.id === LTT,
+      JSON.stringify(addedDespiteSweep),
+    );
+    t.check(
+      'channel stayed stored after a failed seed',
+      (await readChannels()).some((c) => c.id === LTT),
     );
 
     const beforeFav = mock.alarmsCreated.length;

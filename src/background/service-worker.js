@@ -42,6 +42,10 @@ const ALARM_FAV = 'poll-fav';
 const BADGE_COLOR = '#cc0000';
 const EXT_ICON = 'icons/icon128.png';
 
+// Innertube POSTs from the worker carry Origin: chrome-extension://… and
+// YouTube 403s that Origin. Fetch cannot override it; this rule can.
+const YT_ORIGIN_RULE_ID = 1;
+
 // Politeness pause between channel fetches — not a rate limit YouTube published.
 const CHANNEL_FETCH_DELAY_MS = 250;
 
@@ -155,6 +159,49 @@ function notificationIdFor(channelId) {
  */
 export async function reconcileRunning() {
   await writePollState({ running: false });
+}
+
+let originRulePromise = null;
+
+/**
+ * Rewrite Origin/Referer on this extension's own youtube.com requests so
+ * they look like they came from the site. initiatorDomains keeps the
+ * user's YouTube tabs untouched.
+ */
+export function ensureYtOriginRule() {
+  if (originRulePromise) return originRulePromise;
+  originRulePromise = installYtOriginRule().catch((err) => {
+    originRulePromise = null;
+    throw err;
+  });
+  return originRulePromise;
+}
+
+async function installYtOriginRule() {
+  const dnr = chromeApi().declarativeNetRequest;
+  const id = chromeApi().runtime?.id;
+  if (!dnr?.updateDynamicRules || !id) return;
+  await dnr.updateDynamicRules({
+    removeRuleIds: [YT_ORIGIN_RULE_ID],
+    addRules: [
+      {
+        id: YT_ORIGIN_RULE_ID,
+        priority: 1,
+        action: {
+          type: 'modifyHeaders',
+          requestHeaders: [
+            { header: 'Origin', operation: 'set', value: 'https://www.youtube.com' },
+            { header: 'Referer', operation: 'set', value: 'https://www.youtube.com/' },
+          ],
+        },
+        condition: {
+          initiatorDomains: [id],
+          requestDomains: ['www.youtube.com'],
+          resourceTypes: ['xmlhttprequest', 'other'],
+        },
+      },
+    ],
+  });
 }
 
 export async function syncAlarms() {
@@ -381,6 +428,7 @@ async function performSweep({ scope, onlyId }) {
  * upload as new and fire duplicate alerts.
  */
 export async function runSweep({ scope = 'all', onlyId = null } = {}) {
+  await ensureYtOriginRule().catch(() => {});
   if (sweepActive) return { ok: false, error: 'already running' };
   sweepActive = true;
   try {
@@ -412,7 +460,12 @@ export async function addChannelByInput(input) {
     avatar: header.avatar || '',
   });
   if (!added) return { ok: false, error: 'already added', id };
-  await runSweep({ scope: 'all', onlyId: id });
+  try {
+    await runSweep({ scope: 'all', onlyId: id });
+  } catch {
+    // The channel is already stored. A failed seed must not look like
+    // "could not add" — the next poll retries it.
+  }
   const channel = (await readChannels()).find((ch) => ch.id === id);
   return { ok: true, channel };
 }
@@ -462,6 +515,7 @@ export async function openChannelWindow(id) {
 
 export async function handleMessage(msg, _sender) {
   try {
+    await ensureYtOriginRule().catch(() => {});
     const type = msg && msg.type;
     switch (type) {
       case 'getState':
@@ -563,6 +617,7 @@ function onAlarm(alarm) {
 }
 
 function onBoot() {
+  ensureYtOriginRule().catch(() => {});
   reconcileRunning().then(syncAlarms).catch(() => {});
 }
 
@@ -588,4 +643,7 @@ chromeApi().windows.onRemoved.addListener((windowId) => {
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 
-export const ready = reconcileRunning().catch(() => {});
+export const ready = Promise.all([
+  reconcileRunning().catch(() => {}),
+  ensureYtOriginRule().catch(() => {}),
+]);

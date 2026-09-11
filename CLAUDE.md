@@ -140,3 +140,7 @@ The full list is [DESIGN.md §12](DESIGN.md). The ones that have teeth:
   Use inline confirm rows.
 - **Chrome floors alarm periods at 1 minute** and silently clamps anything
   lower.
+- **Innertube POSTs from the extension send `Origin: chrome-extension://…`
+  and YouTube 403s that Origin.** Fetch cannot override it. A DNR rule
+  rewrites Origin to `https://www.youtube.com` on this extension's own
+  requests. All YouTube fetches pass `credentials: 'omit'`.

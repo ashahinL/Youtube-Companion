@@ -25,10 +25,15 @@ export default async function run(t) {
 
   t.check('is MV3', manifest.manifest_version === 3, String(manifest.manifest_version));
 
-  const expectedPerms = ['storage', 'alarms', 'notifications'];
+  const expectedPerms = [
+    'storage',
+    'alarms',
+    'notifications',
+    'declarativeNetRequestWithHostAccess',
+  ];
   const perms = manifest.permissions || [];
   t.check(
-    'has exactly storage, alarms, notifications',
+    'has storage, alarms, notifications, declarativeNetRequestWithHostAccess',
     perms.length === expectedPerms.length && expectedPerms.every((p) => perms.includes(p)),
     JSON.stringify(perms),
   );

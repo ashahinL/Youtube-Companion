@@ -163,6 +163,9 @@ async function innertubePost(method, extra, fetchImpl) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...INNERTUBE_CONTEXT, ...extra }),
+      // Cookie-free on purpose. A logged-in YouTube cookie without
+      // SAPISIDHASH is a different request, often 401.
+      credentials: 'omit',
     });
   } catch {
     throw new YtError('network', method);
@@ -530,7 +533,7 @@ export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } =
   try {
     // The feed's cache-control is max-age=900 with no ETag/304, so a poll
     // without cache:'no-cache' returns the same bytes for 15 minutes.
-    res = await fetch(url, { cache: 'no-cache' });
+    res = await fetch(url, { cache: 'no-cache', credentials: 'omit' });
   } catch {
     throw new YtError('network', 'feed');
   }
@@ -568,7 +571,7 @@ export async function isShort(videoId, { fetch = globalThis.fetch } = {}) {
   try {
     // redirect:'manual' yields an opaque response whose status cannot be
     // read. Leave the default (follow) and inspect redirected / url.
-    res = await fetch(url, { method: 'HEAD' });
+    res = await fetch(url, { method: 'HEAD', credentials: 'omit' });
   } catch {
     throw new YtError('network', 'shorts');
   }
