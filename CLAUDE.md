@@ -6,7 +6,7 @@ Guidance for Claude Code working in this repository.
 
 **YouTube Companion** — a Chrome/Edge **MV3** extension. Account-free YouTube
 subscriptions: a merged time-sorted feed of channels you add by URL, a
-per-channel browser window, and desktop alerts on new uploads.
+per-channel sheet inside the popup, and desktop alerts on new uploads.
 
 Sibling of `../poppo-companion` and `../bigo-companion`. Same house shape:
 **no build step, no dependencies, plain ES modules.** What is in `src/` is what
@@ -32,7 +32,7 @@ Quick map of the spec:
 | 4 | File layout and the manifest |
 | 5 | The background worker: alarms, the sweep, the silent seed, alerts, badge |
 | 6 | The popup's three tabs |
-| 7 | The per-channel window |
+| 7 | The per-channel sheet |
 | 8 | i18n and RTL |
 | 9 | Backup format |
 | 10 | The test suites |
@@ -52,7 +52,7 @@ loadable; job 10 is the remaining one. Update this table as each one lands.
 | 4 | Worker: alarms, sweep, silent seed, notifications, badge | **done** |
 | 5 | Watchlist tab: add by URL, add by search, favourite, remove | **done** |
 | 6 | Feeds tab: render, tags, filter, refresh, click-through | **done** |
-| 7 | Channel window | **done** |
+| 7 | Channel sheet (in-popup overlay of stored videos) | **done** |
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
 | 9 | i18n + Arabic + RTL over finished markup | **done** |
 | 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | later stage, after 1-9 |

@@ -1,7 +1,7 @@
 /**
- * Popup: three tabs. Feeds is the merged timeline; the Watchlist tab
- * adds, searches, favourites and removes channels. The worker owns all
- * network; this page only renders.
+ * Popup: three tabs plus the channel sheet overlay. Feeds is the merged
+ * timeline; the Watchlist tab adds, searches, favourites and removes
+ * channels. The worker owns all network; this page only renders.
  */
 
 import { normalizeChannelInput, thumbUrl } from '../lib/yt.js';
@@ -35,6 +35,8 @@ const view = {
   importStage: 'idle',
   importBusy: false,
   pendingImportText: '',
+  sheetId: null,
+  sheetError: '',
 };
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -191,9 +193,29 @@ function buttonEl(className, label, onClick) {
   return btn;
 }
 
-function openChannelWindow(id) {
+function openUrl(url) {
+  if (!url) return;
+  try {
+    const opening = chrome.tabs.create({ url, active: true });
+    Promise.resolve(opening).then(() => window.close(), () => {});
+  } catch {
+    // Leave the popup open if the tab could not be created.
+  }
+}
+
+function openChannelSheet(id) {
   if (!id) return;
-  void send({ type: 'openChannelWindow', id });
+  view.sheetId = id;
+  view.sheetError = '';
+  render();
+  document.getElementById('channel-sheet-close')?.focus?.();
+}
+
+function closeChannelSheet() {
+  if (!view.sheetId) return;
+  view.sheetId = null;
+  view.sheetError = '';
+  render();
 }
 
 function searchRow(result, locale) {
@@ -246,7 +268,7 @@ function channelRow(ch, locale) {
   main.type = 'button';
   main.className = 'channel-row__main';
   main.setAttribute('aria-label', t('watchlistOpenChannel', [title]));
-  main.addEventListener('click', () => openChannelWindow(ch.id));
+  main.addEventListener('click', () => openChannelSheet(ch.id));
   main.appendChild(avatarEl(ch.avatar));
 
   const text = document.createElement('div');
@@ -343,15 +365,10 @@ function openVideo(item) {
   const url = item.k === 'short'
     ? `https://www.youtube.com/shorts/${id}`
     : `https://www.youtube.com/watch?v=${id}`;
-  try {
-    const opening = chrome.tabs.create({ url, active: true });
-    Promise.resolve(opening).then(() => window.close(), () => {});
-  } catch {
-    // Leave the popup open if the tab could not be created.
-  }
+  openUrl(url);
 }
 
-function feedRow(item, locale, channel) {
+function feedRow(item, locale, channel, { showChannel = true } = {}) {
   const row = document.createElement('div');
   row.className = 'feed-row';
   row.tabIndex = 0;
@@ -390,7 +407,7 @@ function feedRow(item, locale, channel) {
 
   const metaNodes = [];
   const channelName = channel?.title || channel?.handle || '';
-  if (channelName) {
+  if (showChannel && channelName) {
     const chBtn = document.createElement('button');
     chBtn.type = 'button';
     chBtn.className = 'feed-row__channel';
@@ -399,7 +416,7 @@ function feedRow(item, locale, channel) {
     chBtn.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
-      openChannelWindow(channel.id);
+      openChannelSheet(channel.id);
     });
     metaNodes.push(chBtn);
   }
@@ -572,6 +589,74 @@ function render() {
   for (const ch of channels) listEl.appendChild(channelRow(ch, locale));
   emptyEl.hidden = channels.length > 0;
   renderSettings(locale);
+  renderChannelSheet();
+}
+
+function renderChannelSheet() {
+  const sheet = document.getElementById('channel-sheet');
+  if (!sheet) return;
+
+  const id = view.sheetId;
+  const ch = id ? view.channels.find((c) => c.id === id) : null;
+  if (!id || !ch) {
+    view.sheetId = null;
+    sheet.hidden = true;
+    return;
+  }
+
+  sheet.hidden = false;
+
+  const titleEl = document.getElementById('channel-sheet-name');
+  const handleEl = document.getElementById('channel-sheet-handle');
+  const avatar = document.getElementById('channel-sheet-avatar');
+  const avatarPh = document.getElementById('channel-sheet-avatar-ph');
+  const refreshBtn = document.getElementById('channel-sheet-refresh');
+  const spinner = document.getElementById('channel-sheet-spinner');
+  const statusEl = document.getElementById('channel-sheet-status');
+  const listEl = document.getElementById('channel-sheet-videos');
+  const emptyEl = document.getElementById('channel-sheet-empty');
+
+  const title = ch.title || ch.handle || ch.id;
+  titleEl.textContent = title;
+  handleEl.textContent = ch.handle || '';
+  ltrRun(handleEl);
+
+  if (ch.avatar) {
+    avatar.src = ch.avatar;
+    avatar.hidden = false;
+    avatarPh.hidden = true;
+  } else {
+    avatar.removeAttribute('src');
+    avatar.hidden = true;
+    avatarPh.hidden = false;
+  }
+
+  const locked = view.sweeping;
+  refreshBtn.disabled = locked;
+  spinner.hidden = !locked;
+  refreshBtn.setAttribute('aria-label', t('feedRefresh'));
+  refreshBtn.title = t('feedRefresh');
+  sheet.setAttribute('aria-busy', locked ? 'true' : 'false');
+
+  if (view.sheetError) {
+    statusEl.hidden = false;
+    statusEl.textContent = view.sheetError;
+    statusEl.classList.add('banner--error');
+  } else {
+    statusEl.hidden = true;
+    statusEl.textContent = '';
+    statusEl.classList.remove('banner--error');
+  }
+
+  const items = visibleFeedItems().filter((item) => item.c === ch.id);
+  listEl.replaceChildren();
+  for (const item of items) {
+    listEl.appendChild(feedRow(item, locale, ch, { showChannel: false }));
+  }
+
+  const hasItems = items.length > 0;
+  listEl.hidden = !hasItems;
+  emptyEl.hidden = locked || hasItems;
 }
 
 function renderSettings(locale) {
@@ -723,21 +808,28 @@ async function submitAdd(raw) {
   else await runSearch(input);
 }
 
-async function requestSweep() {
+async function requestSweep({ onlyId = null } = {}) {
   if (view.sweeping) return;
   view.sweeping = true;
   view.feedNotice = '';
+  view.sheetError = '';
   render();
   try {
-    const res = await send({ type: 'sweep', scope: 'all' });
+    const msg = { type: 'sweep', scope: 'all' };
+    if (onlyId) msg.onlyId = onlyId;
+    const res = await send(msg);
     if (res && res.ok === false) {
-      view.feedNotice = res.error === 'already running'
+      const text = res.error === 'already running'
         ? t('feedSweepRunning')
         : formatError(res.error);
+      if (onlyId) view.sheetError = text;
+      else view.feedNotice = text;
     }
     await refreshState();
   } catch (err) {
-    view.feedNotice = formatError(err?.message || err);
+    const text = formatError(err?.message || err);
+    if (onlyId) view.sheetError = text;
+    else view.feedNotice = text;
   } finally {
     view.sweeping = false;
     render();
@@ -912,9 +1004,30 @@ function bindWatchlist() {
   });
 }
 
+function bindChannelSheet() {
+  const sheet = document.getElementById('channel-sheet');
+  document.getElementById('channel-sheet-close')?.addEventListener('click', () => {
+    closeChannelSheet();
+  });
+  document.getElementById('channel-sheet-refresh')?.addEventListener('click', () => {
+    if (!view.sheetId) return;
+    void requestSweep({ onlyId: view.sheetId });
+  });
+  sheet?.addEventListener('click', (event) => {
+    if (event.target === sheet) closeChannelSheet();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!view.sheetId) return;
+    event.preventDefault();
+    closeChannelSheet();
+  });
+}
+
 bindWatchlist();
 bindFeeds();
 bindSettings();
+bindChannelSheet();
 
 void (async () => {
   await applyI18n('auto');

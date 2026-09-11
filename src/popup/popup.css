@@ -478,7 +478,8 @@ body {
  * strong character, so the ellipsis lands at the end of the name either way. */
 .feed-row__title,
 .feed-row__channel,
-.watch-row__title {
+.channel-row__title,
+.sheet__name {
   unicode-bidi: plaintext;
 }
 
@@ -628,4 +629,91 @@ body {
 
 .settings-footer p {
   margin: 0;
+}
+
+.footnote {
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+/* Fixed to the popup rather than absolutely placed, because the page is a
+   scrolling column and the sheet must not scroll away from the thing that
+   opened it. The video list inside scrolls on its own instead. */
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.55);
+}
+
+.sheet__panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: 86vh;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-start-start-radius: var(--radius);
+  border-start-end-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 0.35);
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: 8px;
+}
+
+.sheet__avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface);
+}
+
+.sheet__avatar--ph {
+  display: inline-block;
+}
+
+.sheet__title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet__status:empty {
+  display: none;
+}
+
+.sheet__status {
+  margin: 0;
+  margin-block-end: 8px;
+}
+
+.sheet__videos {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin-block-end: 0;
+}
+
+.sheet .empty {
+  margin-block: 16px;
+  margin-inline: 0;
 }

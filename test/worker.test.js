@@ -155,61 +155,6 @@ function searchJson(hits) {
   };
 }
 
-function videosJson(items) {
-  const contents = items.map((it) => ({
-    richItemRenderer: {
-      content: {
-        lockupViewModel: {
-          contentId: it.v,
-          metadata: {
-            lockupMetadataViewModel: {
-              title: { content: it.title || it.v },
-              metadata: {
-                contentMetadataViewModel: {
-                  metadataRows: [{
-                    metadataParts: [
-                      { text: { content: '1K views' } },
-                      { text: { content: '1 day ago' } },
-                    ],
-                  }],
-                },
-              },
-            },
-          },
-          contentImage: {
-            thumbnailViewModel: {
-              overlays: [{
-                thumbnailBottomOverlayViewModel: {
-                  badges: [{ thumbnailBadgeViewModel: { text: it.duration || '10:00' } }],
-                },
-              }],
-            },
-          },
-        },
-      },
-    },
-  }));
-  contents.push({
-    continuationItemRenderer: {
-      continuationEndpoint: { continuationCommand: { token: 'NEXT_TOKEN' } },
-    },
-  });
-  return {
-    contents: {
-      twoColumnBrowseResultsRenderer: {
-        tabs: [
-          {},
-          {
-            tabRenderer: {
-              content: { richGridRenderer: { contents } },
-            },
-          },
-        ],
-      },
-    },
-  };
-}
-
 function bodyOf(opts) {
   try {
     return JSON.parse(opts.body);
@@ -849,6 +794,29 @@ export default async function run(t) {
     t.check('setFavorite persisted', (await readChannels()).find((c) => c.id === BEAST)?.favorite === true);
     t.check('setFavorite calls syncAlarms', mock.alarmsCreated.length > beforeFav, String(mock.alarmsCreated.length));
 
+    const onlyFetch = installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'MKBHD', [
+          { v: 'onlyid000001', t: 'only this', at: AT.newest },
+        ]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [
+          { v: 'beastonly01', t: 'should not fetch', at: AT.newest },
+        ]),
+      },
+    });
+    const only = await handleMessage({ type: 'sweep', scope: 'all', onlyId: MKBHD });
+    t.check('sweep onlyId reports ok', only.ok === true, JSON.stringify(only));
+    const feedCalls = onlyFetch.calls.filter((c) => String(c.url).includes('/feeds/videos.xml'));
+    t.check(
+      'sweep onlyId fetches one feed',
+      feedCalls.length === 1 && String(feedCalls[0].url).includes(MKBHD),
+      JSON.stringify(feedCalls.map((c) => c.url)),
+    );
+    t.check(
+      'sweep onlyId did not fetch the other channel',
+      !feedCalls.some((c) => String(c.url).includes(BEAST)),
+    );
+
     await writePollState({ lastSeenAt: 0 });
     await refreshBadge();
     t.check('badge is non-empty before remove', mock.badgeText !== '', JSON.stringify(mock.badgeText));
@@ -859,14 +827,6 @@ export default async function run(t) {
       'removeChannel dropped that channel\'s feed items',
       !(await readFeed()).some((row) => row.c === BEAST),
     );
-
-    installFetch({
-      browse: videosJson([{ v: 'gTKS8SAwUzE', title: 'A video', duration: '23:28' }]),
-    });
-    const videos = await handleMessage({ type: 'getChannelVideos', id: BEAST });
-    t.check('getChannelVideos returns items', videos.items?.[0]?.v === 'gTKS8SAwUzE', JSON.stringify(videos.items?.[0]));
-    t.check('getChannelVideos duration 23:28 is 1408s', videos.items?.[0]?.d === 1408, String(videos.items?.[0]?.d));
-    t.check('getChannelVideos continuation', videos.continuation === 'NEXT_TOKEN', String(videos.continuation));
 
     const unknown = await handleMessage({ type: 'nonesuch' });
     t.check(

@@ -114,7 +114,6 @@ export default async function run(t) {
     'settings-notifications',
     'settings-checking',
     'settings-feed',
-    'settings-channel-window',
     'settings-language',
     'settings-backup',
   ];
@@ -252,23 +251,49 @@ export default async function run(t) {
     t.check(`light :root declares ${name}`, lightRoot.includes(`${name}:`), lightRoot.includes(name) ? name : 'missing');
   }
 
-  t.section('channel window wiring');
+  t.section('channel sheet');
 
+  t.check('has channel sheet overlay', /id="channel-sheet"/.test(html));
   t.check(
-    'openChannelWindow sends openChannelWindow',
-    /function openChannelWindow\s*\(\s*id\s*\)\s*\{[\s\S]*?type:\s*['"]openChannelWindow['"]/.test(js),
+    'sheet is a dialog overlay',
+    /id="channel-sheet"[\s\S]*?role="dialog"/.test(html),
+  );
+  t.check('sheet has a close control', /id="channel-sheet-close"/.test(html));
+  t.check('sheet has a refresh control', /id="channel-sheet-refresh"/.test(html));
+  t.check('sheet has a video list', /id="channel-sheet-videos"/.test(html));
+  t.check(
+    'watchlist row opens the channel sheet by id',
+    /openChannelSheet\(\s*ch\.id\s*\)/.test(js),
   );
   t.check(
-    'watchlist row opens the channel window by id',
-    /openChannelWindow\(\s*ch\.id\s*\)/.test(js),
+    'feed channel name opens the channel sheet by id',
+    /openChannelSheet\(\s*channel\.id\s*\)/.test(js),
   );
   t.check(
-    'feed channel name opens the channel window by id',
-    /openChannelWindow\(\s*channel\.id\s*\)/.test(js),
+    'sheet refresh sweeps only that channel',
+    /onlyId:\s*view\.sheetId/.test(js),
   );
   t.check(
-    'openChannelWindow is not an empty stub',
-    !/The per-channel window opens from here/.test(js),
+    'sheet lists stored feed items for that channel',
+    /visibleFeedItems\(\)\s*\.filter/.test(js),
+  );
+  t.check(
+    'does not open a detached channel window',
+    !/openChannelWindow/.test(js) && !/windows\.create/.test(js),
+  );
+  const openFn = js.match(/function openChannelSheet\s*\(\s*id\s*\)\s*\{[\s\S]*?\n\}/);
+  t.check(
+    'opening the sheet does not send a worker message',
+    !!openFn && !/\bsend\s*\(/.test(openFn[0]),
+    openFn ? openFn[0].slice(0, 240) : 'missing function',
+  );
+  t.check(
+    'Escape closes the sheet',
+    /event\.key !== 'Escape'/.test(js) && /closeChannelSheet/.test(js),
+  );
+  t.check(
+    'sheet is position fixed',
+    /\.sheet\s*\{[^}]*position:\s*fixed/.test(css),
   );
 
   t.section('message types');

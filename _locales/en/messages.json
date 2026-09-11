@@ -209,31 +209,13 @@
       }
     }
   },
-  "channelWindowTitle": {
-    "message": "Channel",
-    "description": "Fallback document title of the per-channel window before the channel name is known."
-  },
-  "channelLoadMore": {
-    "message": "Load more",
-    "description": "Button that loads the next page of videos in the per-channel window."
+  "sheetClose": {
+    "message": "Close",
+    "description": "Accessible name of the control that closes the channel sheet."
   },
   "channelEmpty": {
     "message": "No videos",
-    "description": "Empty state in the per-channel window when the channel has no videos."
-  },
-  "channelLastRefresh": {
-    "message": "Updated $TIME$",
-    "description": "Time of the last refresh of the per-channel video list. $TIME$ is a relative timestamp such as 2h ago.",
-    "placeholders": {
-      "time": {
-        "content": "$1",
-        "example": "2h ago"
-      }
-    }
-  },
-  "channelMissing": {
-    "message": "This channel is not in your watchlist",
-    "description": "Shown when the per-channel window has no channel id, or the id is not on the Watchlist."
+    "description": "Empty state on the channel sheet when this channel has no stored videos to show."
   },
   "settingsNotifications": {
     "message": "Notifications",
@@ -322,38 +304,6 @@
   "settingsShowShortsTitle": {
     "message": "Off hides shorts from the feed and from the toolbar badge.",
     "description": "Tooltip on the show-shorts switch."
-  },
-  "settingsChannelWindow": {
-    "message": "Channel window",
-    "description": "Settings group heading for the per-channel window."
-  },
-  "settingsWindowRefreshBefore": {
-    "message": "Refresh every",
-    "description": "Label before the channel-window refresh interval input."
-  },
-  "settingsWindowRefreshAfter": {
-    "message": "minutes",
-    "description": "Label after the channel-window refresh interval input."
-  },
-  "settingsWindowRefreshTitle": {
-    "message": "0 means the channel window only refreshes when you press the button.",
-    "description": "Tooltip on the channel-window refresh interval."
-  },
-  "settingsWindowWidth": {
-    "message": "Width",
-    "description": "Label for the per-channel window width input."
-  },
-  "settingsWindowWidthTitle": {
-    "message": "Width of the per-channel window, in pixels.",
-    "description": "Tooltip on the per-channel window width input."
-  },
-  "settingsWindowHeight": {
-    "message": "Height",
-    "description": "Label for the per-channel window height input."
-  },
-  "settingsWindowHeightTitle": {
-    "message": "Height of the per-channel window, in pixels.",
-    "description": "Tooltip on the per-channel window height input."
   },
   "settingsLanguage": {
     "message": "Language",

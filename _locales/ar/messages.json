@@ -209,31 +209,13 @@
       }
     }
   },
-  "channelWindowTitle": {
-    "message": "القناة",
-    "description": "Fallback document title of the per-channel window before the channel name is known."
-  },
-  "channelLoadMore": {
-    "message": "تحميل المزيد",
-    "description": "Button that loads the next page of videos in the per-channel window."
+  "sheetClose": {
+    "message": "إغلاق",
+    "description": "Accessible name of the control that closes the channel sheet."
   },
   "channelEmpty": {
     "message": "لا توجد فيديوهات",
-    "description": "Empty state in the per-channel window when the channel has no videos."
-  },
-  "channelLastRefresh": {
-    "message": "حُدِّث $TIME$",
-    "description": "Time of the last refresh of the per-channel video list. $TIME$ is a relative timestamp such as 2h ago.",
-    "placeholders": {
-      "time": {
-        "content": "$1",
-        "example": "2h ago"
-      }
-    }
-  },
-  "channelMissing": {
-    "message": "هذه القناة ليست في قائمة المتابعة",
-    "description": "Shown when the per-channel window has no channel id, or the id is not on the Watchlist."
+    "description": "Empty state on the channel sheet when this channel has no stored videos to show."
   },
   "settingsNotifications": {
     "message": "الإشعارات",
@@ -322,38 +304,6 @@
   "settingsShowShortsTitle": {
     "message": "الإيقاف يخفي المقاطع القصيرة من الموجز ومن شارة شريط الأدوات.",
     "description": "Tooltip on the show-shorts switch."
-  },
-  "settingsChannelWindow": {
-    "message": "نافذة القناة",
-    "description": "Settings group heading for the per-channel window."
-  },
-  "settingsWindowRefreshBefore": {
-    "message": "حدّث كل",
-    "description": "Label before the channel-window refresh interval input."
-  },
-  "settingsWindowRefreshAfter": {
-    "message": "دقيقة",
-    "description": "Label after the channel-window refresh interval input."
-  },
-  "settingsWindowRefreshTitle": {
-    "message": "0 يعني أن نافذة القناة لا تتحدّث إلا عند الضغط على الزر.",
-    "description": "Tooltip on the channel-window refresh interval."
-  },
-  "settingsWindowWidth": {
-    "message": "العرض",
-    "description": "Label for the per-channel window width input."
-  },
-  "settingsWindowWidthTitle": {
-    "message": "عرض نافذة القناة بالبكسل.",
-    "description": "Tooltip on the per-channel window width input."
-  },
-  "settingsWindowHeight": {
-    "message": "الارتفاع",
-    "description": "Label for the per-channel window height input."
-  },
-  "settingsWindowHeightTitle": {
-    "message": "ارتفاع نافذة القناة بالبكسل.",
-    "description": "Tooltip on the per-channel window height input."
   },
   "settingsLanguage": {
     "message": "اللغة",

@@ -23,12 +23,6 @@ export const DEFAULT_SETTINGS = {
     maxItems: 500,
     showShorts: false,
   },
-  channelWindow: {
-    // 0 leaves refresh to the window's own ↻ button.
-    refreshMinutes: 10,
-    width: 480,
-    height: 760,
-  },
   ui: {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
     locale: 'auto',
@@ -88,7 +82,6 @@ export function clampSettings(s) {
   const poll = isPlainObject(src.poll) ? src.poll : {};
   const alerts = isPlainObject(src.alerts) ? src.alerts : {};
   const feed = isPlainObject(src.feed) ? src.feed : {};
-  const channelWindow = isPlainObject(src.channelWindow) ? src.channelWindow : {};
   const ui = isPlainObject(src.ui) ? src.ui : {};
   const d = DEFAULT_SETTINGS;
 
@@ -112,17 +105,6 @@ export function clampSettings(s) {
       // Below 50 the feed feels empty; 5000 is still a few hundred KB.
       maxItems: clampRange(feed.maxItems, 50, 5000, d.feed.maxItems),
       showShorts: boolOf(feed, 'showShorts', d.feed.showShorts),
-    },
-    channelWindow: {
-      // 0 means the channel window never auto-refreshes.
-      refreshMinutes: clampMinutes(
-        channelWindow.refreshMinutes,
-        d.channelWindow.refreshMinutes,
-        true,
-      ),
-      // Below 320 the layout cannot fit; the ceilings match a large monitor.
-      width: clampRange(channelWindow.width, 320, 1200, d.channelWindow.width),
-      height: clampRange(channelWindow.height, 320, 2000, d.channelWindow.height),
     },
     ui: {
       // Anything outside the shipped locales follows the browser language.

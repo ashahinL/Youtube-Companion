@@ -195,35 +195,6 @@
         </label>
       </fieldset>
 
-      <fieldset class="group" id="settings-channel-window">
-        <legend class="group__legend" data-i18n="settingsChannelWindow">Channel window</legend>
-        <label
-          class="row row--inline"
-          title="0 means the channel window only refreshes when you press the button."
-          data-i18n-title="settingsWindowRefreshTitle"
-        >
-          <span data-i18n="settingsWindowRefreshBefore">Refresh every</span>
-          <input class="settings-num" type="number" step="1" data-setting="channelWindow.refreshMinutes" />
-          <span data-i18n="settingsWindowRefreshAfter">minutes</span>
-        </label>
-        <label
-          class="row row--inline"
-          title="Width of the per-channel window, in pixels."
-          data-i18n-title="settingsWindowWidthTitle"
-        >
-          <span data-i18n="settingsWindowWidth">Width</span>
-          <input class="settings-num" type="number" step="1" data-setting="channelWindow.width" />
-        </label>
-        <label
-          class="row row--inline"
-          title="Height of the per-channel window, in pixels."
-          data-i18n-title="settingsWindowHeightTitle"
-        >
-          <span data-i18n="settingsWindowHeight">Height</span>
-          <input class="settings-num" type="number" step="1" data-setting="channelWindow.height" />
-        </label>
-      </fieldset>
-
       <fieldset class="group" id="settings-language">
         <legend class="group__legend" data-i18n="settingsLanguage">Language</legend>
         <label
@@ -304,6 +275,55 @@
         <p id="settings-stat-version"></p>
       </footer>
     </section>
+
+    <!--
+      A plain overlay rather than <dialog>: the popup is 400px of
+      chrome-owned window and ::backdrop plus the top layer buys nothing here.
+      Escape, the backdrop and ✕ all close it.
+    -->
+    <div
+      id="channel-sheet"
+      class="sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="channel-sheet-name"
+    >
+      <div class="sheet__panel" role="document">
+        <div class="sheet__head">
+          <img id="channel-sheet-avatar" class="sheet__avatar" alt="" hidden />
+          <span id="channel-sheet-avatar-ph" class="sheet__avatar sheet__avatar--ph" aria-hidden="true"></span>
+          <span class="sheet__title">
+            <span id="channel-sheet-name" class="sheet__name"></span>
+            <span id="channel-sheet-handle" class="footnote handle" dir="ltr"></span>
+          </span>
+          <button
+            id="channel-sheet-refresh"
+            class="icon-btn"
+            type="button"
+            data-i18n-label="feedRefresh"
+            data-i18n-title="feedRefresh"
+            aria-label="Refresh"
+          >
+            ↻
+          </button>
+          <span id="channel-sheet-spinner" class="spinner" hidden></span>
+          <button
+            id="channel-sheet-close"
+            class="icon-btn"
+            type="button"
+            data-i18n-label="sheetClose"
+            data-i18n-title="sheetClose"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <p id="channel-sheet-status" class="footnote sheet__status" role="status"></p>
+        <div id="channel-sheet-videos" class="list sheet__videos"></div>
+        <p id="channel-sheet-empty" class="empty" data-i18n="channelEmpty" hidden>No videos</p>
+      </div>
+    </div>
 
     <script type="module" src="popup.js"></script>
   </body>

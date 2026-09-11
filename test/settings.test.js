@@ -135,36 +135,15 @@ export default async function run(t) {
     t.check('maxItems 5001 clamps down to 5000', maxItems(5001) === 5000);
     t.check('maxItems NaN falls back to the default', maxItems(NaN) === 500);
 
-    t.section('clamp: channelWindow.refreshMinutes');
+    t.section('clamp: dropped groups');
 
-    const refresh = (n) =>
-      clampSettings({
+    t.check(
+      'a leftover channelWindow group is dropped',
+      !('channelWindow' in clampSettings({
         ...DEFAULT_SETTINGS,
-        channelWindow: { ...DEFAULT_SETTINGS.channelWindow, refreshMinutes: n },
-      }).channelWindow.refreshMinutes;
-    t.check('channelWindow.refreshMinutes 0 is preserved', refresh(0) === 0);
-    t.check('channelWindow.refreshMinutes 1 is kept', refresh(1) === 1);
-    t.check('channelWindow.refreshMinutes 1440 is kept', refresh(1440) === 1440);
-    t.check('channelWindow.refreshMinutes 1441 clamps down to 1440', refresh(1441) === 1440);
-    t.check('channelWindow.refreshMinutes NaN falls back to the default', refresh(NaN) === 10);
-
-    t.section('clamp: channelWindow size');
-
-    const size = (width, height) =>
-      clampSettings({
-        ...DEFAULT_SETTINGS,
-        channelWindow: { ...DEFAULT_SETTINGS.channelWindow, width, height },
-      }).channelWindow;
-    t.check('width 320 is kept', size(320, 760).width === 320);
-    t.check('width 1200 is kept', size(1200, 760).width === 1200);
-    t.check('width 319 clamps up to 320', size(319, 760).width === 320);
-    t.check('width 1201 clamps down to 1200', size(1201, 760).width === 1200);
-    t.check('width NaN falls back to the default', size(NaN, 760).width === 480);
-    t.check('height 320 is kept', size(480, 320).height === 320);
-    t.check('height 2000 is kept', size(480, 2000).height === 2000);
-    t.check('height 319 clamps up to 320', size(480, 319).height === 320);
-    t.check('height 2001 clamps down to 2000', size(480, 2001).height === 2000);
-    t.check('height NaN falls back to the default', size(480, NaN).height === 760);
+        channelWindow: { refreshMinutes: 10, width: 480, height: 760 },
+      })),
+    );
 
     t.section('clamp: locale and booleans');
 

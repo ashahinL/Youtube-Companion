@@ -1,8 +1,8 @@
 /**
  * Background service worker.
  *
- * Owns all network, alarms, notifications and the badge. The popup and
- * the channel window never fetch — they ask this file and render.
+ * Owns all network, alarms, notifications and the badge. The popup never
+ * fetches — it asks this file and renders.
  */
 
 import {
@@ -10,7 +10,6 @@ import {
   searchChannels,
   fetchChannelFeed,
   fetchChannelHeader,
-  fetchChannelVideos,
   classifyVideo,
 } from '../lib/yt.js';
 import { readSettings, writeSettings, onSettingsChanged } from '../lib/settings.js';
@@ -54,30 +53,6 @@ const CHANNEL_FETCH_DELAY_MS = 250;
 let sweepActive = false;
 
 const notificationVideos = new Map();
-
-// Asking again for a channel that already has a window must focus it.
-// Two windows on the same cid would fight over refresh.
-/* Which channel each open window is showing, keyed by channel id.
- * This lives in chrome.storage.session rather than a module variable because
- * the worker is killed without warning: a map held in memory is gone by the
- * time the user clicks the same channel again, and they would get a second
- * window. Session storage survives that and is cleared on browser restart,
- * by which time no window it described still exists. */
-const CHANNEL_WINDOWS_KEY = 'channelWindows';
-
-async function readChannelWindows() {
-  const area = chromeApi().storage?.session;
-  if (!area) return {};
-  const got = await area.get(CHANNEL_WINDOWS_KEY);
-  const map = got?.[CHANNEL_WINDOWS_KEY];
-  return map && typeof map === 'object' ? map : {};
-}
-
-async function writeChannelWindows(map) {
-  const area = chromeApi().storage?.session;
-  if (!area) return;
-  await area.set({ [CHANNEL_WINDOWS_KEY]: map });
-}
 
 function chromeApi() {
   return globalThis.chrome;
@@ -470,49 +445,6 @@ export async function addChannelByInput(input) {
   return { ok: true, channel };
 }
 
-export async function onChannelWindowRemoved(windowId) {
-  const map = await readChannelWindows();
-  let changed = false;
-  for (const [cid, wid] of Object.entries(map)) {
-    if (wid === windowId) {
-      delete map[cid];
-      changed = true;
-    }
-  }
-  if (changed) await writeChannelWindows(map);
-}
-
-export async function openChannelWindow(id) {
-  const cid = String(id || '').trim();
-  if (!cid) return { ok: false, error: 'missing id' };
-
-  const map = await readChannelWindows();
-  const existing = map[cid];
-  if (existing != null) {
-    try {
-      await chromeApi().windows.update(existing, { focused: true });
-      return { ok: true, windowId: existing };
-    } catch {
-      // The window is gone and we were never told, so forget it and open anew.
-      delete map[cid];
-      await writeChannelWindows(map);
-    }
-  }
-
-  const settings = await readSettings();
-  const win = await chromeApi().windows.create({
-    url: `src/channel/channel.html?cid=${encodeURIComponent(cid)}`,
-    type: 'popup',
-    width: settings.channelWindow.width,
-    height: settings.channelWindow.height,
-  });
-  if (win && win.id != null) {
-    map[cid] = win.id;
-    await writeChannelWindows(map);
-  }
-  return { ok: true, windowId: win?.id };
-}
-
 export async function handleMessage(msg, _sender) {
   try {
     await ensureYtOriginRule().catch(() => {});
@@ -526,7 +458,10 @@ export async function handleMessage(msg, _sender) {
         return await collectState();
       }
       case 'sweep':
-        return await runSweep({ scope: msg.scope || 'all' });
+        return await runSweep({
+          scope: msg.scope || 'all',
+          onlyId: msg.onlyId || null,
+        });
       case 'searchChannels': {
         const results = await searchChannels(String(msg.query ?? ''), ytOpts());
         const ids = new Set((await readChannels()).map((ch) => ch.id));
@@ -544,13 +479,6 @@ export async function handleMessage(msg, _sender) {
         await syncAlarms();
         return { ok: true };
       }
-      case 'getChannelVideos':
-        return await fetchChannelVideos(msg.id, {
-          ...ytOpts(),
-          continuation: msg.continuation,
-        });
-      case 'openChannelWindow':
-        return await openChannelWindow(msg.id);
       case 'updateSettings': {
         // Alarms and the badge both derive from settings (poll periods,
         // showShorts). Writing storage from the popup would leave them stale.
@@ -637,9 +565,6 @@ chromeApi().runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 onSettingsChanged(() => {
   syncAlarms().catch(() => {});
-});
-chromeApi().windows.onRemoved.addListener((windowId) => {
-  void onChannelWindowRemoved(windowId);
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 
