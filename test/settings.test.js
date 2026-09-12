@@ -160,6 +160,17 @@ export default async function run(t) {
     t.check('boolean 0 coerces to false',
       clampSettings({ ...DEFAULT_SETTINGS, alerts: { ...DEFAULT_SETTINGS.alerts, enabled: 0 } })
         .alerts.enabled === false);
+    t.check(
+      'favoritesOnly defaults off',
+      DEFAULT_SETTINGS.feed.favoritesOnly === false,
+    );
+    t.check(
+      'favoritesOnly 1 coerces to true',
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        feed: { ...DEFAULT_SETTINGS.feed, favoritesOnly: 1 },
+      }).feed.favoritesOnly === true,
+    );
 
     t.section('writeSettings');
 

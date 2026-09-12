@@ -73,6 +73,14 @@
         </button>
         <span id="feed-refresh-spinner" class="spinner" hidden></span>
       </div>
+      <label
+        class="row feed-fav-filter"
+        title="Hide videos from channels that are not favourites."
+        data-i18n-title="feedFavoritesOnlyTitle"
+      >
+        <input id="feed-favorites-only" type="checkbox" data-setting="feed.favoritesOnly" />
+        <span data-i18n="feedFavoritesOnly">Favourites only</span>
+      </label>
       <p id="feed-last-poll" class="banner" hidden></p>
       <p id="feed-notice" class="banner" role="status" hidden></p>
       <div id="feed-list" class="list"></div>
@@ -89,6 +97,9 @@
       <div id="feed-empty-filter" class="empty" hidden>
         <p id="feed-filter-miss"></p>
         <button id="feed-filter-clear" class="btn" type="button" data-i18n="feedFilterClear">Clear filter</button>
+      </div>
+      <div id="feed-empty-favorites" class="empty" hidden>
+        <p data-i18n="emptyFeedFavorites">No videos from favourite channels</p>
       </div>
     </section>
 

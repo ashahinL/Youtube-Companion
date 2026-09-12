@@ -436,6 +436,13 @@ body {
   margin-block-end: 10px;
 }
 
+.feed-fav-filter {
+  margin-block-start: -4px;
+  margin-block-end: 10px;
+  padding-block: 0;
+  font-size: 12.5px;
+}
+
 .feed-row {
   display: flex;
   align-items: flex-start;

@@ -480,8 +480,10 @@ function renderFeeds(locale) {
   const emptyNone = document.getElementById('feed-empty-no-channels');
   const emptyWait = document.getElementById('feed-empty-no-items');
   const emptyFilter = document.getElementById('feed-empty-filter');
+  const emptyFav = document.getElementById('feed-empty-favorites');
   const missEl = document.getElementById('feed-filter-miss');
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
+  const favBox = document.getElementById('feed-favorites-only');
   const bar = filterEl.parentElement;
 
   const locked = view.sweeping;
@@ -522,9 +524,15 @@ function renderFeeds(locale) {
   }
 
   const channelsById = new Map(view.channels.map((ch) => [ch.id, ch]));
+  const favOnly = !!view.settings?.feed?.favoritesOnly;
+  if (favBox) favBox.checked = favOnly;
   // The feed has no read state: opening a video never hides it, and
-  // nothing is marked. Newest first, always the full list.
-  const items = visibleFeedItems();
+  // nothing is marked. Newest first. Favourites-only is a view filter
+  // on this tab only — the channel sheet still lists that channel.
+  const items = visibleFeedItems().filter((item) => {
+    if (!favOnly) return true;
+    return !!channelsById.get(item.c)?.favorite;
+  });
   const q = (filterEl.value || '').trim().toLowerCase();
   const shown = q
     ? items.filter((item) => matchesFeedFilter(item, channelsById.get(item.c), q))
@@ -538,7 +546,8 @@ function renderFeeds(locale) {
   const hasChannels = view.channels.length > 0;
   const hasShown = shown.length > 0;
   emptyNone.hidden = hasChannels;
-  emptyWait.hidden = !(hasChannels && !hasShown && !q);
+  emptyWait.hidden = !(hasChannels && !hasShown && !q && !favOnly);
+  emptyFav.hidden = !(hasChannels && !hasShown && !q && favOnly);
   emptyFilter.hidden = !(hasChannels && !hasShown && q);
   listEl.hidden = !hasChannels || !hasShown;
 
@@ -859,6 +868,7 @@ function bindFeeds() {
   const gotoWatchlist = document.getElementById('feed-goto-watchlist');
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
   const emptyClear = document.getElementById('feed-filter-clear');
+  const favBox = document.getElementById('feed-favorites-only');
 
   filter.addEventListener('input', () => render());
   refresh.addEventListener('click', () => {
@@ -871,6 +881,9 @@ function bindFeeds() {
     filter.value = '';
     render();
     filter.focus();
+  });
+  favBox.addEventListener('change', () => {
+    void patchSettings(buildPatch('feed.favoritesOnly', favBox.checked));
   });
   gotoWatchlist.addEventListener('click', () => {
     const tab = document.getElementById('tab-watchlist');

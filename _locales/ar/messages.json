@@ -151,6 +151,14 @@
     "message": "صفِّ حسب العنوان أو القناة",
     "description": "Placeholder and accessible name for the Feeds tab text filter."
   },
+  "feedFavoritesOnly": {
+    "message": "المفضلة فقط",
+    "description": "Checkbox on the Feeds tab that hides videos from channels that are not favourites."
+  },
+  "feedFavoritesOnlyTitle": {
+    "message": "إخفاء فيديوهات القنوات غير المفضلة.",
+    "description": "Tooltip on the Favourites only checkbox on the Feeds tab."
+  },
   "feedRefresh": {
     "message": "تحديث",
     "description": "Accessible name of the Feeds refresh control, and the label of the refresh button in the empty-feed state."
@@ -180,6 +188,10 @@
   "feedFilterClear": {
     "message": "مسح التصفية",
     "description": "Button that clears the Feeds text filter when it matched no videos."
+  },
+  "emptyFeedFavorites": {
+    "message": "لا فيديوهات من القنوات المفضلة",
+    "description": "Empty state on the Feeds tab when Favourites only is on and nothing from a favourite channel is visible."
   },
   "emptyFeedFilter": {
     "message": "لا فيديوهات تطابق \"$QUERY$\"",

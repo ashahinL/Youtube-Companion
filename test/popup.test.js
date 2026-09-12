@@ -136,19 +136,29 @@ export default async function run(t) {
   t.check('has filter input', /id="feed-filter"/.test(f));
   t.check('has refresh control', /id="feed-refresh"/.test(f));
   t.check('has list container', /id="feed-list"/.test(f));
+  t.check('has a favourites-only checkbox', /id="feed-favorites-only"/.test(f));
+  t.check(
+    'favourites-only writes feed.favoritesOnly',
+    /feed\.favoritesOnly/.test(js) && /favOnly/.test(js),
+  );
+  t.check(
+    'the channel sheet does not use favourites-only',
+    /visibleFeedItems\(\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
+  );
 
   const emptyIds = [...f.matchAll(/id="(feed-empty-[^"]+)"/g)].map((m) => m[1]);
   t.check(
-    'has three empty-state elements',
-    emptyIds.length === 3,
+    'has four empty-state elements',
+    emptyIds.length === 4,
     JSON.stringify(emptyIds),
   );
   t.check(
     'empty states are distinct',
-    new Set(emptyIds).size === 3 &&
+    new Set(emptyIds).size === 4 &&
       emptyIds.includes('feed-empty-no-channels') &&
       emptyIds.includes('feed-empty-no-items') &&
-      emptyIds.includes('feed-empty-filter'),
+      emptyIds.includes('feed-empty-filter') &&
+      emptyIds.includes('feed-empty-favorites'),
     JSON.stringify(emptyIds),
   );
 

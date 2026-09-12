@@ -22,6 +22,7 @@ export const DEFAULT_SETTINGS = {
   feed: {
     maxItems: 500,
     showShorts: false,
+    favoritesOnly: false,
   },
   ui: {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
@@ -105,6 +106,7 @@ export function clampSettings(s) {
       // Below 50 the feed feels empty; 5000 is still a few hundred KB.
       maxItems: clampRange(feed.maxItems, 50, 5000, d.feed.maxItems),
       showShorts: boolOf(feed, 'showShorts', d.feed.showShorts),
+      favoritesOnly: boolOf(feed, 'favoritesOnly', d.feed.favoritesOnly),
     },
     ui: {
       // Anything outside the shipped locales follows the browser language.
