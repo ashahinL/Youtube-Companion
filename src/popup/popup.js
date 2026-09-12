@@ -7,7 +7,7 @@
  * only renders.
  */
 
-import { normalizeChannelInput, normalizeVideoInput, thumbUrl } from '../lib/yt.js';
+import { thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
 import { buildBackup } from '../lib/backup.js';
@@ -18,6 +18,14 @@ import {
   applyTo,
   applyDirection,
 } from '../lib/i18n.js';
+import {
+  isChannelRef,
+  listedMatch,
+  visibleFeedItems,
+  feedItemUrl,
+  feedsView,
+  watchlistView,
+} from '../lib/view.js';
 
 let messages = {};
 let locale = 'en';
@@ -149,57 +157,6 @@ function ltrRun(el) {
   // scramble inside Arabic text.
   el.dir = 'ltr';
   return el;
-}
-
-function fold(value) {
-  return String(value || '').normalize('NFKC').toLowerCase();
-}
-
-function isChannelRef(input) {
-  return normalizeChannelInput(String(input || '').trim()) != null;
-}
-
-function handleKey(handle) {
-  return fold(String(handle || '').replace(/^@/, ''));
-}
-
-function handleFromRef(ref) {
-  if (!ref || ref.kind !== 'url') return '';
-  try {
-    const head = new URL(ref.url).pathname.split('/').filter(Boolean)[0] || '';
-    return head.startsWith('@') ? handleKey(head) : '';
-  } catch {
-    return '';
-  }
-}
-
-function listedMatch(input, channels) {
-  const ref = normalizeChannelInput(String(input || '').trim());
-  if (!ref) return null;
-  if (ref.kind === 'id') return channels.find((ch) => ch.id === ref.id) || null;
-  if (ref.kind === 'video') {
-    const item = (view.feed || []).find((row) => row && row.v === ref.id);
-    if (!item) return null;
-    return channels.find((ch) => ch.id === item.c) || null;
-  }
-  const handle = handleFromRef(ref);
-  if (!handle) return null;
-  return channels.find((ch) => handleKey(ch.handle) === handle) || null;
-}
-
-function listedVideo(input, items) {
-  const ref = normalizeVideoInput(String(input || '').trim());
-  if (!ref) return null;
-  return items.find((item) => item && item.v === ref.id) || null;
-}
-
-function matchesWatchlist(ch, raw) {
-  const term = fold(raw);
-  if (!term) return true;
-  const handleTerm = term.replace(/^@/, '');
-  return fold(ch.title).includes(term)
-    || handleKey(ch.handle).includes(handleTerm)
-    || String(ch.id || '').toLowerCase().includes(term);
 }
 
 function avatarEl(url) {
@@ -435,12 +392,7 @@ function feedTag(item, locale) {
 }
 
 function openVideo(item) {
-  const id = String(item.v || '');
-  if (!id) return;
-  const url = item.k === 'short'
-    ? `https://www.youtube.com/shorts/${id}`
-    : `https://www.youtube.com/watch?v=${id}`;
-  openUrl(url);
+  openUrl(feedItemUrl(item));
 }
 
 function feedRow(item, locale, channel, { showChannel = true } = {}) {
@@ -529,35 +481,6 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   return row;
 }
 
-function visibleFeedItems() {
-  const showShorts = !!view.settings?.feed?.showShorts;
-  // Shorts stay in storage; the view drops them when the setting is off.
-  const items = [];
-  for (const item of view.feed) {
-    if (!item || !item.v) continue;
-    if (!showShorts && item.k === 'short') continue;
-    items.push(item);
-  }
-  items.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
-  return items;
-}
-
-function matchesFeedFilter(item, channel, q) {
-  const term = fold(q);
-  if (!term) return true;
-  if (fold(item.t).includes(term)) return true;
-  if (fold(channel?.title || '').includes(term)) return true;
-  const handleTerm = term.replace(/^@/, '');
-  if (handleKey(channel?.handle || '').includes(handleTerm)) return true;
-  if (fold(item.ct || '').includes(term)) return true;
-  if (fold(item.v).includes(term)) return true;
-  if (fold(item.c).includes(term)) return true;
-  const ref = normalizeChannelInput(q);
-  if (ref?.kind === 'video' && item.v === ref.id) return true;
-  if (ref?.kind === 'id' && item.c === ref.id) return true;
-  return false;
-}
-
 function renderFeeds(locale) {
   const form = document.getElementById('feed-add-form');
   const filterEl = document.getElementById('feed-filter');
@@ -640,18 +563,19 @@ function renderFeeds(locale) {
   }
 
   const channelsById = new Map(view.channels.map((ch) => [ch.id, ch]));
-  const favOnly = !!view.settings?.feed?.favoritesOnly;
-  if (favBox) favBox.checked = favOnly;
   // The feed has no read state: opening a video never hides it, and
   // nothing is marked. Newest first. Favourites-only is a view filter
   // on this tab only — the channel sheet still lists that channel.
-  const items = visibleFeedItems().filter((item) => {
-    if (!favOnly) return true;
-    return !!channelsById.get(item.c)?.favorite;
+  const feeds = feedsView({
+    feed: view.feed,
+    channels: view.channels,
+    settings: view.settings,
+    query: filterEl.value,
   });
-  const q = (filterEl.value || '').trim();
-  const onList = !!listedMatch(q, view.channels);
-  const addable = !q || (isChannelRef(q) && !onList);
+  const favOnly = feeds.favOnly;
+  if (favBox) favBox.checked = favOnly;
+  const q = feeds.query;
+  const { shown, onList, addable } = feeds;
 
   filterEl.disabled = view.busy;
   addBtn.disabled = locked || !addable;
@@ -661,33 +585,22 @@ function renderFeeds(locale) {
     : (q ? t('feedFilterPlaceholder') : t('watchlistAddFromTab'));
   if (clearBtn) clearBtn.hidden = !q || view.busy;
 
-  let shown = q
-    ? items.filter((item) => matchesFeedFilter(item, channelsById.get(item.c), q))
-    : items;
-  // An exact URL / id still surfaces that row when favourites-only (or
-  // hidden shorts) would have dropped it — you asked for that video.
-  const hit = listedVideo(q, view.feed);
-  if (hit && !shown.some((item) => item.v === hit.v)) shown = [hit];
-
   listEl.replaceChildren();
   for (const item of shown) {
     listEl.appendChild(feedRow(item, locale, channelsById.get(item.c)));
   }
 
-  const searching = !!q;
+  const searching = feeds.searching;
   countEl.hidden = !searching;
   countEl.textContent = searching
-    ? t('watchlistShowing', [String(shown.length), String(items.length)])
+    ? t('watchlistShowing', [String(shown.length), String(feeds.total)])
     : '';
 
-  const hasChannels = view.channels.length > 0;
-  const hasAnyFeed = view.feed.length > 0;
-  const hasShown = shown.length > 0;
-  emptyNone.hidden = hasChannels || hasAnyFeed || searching;
-  emptyWait.hidden = !(hasChannels && !hasShown && !q && !favOnly);
-  emptyFav.hidden = !((hasChannels || hasAnyFeed) && !hasShown && !q && favOnly);
-  emptyFilter.hidden = !(searching && !hasShown);
-  listEl.hidden = !hasShown;
+  emptyNone.hidden = !feeds.showEmptyNone;
+  emptyWait.hidden = !feeds.showEmptyWait;
+  emptyFav.hidden = !feeds.showEmptyFav;
+  emptyFilter.hidden = !feeds.showEmptyFilter;
+  listEl.hidden = shown.length === 0;
 
   if (!emptyFilter.hidden && missEl) {
     missEl.textContent = addable
@@ -710,11 +623,14 @@ function render() {
   const emptyEl = document.getElementById('watchlist-empty');
   const missEl = document.getElementById('watchlist-nomatch');
 
-  const q = (input.value || '').trim();
   const channels = sortChannelsForDisplay(view.channels, view.feed);
-  const shown = q ? channels.filter((ch) => matchesWatchlist(ch, q)) : channels;
-  const onList = !!listedMatch(q, channels);
-  const addable = !q || (isChannelRef(q) && !onList);
+  const watchlist = watchlistView({
+    channels,
+    feed: view.feed,
+    query: input.value,
+  });
+  const q = watchlist.query;
+  const { shown, onList, addable } = watchlist;
 
   form.classList.toggle('is-busy', view.busy);
   form.setAttribute('aria-busy', view.busy ? 'true' : 'false');
@@ -751,8 +667,8 @@ function render() {
 
   listEl.replaceChildren();
   for (const ch of shown) listEl.appendChild(channelRow(ch, locale));
-  emptyEl.hidden = channels.length > 0 || searching;
-  const noMatch = shown.length === 0 && searching && !view.error;
+  emptyEl.hidden = watchlist.total > 0 || searching;
+  const noMatch = watchlist.noMatch && !view.error;
   missEl.hidden = !noMatch;
   if (noMatch) {
     missEl.textContent = addable
@@ -824,7 +740,8 @@ function renderChannelSheet() {
     statusEl.classList.remove('banner--error');
   }
 
-  const items = visibleFeedItems().filter((item) => item.c === ch.id);
+  const items = visibleFeedItems(view.feed, !!view.settings?.feed?.showShorts)
+    .filter((item) => item.c === ch.id);
   listEl.replaceChildren();
   for (const item of items) {
     listEl.appendChild(feedRow(item, locale, ch, { showChannel: false }));
@@ -992,7 +909,7 @@ async function submitAdd(raw, dest = 'watchlist') {
     }
   }
   if (!isChannelRef(input)) return;
-  if (listedMatch(input, view.channels)) {
+  if (listedMatch(input, view.channels, view.feed)) {
     if (fromTab) {
       view[errorField] = t('watchlistAlreadyAdded');
       render();

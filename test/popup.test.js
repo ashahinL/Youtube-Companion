@@ -46,6 +46,7 @@ export default async function run(t) {
   const html = fs.readFileSync(path.join(POPUP, 'popup.html'), 'utf8');
   const css = fs.readFileSync(path.join(POPUP, 'popup.css'), 'utf8');
   const js = fs.readFileSync(path.join(POPUP, 'popup.js'), 'utf8');
+  const viewJs = fs.readFileSync(path.join(ROOT, 'src/lib/view.js'), 'utf8');
   const worker = fs.readFileSync(path.join(ROOT, 'src/background/service-worker.js'), 'utf8');
   const en = JSON.parse(fs.readFileSync(path.join(ROOT, '_locales/en/messages.json'), 'utf8'));
 
@@ -96,12 +97,12 @@ export default async function run(t) {
   t.check('typed Add only fires for a channel ref', /isChannelRef\(input\)/.test(js));
   t.check(
     'already-listed handle disables Add rather than erroring',
-    /listedMatch\(input,\s*view\.channels\)/.test(js) && /watchlistOnList/.test(js),
+    /listedMatch\(input,\s*view\.channels,\s*view\.feed\)/.test(js) && /watchlistOnList/.test(js),
   );
-  t.check('the box filters the local watchlist', /matchesWatchlist\(ch,\s*q\)/.test(js));
+  t.check('the box filters the local watchlist', /matchesWatchlist\(ch,\s*q\)/.test(viewJs));
   t.check(
     'Add stays available when the box is empty',
-    /addable = !q \|\|/.test(js),
+    /addable = !q \|\|/.test(viewJs),
   );
   t.check(
     'empty Add reads the focused tab',
@@ -176,12 +177,12 @@ export default async function run(t) {
   t.check('typed Feeds Add only fires for a channel ref', /submitAdd\(filter\.value,\s*'feeds'\)/.test(js));
   t.check(
     'already-listed channel disables Feeds Add rather than erroring',
-    /listedMatch\(q,\s*view\.channels\)/.test(js) && /watchlistOnList/.test(js),
+    /listedMatch\(q,\s*channels,\s*feed\)/.test(viewJs) && /watchlistOnList/.test(js),
   );
-  t.check('the box filters the local feed', /matchesFeedFilter\(item,/.test(js));
+  t.check('the box filters the local feed', /matchesFeedFilter\(item,/.test(viewJs));
   t.check(
     'Feeds Add stays available when the box is empty',
-    /addable = !q \|\| \(isChannelRef\(q\) && !onList\)/.test(js),
+    /addable = !q \|\| \(isChannelRef\(q\) && !onList\)/.test(viewJs),
   );
   t.check(
     'empty Feeds Add reads the focused tab',
@@ -208,7 +209,7 @@ export default async function run(t) {
   );
   t.check(
     'the channel sheet does not use favourites-only',
-    /visibleFeedItems\(\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
+    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts\s*\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
   );
 
   const emptyIds = [...f.matchAll(/id="(feed-empty-[^"]+)"/g)].map((m) => m[1]);
@@ -280,6 +281,7 @@ export default async function run(t) {
     t.check(`data-i18n-label="${key}" exists in en`, key in en);
   }
   t.check('popup.js imports i18n.js', /from ['"]\.\.\/lib\/i18n\.js['"]/.test(js));
+  t.check('popup.js imports view.js', /from ['"]\.\.\/lib\/view\.js['"]/.test(js));
   t.check(
     'relativeTime is passed the active locale',
     /relativeTime\([^;]*\blocale\b/.test(js),
@@ -403,7 +405,7 @@ export default async function run(t) {
   );
   t.check(
     'sheet lists stored feed items for that channel',
-    /visibleFeedItems\(\)\s*\.filter/.test(js),
+    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts\s*\)\s*\.filter/.test(js),
   );
   t.check(
     'does not open a detached channel window',
