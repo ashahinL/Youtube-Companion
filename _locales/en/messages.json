@@ -494,5 +494,9 @@
         "example": "0.1.0"
       }
     }
+  },
+  "cmdToggleAudioMode": {
+    "message": "Toggle audio mode",
+    "description": "Keyboard command that pins or unpins 144p audio mode on the active YouTube tab. Chrome may register it with no shortcut if the suggested key is already taken."
   }
 }

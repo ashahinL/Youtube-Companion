@@ -53,6 +53,43 @@ const missing = [...referenced].filter((f) => !fs.existsSync(path.join(ROOT, f))
 if (missing.length) bad(`${missing.length} referenced file(s) missing`, missing.join(', '));
 else ok(`all ${referenced.size} referenced files resolve`);
 
+console.log('\ncontent scripts');
+const csList = manifest.content_scripts || [];
+if (!csList.length) bad('content_scripts is missing');
+else {
+  const cs = csList[0];
+  if ((cs.matches || []).includes('https://www.youtube.com/*')) ok('matches https://www.youtube.com/*');
+  else bad('content_scripts matches', JSON.stringify(cs.matches));
+  if (cs.run_at === 'document_idle') ok('run_at is document_idle');
+  else bad('run_at is not document_idle', String(cs.run_at));
+  const js = cs.js || [];
+  if (js[0] === 'src/content/core.js' && js[1] === 'src/content/content.js' && js.length === 2) {
+    ok('js is core.js then content.js');
+  } else {
+    bad('js order', JSON.stringify(js));
+  }
+  if (js.includes('src/content/inject.js')) {
+    bad('inject.js is a content_scripts js entry; it must be MAIN-world via web_accessible_resources');
+  }
+  const css = cs.css || [];
+  if (css.includes('src/content/overlay.css')) ok('css includes overlay.css');
+  else bad('css missing overlay.css', JSON.stringify(css));
+}
+
+const cmd = manifest.commands && manifest.commands['toggle-audio-mode'];
+if (cmd && typeof cmd.description === 'string' && cmd.description.length) ok('toggle-audio-mode command is declared');
+else bad('commands.toggle-audio-mode is missing');
+
+const warList = manifest.web_accessible_resources || [];
+const warHit = warList.some((entry) => (
+  Array.isArray(entry.resources)
+  && entry.resources.includes('src/content/inject.js')
+  && Array.isArray(entry.matches)
+  && entry.matches.includes('https://www.youtube.com/*')
+));
+if (warHit) ok('inject.js is web-accessible on youtube.com');
+else bad('web_accessible_resources does not expose inject.js on youtube.com');
+
 /* ---- source parses -------------------------------------------------- */
 console.log('\nsyntax');
 function walk(dir) {

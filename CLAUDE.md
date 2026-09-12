@@ -12,8 +12,10 @@ Sibling of `../poppo-companion` and `../bigo-companion`. Same house shape:
 **no build step, no dependencies, plain ES modules.** What is in `src/` is what
 Chrome loads.
 
-Nothing is authenticated. No Google account, no API key, no OAuth, no content
-script — the extension only reads public `youtube.com` endpoints.
+Nothing is authenticated. No Google account, no API key, no OAuth. The feed
+only reads public `youtube.com` endpoints. Audio mode injects an isolated
+content script on youtube.com to pin the player to 144p; `#movie_player`
+methods are reached through a MAIN-world bridge.
 
 ## Read DESIGN.md first
 

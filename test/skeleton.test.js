@@ -46,7 +46,39 @@ export default async function run(t) {
     JSON.stringify(hosts),
   );
 
-  t.check('has no content_scripts key', !('content_scripts' in manifest));
+  const cs = (manifest.content_scripts || [])[0] || {};
+  t.check(
+    'content_scripts matches youtube.com',
+    Array.isArray(cs.matches) && cs.matches.includes('https://www.youtube.com/*'),
+    JSON.stringify(cs.matches),
+  );
+  t.check('content_scripts run_at is document_idle', cs.run_at === 'document_idle', String(cs.run_at));
+  t.check(
+    'content_scripts js is core.js then content.js',
+    Array.isArray(cs.js) && cs.js[0] === 'src/content/core.js' && cs.js[1] === 'src/content/content.js',
+    JSON.stringify(cs.js),
+  );
+  t.check(
+    'content_scripts css includes overlay.css',
+    Array.isArray(cs.css) && cs.css.includes('src/content/overlay.css'),
+    JSON.stringify(cs.css),
+  );
+
+  t.check(
+    'commands has toggle-audio-mode',
+    !!manifest.commands && typeof manifest.commands['toggle-audio-mode'] === 'object',
+    JSON.stringify(manifest.commands),
+  );
+
+  const war = (manifest.web_accessible_resources || [])[0] || {};
+  t.check(
+    'web_accessible_resources lists inject.js for youtube.com',
+    Array.isArray(war.resources)
+      && war.resources.includes('src/content/inject.js')
+      && Array.isArray(war.matches)
+      && war.matches.includes('https://www.youtube.com/*'),
+    JSON.stringify(war),
+  );
 
   t.section('locales');
 

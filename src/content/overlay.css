@@ -1,0 +1,97 @@
+/**
+ * In-page audio-mode overlay. Loaded into youtube.com, which cannot
+ * read the popup's custom properties, so the six presets live here.
+ * Every selector is scoped to #ytc-audio-overlay.
+ */
+
+#ytc-audio-overlay {
+  --ytc-audio-angle: 165deg;
+  --ytc-audio-midnight-from: #0f0f14;
+  --ytc-audio-midnight-to: #1e1e28;
+  --ytc-audio-slate-from: #17171f;
+  --ytc-audio-slate-to: #3a3a48;
+  --ytc-audio-ember-from: #14080a;
+  --ytc-audio-ember-to: #8c1220;
+  --ytc-audio-amber-from: #141007;
+  --ytc-audio-amber-to: #8a6210;
+  --ytc-audio-forest-from: #081410;
+  --ytc-audio-forest-to: #14763a;
+  --ytc-audio-sunset-from: #96630d;
+  --ytc-audio-sunset-to: #7a1020;
+  --ytc-audio-custom-color: var(--ytc-audio-midnight-from);
+
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  pointer-events: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-midnight-from),
+    var(--ytc-audio-midnight-to)
+  );
+}
+
+#ytc-audio-overlay[data-preset='midnight'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-midnight-from),
+    var(--ytc-audio-midnight-to)
+  );
+}
+
+#ytc-audio-overlay[data-preset='slate'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-slate-from),
+    var(--ytc-audio-slate-to)
+  );
+}
+
+#ytc-audio-overlay[data-preset='ember'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-ember-from),
+    var(--ytc-audio-ember-to)
+  );
+}
+
+#ytc-audio-overlay[data-preset='amber'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-amber-from),
+    var(--ytc-audio-amber-to)
+  );
+}
+
+#ytc-audio-overlay[data-preset='forest'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-forest-from),
+    var(--ytc-audio-forest-to)
+  );
+}
+
+#ytc-audio-overlay[data-preset='sunset'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-sunset-from),
+    var(--ytc-audio-sunset-to)
+  );
+}
+
+#ytc-audio-overlay[data-kind='color'] {
+  background: var(--ytc-audio-custom-color, var(--ytc-audio-midnight-from));
+}
+
+#ytc-audio-overlay[data-kind='image'] {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}

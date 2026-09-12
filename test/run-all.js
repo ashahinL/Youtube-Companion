@@ -23,6 +23,7 @@ const SUITES = [
   ['backup',             './backup.test.js'],
   ['service worker',     './worker.test.js'],
   ['audio-mode core',    './core.test.js'],
+  ['audio-mode engine',  './audio-engine.test.js'],
 ];
 
 const results = [];

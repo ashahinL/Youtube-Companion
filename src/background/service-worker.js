@@ -1,8 +1,8 @@
 /**
  * Background service worker.
  *
- * Owns all network, alarms, notifications and the badge. The popup never
- * fetches — it asks this file and renders.
+ * Owns all network, alarms, notifications, the badge, and the audio-mode
+ * keyboard command. The popup never fetches — it asks this file and renders.
  */
 
 import {
@@ -40,6 +40,7 @@ const ALARM_ALL = 'poll-all';
 const ALARM_FAV = 'poll-fav';
 const BADGE_COLOR = '#cc0000';
 const EXT_ICON = 'icons/icon128.png';
+const AUDIO_TOGGLE_COMMAND = 'toggle-audio-mode';
 
 // Innertube POSTs from the worker carry Origin: chrome-extension://… and
 // YouTube 403s that Origin. Fetch cannot override it; this rule can.
@@ -597,6 +598,31 @@ onSettingsChanged(() => {
   syncAlarms().catch(() => {});
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
+
+/**
+ * Scoped to the active tab on purpose. Targeting another YouTube tab
+ * from a mistyped shortcut elsewhere used to switch audio mode off
+ * silently; the first sign was a larger bandwidth bill.
+ */
+export async function handleCommand(command, tab) {
+  if (command !== AUDIO_TOGGLE_COMMAND) return;
+  const api = chromeApi();
+  let id = tab && tab.id;
+  if (id == null) {
+    const tabs = await api.tabs.query({ active: true, currentWindow: true });
+    id = tabs && tabs[0] && tabs[0].id;
+  }
+  if (id == null) return;
+  try {
+    await api.tabs.sendMessage(id, { type: 'audioMode.toggle' });
+  } catch {
+    // No content script in this tab.
+  }
+}
+
+chromeApi().commands?.onCommand?.addListener((command, tab) => {
+  handleCommand(command, tab).catch(() => {});
+});
 
 export const ready = Promise.all([
   reconcileRunning().catch(() => {}),

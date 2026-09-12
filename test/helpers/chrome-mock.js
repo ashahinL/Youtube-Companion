@@ -57,6 +57,8 @@ export function installChromeMock(initial = {}) {
     badgeTexts: [],
     badgeColor: null,
     tabsCreated: [],
+    messagesSent: [],
+    commandListeners: [],
     activeTab: null,
     dnrRules: [],
     dnrUpdates: [],
@@ -220,6 +222,22 @@ export function installChromeMock(initial = {}) {
         }
         return [];
       },
+      async sendMessage(tabId, message) {
+        handle.messagesSent.push({ tabId, message });
+        return { ok: true };
+      },
+    },
+
+    commands: {
+      onCommand: {
+        addListener(fn) {
+          if (typeof fn === 'function') handle.commandListeners.push(fn);
+        },
+        removeListener(fn) {
+          const i = handle.commandListeners.indexOf(fn);
+          if (i >= 0) handle.commandListeners.splice(i, 1);
+        },
+      },
     },
 
     declarativeNetRequest: {
@@ -275,6 +293,7 @@ export function installChromeMock(initial = {}) {
     handle.notifications.length = 0;
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
+    handle.messagesSent.length = 0;
     handle.activeTab = null;
     for (const key of Object.keys(alarms)) delete alarms[key];
     handle.badgeText = '';
