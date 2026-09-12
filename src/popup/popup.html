@@ -49,30 +49,36 @@
     </nav>
 
     <section id="feeds" class="panel" role="tabpanel" aria-labelledby="tab-feeds">
-      <div class="feed-bar">
-        <input
-          id="feed-filter"
-          class="add-row__input"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Filter by title or channel"
-          data-i18n-placeholder="feedFilterPlaceholder"
-          data-i18n-label="feedFilterPlaceholder"
-          aria-label="Filter by title or channel"
-        />
-        <button
-          id="feed-refresh"
-          class="icon-btn"
-          type="button"
-          data-i18n-label="feedRefresh"
-          data-i18n-title="feedRefresh"
-          aria-label="Refresh"
-        >
-          ↻
+      <form id="feed-add-form" class="add-row">
+        <span class="add-row__field">
+          <input
+            id="feed-filter"
+            class="add-row__input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Search your feed, or a URL / @handle"
+            data-i18n-placeholder="feedFilterPlaceholder"
+            data-i18n-label="feedFilterPlaceholder"
+            aria-label="Search your feed, or a URL / @handle"
+          />
+          <button
+            id="feed-clear"
+            class="add-row__clear"
+            type="button"
+            hidden
+            data-i18n-title="feedClear"
+            data-i18n-label="feedClear"
+            title="Clear the search"
+            aria-label="Clear the search"
+          >✕</button>
+        </span>
+        <button id="feed-add-btn" class="btn btn--primary" type="submit" data-i18n="watchlistAdd">
+          Add
         </button>
-        <span id="feed-refresh-spinner" class="spinner" hidden></span>
-      </div>
+        <span id="feed-add-spinner" class="spinner" hidden></span>
+      </form>
+      <p id="feed-count" class="footnote add-row__count" hidden></p>
       <label
         class="row feed-fav-filter"
         title="Hide videos from channels that are not favourites."
@@ -81,7 +87,24 @@
         <input id="feed-favorites-only" type="checkbox" data-setting="feed.favoritesOnly" />
         <span data-i18n="feedFavoritesOnly">Favourites only</span>
       </label>
-      <p id="feed-last-poll" class="banner" hidden></p>
+      <div id="feed-status" class="feed-status">
+        <span id="feed-last-poll" class="footnote"></span>
+        <span class="feed-status__actions reload-slot">
+          <button
+            id="feed-refresh"
+            class="icon-btn"
+            type="button"
+            data-i18n-label="feedRefresh"
+            data-i18n-title="feedRefresh"
+            aria-label="Refresh"
+          >
+            ↻
+          </button>
+          <span id="feed-refresh-spinner" class="spinner" hidden></span>
+        </span>
+      </div>
+      <p id="feed-ok" class="banner banner--ok" role="status" hidden></p>
+      <p id="feed-error" class="banner banner--error" role="status" hidden></p>
       <p id="feed-notice" class="banner" role="status" hidden></p>
       <div id="feed-list" class="list"></div>
       <div id="feed-empty-no-channels" class="empty">
@@ -134,6 +157,7 @@
         <span id="watchlist-spinner" class="spinner" hidden></span>
       </form>
       <p id="watchlist-count" class="footnote add-row__count" hidden></p>
+      <p id="watchlist-ok" class="banner banner--ok" role="status" hidden></p>
       <p id="watchlist-error" class="banner banner--error" role="status" hidden></p>
       <div id="watchlist-list" class="list"></div>
       <p id="watchlist-empty" class="empty" data-i18n="emptyWatchlist">Watchlist is empty</p>
@@ -320,17 +344,19 @@
             <span id="channel-sheet-name" class="sheet__name"></span>
             <span id="channel-sheet-handle" class="footnote handle" dir="ltr"></span>
           </span>
-          <button
-            id="channel-sheet-refresh"
-            class="icon-btn"
-            type="button"
-            data-i18n-label="feedRefresh"
-            data-i18n-title="feedRefresh"
-            aria-label="Refresh"
-          >
-            ↻
-          </button>
-          <span id="channel-sheet-spinner" class="spinner" hidden></span>
+          <span class="reload-slot">
+            <button
+              id="channel-sheet-refresh"
+              class="icon-btn"
+              type="button"
+              data-i18n-label="feedRefresh"
+              data-i18n-title="feedRefresh"
+              aria-label="Refresh"
+            >
+              ↻
+            </button>
+            <span id="channel-sheet-spinner" class="spinner" hidden></span>
+          </span>
           <button
             id="channel-sheet-close"
             class="icon-btn"

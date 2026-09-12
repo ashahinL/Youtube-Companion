@@ -7,6 +7,7 @@
   --text-dim: rgba(241, 241, 244, 0.55);
   --accent: #ff0000;
   --on-accent: #ffffff;
+  --ok: #22c55e;
   --radius: 9px;
   /* The duration badge sits on a photograph, not on the page, so it stays
    * dark-on-light in both themes rather than following them. */
@@ -30,6 +31,7 @@
     --text: #16161a;
     --text-dim: rgba(22, 22, 26, 0.58);
     --on-accent: #ffffff;
+    --ok: #15803d;
     --tag-live: #d10f20;
     --on-tag-live: #ffffff;
     --tag-premiere: #c98911;
@@ -250,6 +252,24 @@ body {
   color: var(--accent);
 }
 
+.banner--ok {
+  color: var(--ok);
+}
+
+/* ↻ and its spinner share one 28×28 cell so the row does not shift
+   when the button hides and the spinner takes its place. */
+.reload-slot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.reload-slot > * {
+  grid-area: 1 / 1;
+}
+
 .list {
   display: flex;
   flex-direction: column;
@@ -429,18 +449,29 @@ body {
   margin-block-start: 12px;
 }
 
-.feed-bar {
+.feed-fav-filter {
+  margin-block-start: -4px;
+  margin-block-end: 10px;
+  padding-block: 0;
+  font-size: 12.5px;
+}
+
+/* Last-check text and ↻ share a row so the add box can keep its ✕
+   inside the field, the same shape as poppo. */
+.feed-status {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-block-end: 10px;
 }
 
-.feed-fav-filter {
-  margin-block-start: -4px;
-  margin-block-end: 10px;
-  padding-block: 0;
-  font-size: 12.5px;
+.feed-status .footnote {
+  margin: 0;
+  min-width: 0;
+}
+
+.feed-status__actions {
+  margin-inline-start: auto;
 }
 
 .feed-row {

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import {
   YtError,
   normalizeChannelInput,
+  normalizeVideoInput,
   thumbUrl,
   parseDuration,
   parseCompactCount,
@@ -172,6 +173,33 @@ export default async function run(t) {
   t.check('non-YouTube URL is rejected', asId('https://example.com/@mkbhd') === null);
   t.check('empty string is rejected', asId('') === null);
   t.check('whitespace-only is rejected', asId('   ') === null);
+
+  /* ---- normalizeVideoInput ------------------------------------------ */
+  t.section('normalizeVideoInput');
+
+  const asVid = (input) => normalizeVideoInput(input);
+  t.check(
+    'bare 11-character id is a video',
+    JSON.stringify(asVid('Od6M0AXpcxQ')) === JSON.stringify({ kind: 'video', id: 'Od6M0AXpcxQ' }),
+  );
+  t.check(
+    'watch URL is a video',
+    JSON.stringify(asVid('https://www.youtube.com/watch?v=Od6M0AXpcxQ')) ===
+      JSON.stringify({ kind: 'video', id: 'Od6M0AXpcxQ' }),
+  );
+  t.check(
+    'shorts URL is a video',
+    asVid('https://www.youtube.com/shorts/5mU6SRS2Bxo')?.id === '5mU6SRS2Bxo',
+  );
+  t.check(
+    'youtu.be URL is a video',
+    asVid('https://youtu.be/Od6M0AXpcxQ')?.id === 'Od6M0AXpcxQ',
+  );
+  t.check('a handle is not a video', asVid('@mkbhd') === null);
+  t.check('a bare word is not a video on Feeds', asVid('mkbhd') === null);
+  t.check('a channel id is not a video', asVid(mkbhdId) === null);
+  t.check('a name with spaces is not a video', asVid('never gonna give you up') === null);
+  t.check('empty string is not a video', asVid('') === null);
 
   /* ---- thumbUrl / parseDuration / parseCompactCount ----------------- */
   t.section('thumbUrl / duration / compact count');

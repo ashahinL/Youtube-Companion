@@ -134,8 +134,39 @@ export default async function run(t) {
   t.check('feeds panel exists', !!feeds);
   const f = feeds ? feeds[0] : '';
   t.check('has filter input', /id="feed-filter"/.test(f));
+  t.check('has add button', /id="feed-add-btn"/.test(f));
+  t.check('has a clear control', /id="feed-clear"/.test(f));
+  t.check('has a local-filter count', /id="feed-count"/.test(f));
   t.check('has refresh control', /id="feed-refresh"/.test(f));
+  t.check(
+    'refresh sits on the last-check row',
+    /id="feed-status"[\s\S]*id="feed-last-poll"[\s\S]*id="feed-refresh"/.test(f),
+  );
+  t.check(
+    'the add box does not hold the refresh control',
+    !/<form\b[^>]*id="feed-add-form"[\s\S]*?id="feed-refresh"[\s\S]*?<\/form>/.test(f),
+  );
   t.check('has list container', /id="feed-list"/.test(f));
+  t.check('typed Feeds Add only fires for a channel ref', /submitAdd\(filter\.value,\s*'feeds'\)/.test(js));
+  t.check(
+    'already-listed channel disables Feeds Add rather than erroring',
+    /listedMatch\(q,\s*view\.channels\)/.test(js) && /watchlistOnList/.test(js),
+  );
+  t.check('the box filters the local feed', /matchesFeedFilter\(item,/.test(js));
+  t.check(
+    'Feeds Add stays available when the box is empty',
+    /addable = !q \|\| \(isChannelRef\(q\) && !onList\)/.test(js),
+  );
+  t.check(
+    'empty Feeds Add reads the focused tab',
+    /submitAdd\(filter\.value,\s*'feeds'\)/.test(js) && /watchlistNoCurrentTab/.test(js),
+  );
+  t.check('Feeds Add sends addChannel', /type:\s*'addChannel'/.test(js));
+  t.check('a successful add shows channelAdded', /channelAdded/.test(js) && /banner--ok/.test(html));
+  t.check(
+    'reload hides while its spinner runs',
+    /refreshBtn\.hidden = view\.sweeping/.test(js) && /refreshBtn\.hidden = locked/.test(js),
+  );
   t.check('has a favourites-only checkbox', /id="feed-favorites-only"/.test(f));
   t.check(
     'favourites-only writes feed.favoritesOnly',

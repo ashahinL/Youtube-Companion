@@ -236,6 +236,19 @@ export function normalizeChannelInput(input) {
   return null;
 }
 
+/**
+ * A bare 11-character token is a video id here; the same token on Add
+ * / Watchlist is a handle. Channel URLs and @handles are not videos.
+ */
+export function normalizeVideoInput(input) {
+  if (input == null) return null;
+  const raw = String(input).trim();
+  if (!raw) return null;
+  if (VIDEO_ID_RE.test(raw)) return { kind: 'video', id: raw };
+  const ch = normalizeChannelInput(raw);
+  return ch && ch.kind === 'video' ? ch : null;
+}
+
 function videoIdFromParsedUrl(url) {
   const host = url.hostname.toLowerCase();
   if (host === 'youtu.be' || host === 'www.youtu.be') {
@@ -618,13 +631,21 @@ export async function isShort(videoId, { fetch = globalThis.fetch } = {}) {
   return true;
 }
 
-export async function classifyVideo(videoId, { fetch = globalThis.fetch } = {}) {
+export async function fetchPlayer(videoId, { fetch = globalThis.fetch } = {}) {
   const json = await innertubePost('player', { videoId }, fetch);
-  const p = parsePlayer(json);
+  return parsePlayer(json);
+}
+
+export async function classifyPlayer(p, { fetch = globalThis.fetch } = {}) {
   if (p.isUpcoming) return { k: 'premiere', d: 0, st: p.startsAt };
   if (p.isLive) return { k: 'live', d: 0, st: p.startsAt };
   // Shorts max out at 3 minutes, so a longer video cannot be one.
   if (p.lengthSeconds > 180) return { k: 'video', d: p.lengthSeconds, st: 0 };
-  const short = await isShort(videoId, { fetch });
+  const short = await isShort(p.v, { fetch });
   return { k: short ? 'short' : 'video', d: p.lengthSeconds, st: 0 };
+}
+
+export async function classifyVideo(videoId, { fetch = globalThis.fetch } = {}) {
+  const p = await fetchPlayer(videoId, { fetch });
+  return classifyPlayer(p, { fetch });
 }

@@ -1,11 +1,13 @@
 /**
  * Popup: three tabs plus the channel sheet overlay. Feeds is the merged
- * timeline; the Watchlist tab adds by URL or handle, filters the list as
- * you type, favourites and removes channels. Empty Add reads the focused
- * tab. The worker owns all network; this page only renders.
+ * timeline; its box filters videos, and Add adds a channel the same way
+ * the Watchlist box does. The Watchlist tab adds by URL or handle,
+ * filters the list as you type, favourites and removes channels. Empty
+ * Add reads the focused tab. The worker owns all network; this page
+ * only renders.
  */
 
-import { normalizeChannelInput, thumbUrl } from '../lib/yt.js';
+import { normalizeChannelInput, normalizeVideoInput, thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
 import { buildBackup } from '../lib/backup.js';
@@ -27,6 +29,7 @@ const view = {
   feed: [],
   pollState: {},
   error: '',
+  ok: '',
   busy: false,
   sweeping: false,
   feedNotice: '',
@@ -36,6 +39,8 @@ const view = {
   pendingImportText: '',
   sheetId: null,
   sheetError: '',
+  feedError: '',
+  feedOk: '',
 };
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -172,9 +177,20 @@ function listedMatch(input, channels) {
   const ref = normalizeChannelInput(String(input || '').trim());
   if (!ref) return null;
   if (ref.kind === 'id') return channels.find((ch) => ch.id === ref.id) || null;
+  if (ref.kind === 'video') {
+    const item = (view.feed || []).find((row) => row && row.v === ref.id);
+    if (!item) return null;
+    return channels.find((ch) => ch.id === item.c) || null;
+  }
   const handle = handleFromRef(ref);
   if (!handle) return null;
   return channels.find((ch) => handleKey(ch.handle) === handle) || null;
+}
+
+function listedVideo(input, items) {
+  const ref = normalizeVideoInput(String(input || '').trim());
+  if (!ref) return null;
+  return items.find((item) => item && item.v === ref.id) || null;
 }
 
 function matchesWatchlist(ch, raw) {
@@ -407,19 +423,23 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   body.appendChild(headline);
 
   const metaNodes = [];
-  const channelName = channel?.title || channel?.handle || '';
+  const channelName = channel?.title || channel?.handle || item.ct || '';
   if (showChannel && channelName) {
-    const chBtn = document.createElement('button');
-    chBtn.type = 'button';
-    chBtn.className = 'feed-row__channel';
-    chBtn.textContent = channelName;
-    chBtn.setAttribute('aria-label', t('watchlistOpenChannel', [channelName]));
-    chBtn.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openChannelSheet(channel.id);
-    });
-    metaNodes.push(chBtn);
+    if (channel) {
+      const chBtn = document.createElement('button');
+      chBtn.type = 'button';
+      chBtn.className = 'feed-row__channel';
+      chBtn.textContent = channelName;
+      chBtn.setAttribute('aria-label', t('watchlistOpenChannel', [channelName]));
+      chBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openChannelSheet(channel.id);
+      });
+      metaNodes.push(chBtn);
+    } else {
+      metaNodes.push(textEl('span', '', channelName));
+    }
   }
 
   const at = Number(item.at) || 0;
@@ -464,16 +484,33 @@ function visibleFeedItems() {
 }
 
 function matchesFeedFilter(item, channel, q) {
-  if (!q) return true;
-  const title = String(item.t || '').toLowerCase();
-  const name = String(channel?.title || channel?.handle || '').toLowerCase();
-  return title.includes(q) || name.includes(q);
+  const term = fold(q);
+  if (!term) return true;
+  if (fold(item.t).includes(term)) return true;
+  if (fold(channel?.title || '').includes(term)) return true;
+  const handleTerm = term.replace(/^@/, '');
+  if (handleKey(channel?.handle || '').includes(handleTerm)) return true;
+  if (fold(item.ct || '').includes(term)) return true;
+  if (fold(item.v).includes(term)) return true;
+  if (fold(item.c).includes(term)) return true;
+  const ref = normalizeChannelInput(q);
+  if (ref?.kind === 'video' && item.v === ref.id) return true;
+  if (ref?.kind === 'id' && item.c === ref.id) return true;
+  return false;
 }
 
 function renderFeeds(locale) {
+  const form = document.getElementById('feed-add-form');
   const filterEl = document.getElementById('feed-filter');
+  const addBtn = document.getElementById('feed-add-btn');
+  const clearBtn = document.getElementById('feed-clear');
+  const countEl = document.getElementById('feed-count');
+  const errorEl = document.getElementById('feed-error');
+  const okEl = document.getElementById('feed-ok');
   const refreshBtn = document.getElementById('feed-refresh');
+  const addSpinner = document.getElementById('feed-add-spinner');
   const spinner = document.getElementById('feed-refresh-spinner');
+  const statusEl = document.getElementById('feed-status');
   const lastEl = document.getElementById('feed-last-poll');
   const noticeEl = document.getElementById('feed-notice');
   const listEl = document.getElementById('feed-list');
@@ -484,14 +521,17 @@ function renderFeeds(locale) {
   const missEl = document.getElementById('feed-filter-miss');
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
   const favBox = document.getElementById('feed-favorites-only');
-  const bar = filterEl.parentElement;
 
-  const locked = view.sweeping;
+  const locked = view.busy || view.sweeping;
   refreshBtn.disabled = locked;
+  refreshBtn.hidden = view.sweeping;
   if (emptyRefresh) emptyRefresh.disabled = locked;
+  if (addSpinner) addSpinner.hidden = !view.busy;
   spinner.hidden = !view.sweeping;
-  bar.classList.toggle('is-busy', view.sweeping);
-  bar.setAttribute('aria-busy', view.sweeping ? 'true' : 'false');
+  form.classList.toggle('is-busy', view.busy);
+  form.setAttribute('aria-busy', view.busy ? 'true' : 'false');
+  statusEl.classList.toggle('is-busy', view.sweeping);
+  statusEl.setAttribute('aria-busy', view.sweeping ? 'true' : 'false');
   refreshBtn.setAttribute('aria-label', t('feedRefresh'));
   refreshBtn.title = t('feedRefresh');
 
@@ -523,6 +563,22 @@ function renderFeeds(locale) {
     noticeEl.classList.remove('banner--error');
   }
 
+  if (view.feedError) {
+    errorEl.hidden = false;
+    errorEl.textContent = view.feedError;
+  } else {
+    errorEl.hidden = true;
+    errorEl.textContent = '';
+  }
+
+  if (view.feedOk) {
+    okEl.hidden = false;
+    okEl.textContent = view.feedOk;
+  } else {
+    okEl.hidden = true;
+    okEl.textContent = '';
+  }
+
   const channelsById = new Map(view.channels.map((ch) => [ch.id, ch]));
   const favOnly = !!view.settings?.feed?.favoritesOnly;
   if (favBox) favBox.checked = favOnly;
@@ -533,26 +589,50 @@ function renderFeeds(locale) {
     if (!favOnly) return true;
     return !!channelsById.get(item.c)?.favorite;
   });
-  const q = (filterEl.value || '').trim().toLowerCase();
-  const shown = q
+  const q = (filterEl.value || '').trim();
+  const onList = !!listedMatch(q, view.channels);
+  const addable = !q || (isChannelRef(q) && !onList);
+
+  filterEl.disabled = view.busy;
+  addBtn.disabled = locked || !addable;
+  addBtn.textContent = onList ? t('watchlistOnList') : t('watchlistAdd');
+  addBtn.title = onList
+    ? t('watchlistOnList')
+    : (q ? t('feedFilterPlaceholder') : t('watchlistAddFromTab'));
+  if (clearBtn) clearBtn.hidden = !q || view.busy;
+
+  let shown = q
     ? items.filter((item) => matchesFeedFilter(item, channelsById.get(item.c), q))
     : items;
+  // An exact URL / id still surfaces that row when favourites-only (or
+  // hidden shorts) would have dropped it — you asked for that video.
+  const hit = listedVideo(q, view.feed);
+  if (hit && !shown.some((item) => item.v === hit.v)) shown = [hit];
 
   listEl.replaceChildren();
   for (const item of shown) {
     listEl.appendChild(feedRow(item, locale, channelsById.get(item.c)));
   }
 
+  const searching = !!q;
+  countEl.hidden = !searching;
+  countEl.textContent = searching
+    ? t('watchlistShowing', [String(shown.length), String(items.length)])
+    : '';
+
   const hasChannels = view.channels.length > 0;
+  const hasAnyFeed = view.feed.length > 0;
   const hasShown = shown.length > 0;
-  emptyNone.hidden = hasChannels;
+  emptyNone.hidden = hasChannels || hasAnyFeed || searching;
   emptyWait.hidden = !(hasChannels && !hasShown && !q && !favOnly);
-  emptyFav.hidden = !(hasChannels && !hasShown && !q && favOnly);
-  emptyFilter.hidden = !(hasChannels && !hasShown && q);
-  listEl.hidden = !hasChannels || !hasShown;
+  emptyFav.hidden = !((hasChannels || hasAnyFeed) && !hasShown && !q && favOnly);
+  emptyFilter.hidden = !(searching && !hasShown);
+  listEl.hidden = !hasShown;
 
   if (!emptyFilter.hidden && missEl) {
-    missEl.textContent = t('emptyFeedFilter', [(filterEl.value || '').trim()]);
+    missEl.textContent = addable
+      ? t('feedNoMatchAdd', [q])
+      : t('emptyFeedFilter', [q]);
   }
 }
 
@@ -564,6 +644,7 @@ function render() {
   const clearBtn = document.getElementById('watchlist-clear');
   const spinner = document.getElementById('watchlist-spinner');
   const errorEl = document.getElementById('watchlist-error');
+  const okEl = document.getElementById('watchlist-ok');
   const countEl = document.getElementById('watchlist-count');
   const listEl = document.getElementById('watchlist-list');
   const emptyEl = document.getElementById('watchlist-empty');
@@ -592,6 +673,14 @@ function render() {
   } else {
     errorEl.hidden = true;
     errorEl.textContent = '';
+  }
+
+  if (view.ok) {
+    okEl.hidden = false;
+    okEl.textContent = view.ok;
+  } else {
+    okEl.hidden = true;
+    okEl.textContent = '';
   }
 
   const searching = !!q;
@@ -655,6 +744,7 @@ function renderChannelSheet() {
 
   const locked = view.sweeping;
   refreshBtn.disabled = locked;
+  refreshBtn.hidden = locked;
   spinner.hidden = !locked;
   refreshBtn.setAttribute('aria-label', t('feedRefresh'));
   refreshBtn.title = t('feedRefresh');
@@ -751,32 +841,37 @@ function renderSettings(locale) {
   }
 }
 
-async function withBusy(fn) {
+async function withBusy(fn, errField = 'error') {
   if (view.busy) return;
   view.busy = true;
-  view.error = '';
+  view[errField] = '';
   render();
   try {
     await fn();
   } catch (err) {
-    view.error = formatError(err?.message || err);
+    view[errField] = formatError(err?.message || err);
   } finally {
     view.busy = false;
     render();
   }
 }
 
-async function addChannel(input) {
+async function addChannel(input, dest = 'watchlist') {
+  const errorField = dest === 'feeds' ? 'feedError' : 'error';
+  const okField = dest === 'feeds' ? 'feedOk' : 'ok';
+  const boxId = dest === 'feeds' ? 'feed-filter' : 'watchlist-input';
   await withBusy(async () => {
+    view[okField] = '';
     const res = await send({ type: 'addChannel', input });
     if (!res || res.ok === false) {
-      view.error = formatError(res?.error);
+      view[errorField] = formatError(res?.error);
       return;
     }
-    const box = document.getElementById('watchlist-input');
+    const box = document.getElementById(boxId);
     if (box) box.value = '';
     await refreshState();
-  });
+    view[okField] = t('channelAdded');
+  }, errorField);
 }
 
 async function toggleFavorite(id, on) {
@@ -810,15 +905,18 @@ async function currentTabUrl() {
   }
 }
 
-async function submitAdd(raw) {
+async function submitAdd(raw, dest = 'watchlist') {
   if (view.busy) return;
+  const errorField = dest === 'feeds' ? 'feedError' : 'error';
+  const okField = dest === 'feeds' ? 'feedOk' : 'ok';
   let input = String(raw || '').trim();
   let fromTab = false;
+  view[okField] = '';
   if (!input) {
     fromTab = true;
     input = await currentTabUrl();
     if (!isChannelRef(input)) {
-      view.error = t('watchlistNoCurrentTab');
+      view[errorField] = t('watchlistNoCurrentTab');
       render();
       return;
     }
@@ -826,12 +924,12 @@ async function submitAdd(raw) {
   if (!isChannelRef(input)) return;
   if (listedMatch(input, view.channels)) {
     if (fromTab) {
-      view.error = t('watchlistAlreadyAdded');
+      view[errorField] = t('watchlistAlreadyAdded');
       render();
     }
     return;
   }
-  await addChannel(input);
+  await addChannel(input, dest);
 }
 
 async function requestSweep({ onlyId = null } = {}) {
@@ -862,15 +960,44 @@ async function requestSweep({ onlyId = null } = {}) {
   }
 }
 
+function clearFeedQuery() {
+  const input = document.getElementById('feed-filter');
+  if (!input || !input.value) return;
+  input.value = '';
+  view.feedError = '';
+  view.feedOk = '';
+  render();
+  input.focus();
+}
+
 function bindFeeds() {
+  const form = document.getElementById('feed-add-form');
   const filter = document.getElementById('feed-filter');
+  const clear = document.getElementById('feed-clear');
   const refresh = document.getElementById('feed-refresh');
   const gotoWatchlist = document.getElementById('feed-goto-watchlist');
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
   const emptyClear = document.getElementById('feed-filter-clear');
   const favBox = document.getElementById('feed-favorites-only');
 
-  filter.addEventListener('input', () => render());
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitAdd(filter.value, 'feeds');
+  });
+  filter.addEventListener('input', () => {
+    view.feedError = '';
+    view.feedOk = '';
+    render();
+  });
+  filter.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!filter.value) return;
+    event.preventDefault();
+    clearFeedQuery();
+  });
+  clear.addEventListener('click', () => {
+    clearFeedQuery();
+  });
   refresh.addEventListener('click', () => {
     void requestSweep();
   });
@@ -878,9 +1005,7 @@ function bindFeeds() {
     void requestSweep();
   });
   emptyClear.addEventListener('click', () => {
-    filter.value = '';
-    render();
-    filter.focus();
+    clearFeedQuery();
   });
   favBox.addEventListener('change', () => {
     void patchSettings(buildPatch('feed.favoritesOnly', favBox.checked));
@@ -1023,6 +1148,7 @@ function clearWatchlistQuery() {
   if (!input || !input.value) return;
   input.value = '';
   view.error = '';
+  view.ok = '';
   render();
   input.focus();
 }
@@ -1037,6 +1163,7 @@ function bindWatchlist() {
   });
   input.addEventListener('input', () => {
     view.error = '';
+    view.ok = '';
     render();
   });
   input.addEventListener('keydown', (event) => {

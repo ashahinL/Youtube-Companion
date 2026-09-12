@@ -148,8 +148,26 @@
     "description": "Accessible name of the warning marker on a Watchlist row whose last fetch failed. The worker's error text is in the tooltip."
   },
   "feedFilterPlaceholder": {
-    "message": "صفِّ حسب العنوان أو القناة",
-    "description": "Placeholder and accessible name for the Feeds tab text filter."
+    "message": "ابحث في الخلاصة، أو ألصق رابطًا أو @معرّف",
+    "description": "Placeholder and accessible name for the Feeds box. The box filters the feed as you type, and Add resolves a URL or handle to a channel."
+  },
+  "feedClear": {
+    "message": "مسح البحث",
+    "description": "Accessible name of the ✕ that clears the Feeds box."
+  },
+  "feedNoMatchAdd": {
+    "message": "لا فيديوهات تطابق \"$QUERY$\". اضغط إضافة لمتابعة هذه القناة.",
+    "description": "Empty state on the Feeds tab when the box filtered the list to nothing but the text is a URL or handle that can be added. $QUERY$ is what is in the box.",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "mkbhd"
+      }
+    }
+  },
+  "channelAdded": {
+    "message": "تمت إضافة القناة بنجاح",
+    "description": "Green status under the Add box on Feeds or Watchlist after a channel is added."
   },
   "feedFavoritesOnly": {
     "message": "المفضلة فقط",
