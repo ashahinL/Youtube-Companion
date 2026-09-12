@@ -199,6 +199,27 @@ export default async function run(t) {
     t.check('items at lastSeenAt are not new',
       newSinceCount(sinceFeed, 100, true) === 0);
 
+    const mixedFeed = [
+      item('fav1', { at: 100, k: 'video', c: 'UCfav' }),
+      item('oth1', { at: 90, k: 'video', c: 'UCoth' }),
+      item('favs', { at: 80, k: 'short', c: 'UCfav' }),
+      item('old1', { at: 10, k: 'video', c: 'UCfav' }),
+    ];
+    t.check('restricts to the given channel ids',
+      newSinceCount(mixedFeed, 50, true, new Set(['UCfav'])) === 2,
+      String(newSinceCount(mixedFeed, 50, true, new Set(['UCfav']))));
+    t.check('restrict plus hide shorts',
+      newSinceCount(mixedFeed, 50, false, new Set(['UCfav'])) === 1,
+      String(newSinceCount(mixedFeed, 50, false, new Set(['UCfav']))));
+    t.check('null channel set counts every channel',
+      newSinceCount(mixedFeed, 50, true, null) === 3,
+      String(newSinceCount(mixedFeed, 50, true, null)));
+    t.check('omitted channel set keeps the showShorts positional arg',
+      newSinceCount(mixedFeed, 50, true) === 3,
+      String(newSinceCount(mixedFeed, 50, true)));
+    t.check('empty channel set counts none',
+      newSinceCount(mixedFeed, 50, true, new Set()) === 0);
+
     t.section('putVideoMeta');
 
     const seeded = {};

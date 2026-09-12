@@ -246,6 +246,7 @@ export default async function run(t) {
     reconcileRunning,
     refreshBadge,
     addChannelByInput,
+    onNotificationClicked,
   } = worker;
   await ready;
 
@@ -605,6 +606,11 @@ export default async function run(t) {
     t.section('clicking a notification opens the newest');
 
     t.check('notification id is yt:<channelId>', mock.notifications[0].id === `yt:${MKBHD}`, mock.notifications[0]?.id);
+    const feedAtClick = await readFeed();
+    await saveFeed([
+      { v: 'later000001', c: MKBHD, t: 'Later', at: AT.newest + 5000, d: 1, vw: 0, k: 'video', st: 0 },
+      ...feedAtClick,
+    ]);
     mock.fireNotificationClick(mock.notifications[0].id);
     for (let i = 0; i < 40 && mock.tabsCreated.length === 0; i++) await wait(5);
     t.check('opened one tab', mock.tabsCreated.length === 1, String(mock.tabsCreated.length));
@@ -614,6 +620,60 @@ export default async function run(t) {
       mock.tabsCreated[0]?.url,
     );
     t.check('the tab is focused', mock.tabsCreated[0].active === true);
+
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked(`yt:${MKBHD}`);
+    t.check(
+      'a second click after the Map entry is consumed opens the newest stored row',
+      mock.tabsCreated[0]?.url === 'https://www.youtube.com/watch?v=later000001',
+      mock.tabsCreated[0]?.url,
+    );
+
+    t.section('notification click rebuilds from storage');
+
+    const CLICK_CH = 'UCclickempty000000000001';
+    await wipe();
+    await saveFeed([
+      { v: 'oldvid00001', c: CLICK_CH, t: 'Old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'newvid00001', c: CLICK_CH, t: 'New', at: 100, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'other000001', c: MKBHD, t: 'Other', at: 200, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked(`yt:${CLICK_CH}`);
+    t.check('empty Map click opened one tab', mock.tabsCreated.length === 1, String(mock.tabsCreated.length));
+    t.check(
+      'empty Map click opens the newest stored video for that channel',
+      mock.tabsCreated[0].url === 'https://www.youtube.com/watch?v=newvid00001',
+      mock.tabsCreated[0]?.url,
+    );
+    t.check('empty Map click focuses the tab', mock.tabsCreated[0].active === true);
+
+    await saveFeed([
+      { v: 'shortvid001', c: CLICK_CH, t: 'A short', at: 50, d: 1, vw: 0, k: 'short', st: 0 },
+      { v: 'older000001', c: CLICK_CH, t: 'Older', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked(`yt:${CLICK_CH}`);
+    t.check(
+      'empty Map click on a short opens /shorts/',
+      mock.tabsCreated[0]?.url === 'https://www.youtube.com/shorts/shortvid001',
+      mock.tabsCreated[0]?.url,
+    );
+
+    await saveFeed([
+      { v: 'other000002', c: MKBHD, t: 'Unrelated', at: 300, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked(`yt:${CLICK_CH}`);
+    t.check(
+      'empty Map click with no rows for that channel opens the channel videos page',
+      mock.tabsCreated[0]?.url === `https://www.youtube.com/channel/${CLICK_CH}/videos`,
+      mock.tabsCreated[0]?.url,
+    );
+
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked('not-a-notification');
+    t.check('invalid notification id opens nothing', mock.tabsCreated.length === 0);
 
     t.section('badge math');
 
@@ -648,6 +708,42 @@ export default async function run(t) {
       'popupOpened sets lastSeenAt to now',
       opened.pollState.lastSeenAt >= beforeOpen,
       String(opened.pollState.lastSeenAt),
+    );
+
+    t.section('badge honours favoritesOnly');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', favorite: true, seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', favorite: false, seeded: true });
+    await saveFeed([
+      { v: 'favvid00001', c: MKBHD, t: 'Fav', at: 100, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'othvid00001', c: BEAST, t: 'Other', at: 90, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'favshort001', c: MKBHD, t: 'Fav short', at: 80, d: 1, vw: 0, k: 'short', st: 0 },
+      { v: 'oldfav00001', c: MKBHD, t: 'Old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    await writePollState({ lastSeenAt: 50 });
+    await writeSettings({ feed: { showShorts: false, favoritesOnly: true } });
+    await refreshBadge();
+    t.check(
+      'favoritesOnly badge ignores non-favourite channels and hidden shorts',
+      mock.badgeText === '1',
+      JSON.stringify(mock.badgeText),
+    );
+
+    await writeSettings({ feed: { showShorts: true, favoritesOnly: true } });
+    await refreshBadge();
+    t.check(
+      'favoritesOnly badge includes favourite shorts when shown',
+      mock.badgeText === '2',
+      JSON.stringify(mock.badgeText),
+    );
+
+    await writeSettings({ feed: { showShorts: false, favoritesOnly: false } });
+    await refreshBadge();
+    t.check(
+      'favoritesOnly off counts every channel, still hiding shorts',
+      mock.badgeText === '2',
+      JSON.stringify(mock.badgeText),
     );
 
     t.section('live item re-classified');

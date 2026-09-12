@@ -168,13 +168,15 @@ export async function applyFeedMerge(incoming, maxItems) {
   return { feed, added };
 }
 
-export function newSinceCount(feed, lastSeenAt, showShorts) {
+export function newSinceCount(feed, lastSeenAt, showShorts, channelIds) {
   let n = 0;
   const seen = Number(lastSeenAt) || 0;
+  const restrict = channelIds != null;
   for (const item of feed || []) {
     if (!item) continue;
     if (!(item.at > seen)) continue;
     if (!showShorts && item.k === 'short') continue;
+    if (restrict && !channelIds.has(item.c)) continue;
     n++;
   }
   return n;

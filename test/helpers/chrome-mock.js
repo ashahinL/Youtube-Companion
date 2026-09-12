@@ -2,7 +2,7 @@
  * In-memory chrome.storage.local for Node suites. Deep-clones on the way
  * in and out so a test holding a reference cannot mutate the store behind
  * the code's back. Also records alarms, notifications, badge, tabs,
- * windows, and runtime calls so the worker suite can assert on them.
+ * and runtime calls so the worker suite can assert on them.
  */
 
 function clone(value) {
@@ -58,10 +58,6 @@ export function installChromeMock(initial = {}) {
     badgeColor: null,
     tabsCreated: [],
     activeTab: null,
-    windowsCreated: [],
-    windowsUpdated: [],
-    windowRemovedListeners: [],
-    nextWindowId: 1,
     dnrRules: [],
     dnrUpdates: [],
     runtimeListeners: {
@@ -72,8 +68,6 @@ export function installChromeMock(initial = {}) {
     alarmListeners: [],
     notificationClickListeners: [],
   };
-
-  const sessionStore = {};
 
   function fire(changes) {
     for (const fn of [...listeners]) fn(changes, 'local');
@@ -142,43 +136,6 @@ export function installChromeMock(initial = {}) {
         removeListener(fn) {
           const i = listeners.indexOf(fn);
           if (i >= 0) listeners.splice(i, 1);
-        },
-      },
-
-      /* chrome.storage.session is backed separately: it survives the service
-       * worker being killed but is cleared when the browser restarts, which is
-       * exactly the lifetime open-window bookkeeping wants. */
-      session: {
-        async get(keys) {
-          if (keys === null || keys === undefined) return clone(sessionStore);
-          if (typeof keys === 'string') {
-            return keys in sessionStore ? { [keys]: clone(sessionStore[keys]) } : {};
-          }
-          if (Array.isArray(keys)) {
-            const out = {};
-            for (const key of keys) {
-              if (key in sessionStore) out[key] = clone(sessionStore[key]);
-            }
-            return out;
-          }
-          if (keys && typeof keys === 'object') {
-            const out = {};
-            for (const [key, fallback] of Object.entries(keys)) {
-              out[key] = key in sessionStore ? clone(sessionStore[key]) : clone(fallback);
-            }
-            return out;
-          }
-          return clone(sessionStore);
-        },
-        async set(items) {
-          if (!items || typeof items !== 'object') return;
-          for (const [key, value] of Object.entries(items)) sessionStore[key] = clone(value);
-        },
-        async remove(keys) {
-          for (const key of [].concat(keys)) delete sessionStore[key];
-        },
-        async clear() {
-          for (const key of Object.keys(sessionStore)) delete sessionStore[key];
         },
       },
     },
@@ -265,28 +222,6 @@ export function installChromeMock(initial = {}) {
       },
     },
 
-    windows: {
-      async create(opts) {
-        const win = { id: handle.nextWindowId++, focused: true, ...(opts || {}) };
-        handle.windowsCreated.push({ ...win });
-        return { ...win };
-      },
-      async update(id, info) {
-        const rec = { id, ...(info || {}) };
-        handle.windowsUpdated.push({ ...rec });
-        return rec;
-      },
-      onRemoved: {
-        addListener(fn) {
-          if (typeof fn === 'function') handle.windowRemovedListeners.push(fn);
-        },
-        removeListener(fn) {
-          const i = handle.windowRemovedListeners.indexOf(fn);
-          if (i >= 0) handle.windowRemovedListeners.splice(i, 1);
-        },
-      },
-    },
-
     declarativeNetRequest: {
       async updateDynamicRules({ addRules = [], removeRuleIds = [] } = {}) {
         const remove = new Set(removeRuleIds);
@@ -341,8 +276,6 @@ export function installChromeMock(initial = {}) {
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
     handle.activeTab = null;
-    handle.windowsCreated.length = 0;
-    handle.windowsUpdated.length = 0;
     for (const key of Object.keys(alarms)) delete alarms[key];
     handle.badgeText = '';
   };
@@ -354,10 +287,6 @@ export function installChromeMock(initial = {}) {
   handle.fireAlarm = (name) => {
     const alarm = alarms[name] || { name };
     return Promise.all(handle.alarmListeners.map((fn) => fn(alarm)));
-  };
-
-  handle.fireWindowRemoved = (id) => {
-    for (const fn of handle.windowRemovedListeners) fn(id);
   };
 
   return handle;

@@ -6,6 +6,7 @@
  */
 
 import {
+  normalizeChannelInput,
   resolveChannelId,
   searchChannels,
   fetchChannelFeed,
@@ -52,6 +53,8 @@ const CHANNEL_FETCH_DELAY_MS = 250;
 // pass the storage read. The durable twin is pollState.running.
 let sweepActive = false;
 
+// Fast path for the video that was announced. MV3 kills the worker shortly
+// after idle, so the click handler must also rebuild from storage.
 const notificationVideos = new Map();
 
 function chromeApi() {
@@ -127,6 +130,19 @@ function notificationIdFor(channelId) {
   return `yt:${channelId}`;
 }
 
+function channelIdFromNotificationId(id) {
+  const raw = String(id || '');
+  if (!raw.startsWith('yt:')) return '';
+  const channelId = raw.slice(3);
+  // Only a real channel id is a safe path segment, and yt.js already owns
+  // what "real" means — a second copy of that pattern would drift.
+  return normalizeChannelInput(channelId)?.kind === 'id' ? channelId : '';
+}
+
+function newestForChannel(feed, channelId) {
+  return newestOf((feed || []).filter((row) => row && row.c === channelId));
+}
+
 /**
  * MV3 can kill the worker between raising and lowering this flag, and
  * storage.local survives the restart. A stranded true would block polling
@@ -199,7 +215,15 @@ export async function refreshBadge() {
     readFeed(),
     readPollState(),
   ]);
-  const n = newSinceCount(feed, poll.lastSeenAt, settings.feed.showShorts);
+  let channelIds = null;
+  if (settings.feed.favoritesOnly) {
+    const channels = await readChannels();
+    channelIds = new Set();
+    for (const ch of channels) {
+      if (ch?.favorite && ch.id) channelIds.add(ch.id);
+    }
+  }
+  const n = newSinceCount(feed, poll.lastSeenAt, settings.feed.showShorts, channelIds);
   const text = n > 0 ? String(n) : '';
   await chromeApi().action.setBadgeText({ text });
 }
@@ -531,12 +555,24 @@ export async function handleMessage(msg, _sender) {
   }
 }
 
-async function onNotificationClicked(id) {
-  const v = notificationVideos.get(id);
-  if (!v) return;
-  const feed = await readFeed();
-  const item = feed.find((row) => row.v === v);
-  await chromeApi().tabs.create({ url: watchUrl(v, item?.k), active: true });
+export async function onNotificationClicked(id) {
+  const mapped = notificationVideos.get(id);
+  if (mapped) notificationVideos.delete(id);
+
+  let url;
+  if (mapped) {
+    const feed = await readFeed();
+    const item = (feed || []).find((row) => row && row.v === mapped);
+    url = watchUrl(mapped, item?.k);
+  } else {
+    const channelId = channelIdFromNotificationId(id);
+    if (!channelId) return;
+    const newest = newestForChannel(await readFeed(), channelId);
+    url = newest?.v
+      ? watchUrl(newest.v, newest.k)
+      : `https://www.youtube.com/channel/${channelId}/videos`;
+  }
+  await chromeApi().tabs.create({ url, active: true });
 }
 
 function onAlarm(alarm) {

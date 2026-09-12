@@ -687,6 +687,55 @@ export default async function run(t) {
   }
 
   {
+    const fetch = recordFetch(() => {
+      throw new Error('offline');
+    });
+    let err = null;
+    try {
+      await resolveChannelId('https://www.youtube.com/watch?v=Od6M0AXpcxQ', { fetch });
+    } catch (e) {
+      err = e;
+    }
+    t.check(
+      'watch URL network failure throws YtError, not null',
+      err instanceof YtError && err.kind === 'network',
+      String(err && err.kind),
+    );
+  }
+
+  {
+    const fetch = recordFetch(() => ({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+      text: async () => '',
+    }));
+    let err = null;
+    try {
+      await resolveChannelId('https://www.youtube.com/watch?v=Od6M0AXpcxQ', { fetch });
+    } catch (e) {
+      err = e;
+    }
+    t.check(
+      'watch URL HTTP error throws YtError kind http',
+      err instanceof YtError && err.kind === 'http' && err.status === 500,
+      String(err && err.kind),
+    );
+  }
+
+  {
+    const fetch = recordFetch(() => jsonRes({
+      videoDetails: {
+        videoId: 'Od6M0AXpcxQ',
+        title: 'No channel',
+        lengthSeconds: '10',
+      },
+    }));
+    const id = await resolveChannelId('https://www.youtube.com/watch?v=Od6M0AXpcxQ', { fetch });
+    t.check('watch URL with no channel id returns null', id === null, String(id));
+  }
+
+  {
     const fetch = recordFetch((url, opts) => {
       t.check('search endpoint', url === 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false', url);
       t.check('search has no key=', !url.includes('key='));

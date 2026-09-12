@@ -557,13 +557,9 @@ export async function resolveChannelId(input, { fetch = globalThis.fetch } = {})
   if (!norm) return null;
   if (norm.kind === 'id') return norm.id;
   if (norm.kind === 'video') {
-    try {
-      const json = await innertubePost('player', { videoId: norm.id }, fetch);
-      const channelId = parsePlayer(json).channelId;
-      return CHANNEL_ID_RE.test(channelId) ? channelId : null;
-    } catch {
-      return null;
-    }
+    const json = await innertubePost('player', { videoId: norm.id }, fetch);
+    const channelId = parsePlayer(json).channelId;
+    return CHANNEL_ID_RE.test(channelId) ? channelId : null;
   }
   const json = await innertubePost('navigation/resolve_url', { url: norm.url }, fetch);
   return parseResolveUrl(json);
