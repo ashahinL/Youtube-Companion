@@ -81,6 +81,32 @@ export default async function run(t) {
   t.check('has add button', /id="watchlist-add-btn"/.test(w));
   t.check('has list container', /id="watchlist-list"/.test(w));
 
+  t.section('watchlist row menu');
+
+  t.check('row actions are a ⋯ menu', /menu__toggle/.test(js) && /⋯/.test(js));
+  t.check('menu can favourite a channel', /watchlistFavoriteAdd/.test(js));
+  t.check(
+    'menu unfavourites when already a favourite',
+    /watchlistFavoriteRemove/.test(js),
+  );
+  t.check('menu remove is a danger item', /menu__item--danger/.test(js));
+  t.check(
+    'menu remove calls removeChannel with no extra confirm',
+    /removeChannel\(\s*ch\.id\s*\)/.test(js) && !/pendingRemoveId/.test(js),
+  );
+  t.check('no star favourite button', !/['"]★['"]/.test(js));
+  t.check(
+    'no inline remove-confirm copy',
+    !/watchlistRemovePrompt/.test(js)
+      && !/watchlistRemoveConfirm/.test(js)
+      && !/watchlistRemoveCancel/.test(js),
+  );
+  t.check('a click outside closes the menu', /addEventListener\(\s*'click'\s*,\s*closeAllMenus/.test(js));
+  t.check(
+    'Escape closes an open menu before the sheet',
+    /if \(closeAllMenus\(\)\)/.test(js),
+  );
+
   t.section('feeds');
 
   const feeds = html.match(/<section\b[^>]*\bid="feeds"[^>]*>[\s\S]*?<\/section>/);

@@ -178,6 +178,7 @@ body {
 
 .btn:focus-visible,
 .icon-btn:focus-visible,
+.menu__item:focus-visible,
 .channel-row__main:focus-visible,
 .feed-row:focus-visible,
 .feed-row__channel:focus-visible {
@@ -310,13 +311,70 @@ body {
   color: var(--text);
 }
 
-.icon-btn.is-on {
-  color: var(--accent);
-}
-
 .icon-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* The ⋯ row menu: a toggle with an absolutely-positioned list below it. */
+.menu {
+  position: relative;
+  display: flex;
+}
+
+.menu:has(.menu__list:not([hidden])) {
+  z-index: 30;
+}
+
+.menu__toggle {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.menu__list {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + 4px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
+}
+
+.menu__item {
+  padding-block: 7px;
+  padding-inline: 9px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu__item:hover {
+  background: var(--surface-hover);
+}
+
+.menu__item:disabled {
+  color: var(--text-dim);
+  cursor: default;
+}
+
+.menu__item:disabled:hover {
+  background: none;
+}
+
+.menu__item--danger:hover {
+  color: var(--accent);
 }
 
 .added-mark {

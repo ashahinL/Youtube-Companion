@@ -85,29 +85,21 @@
       }
     }
   },
+  "watchlistActions": {
+    "message": "Channel actions",
+    "description": "Accessible name of the ⋯ control that opens a Watchlist row's action menu."
+  },
   "watchlistRemove": {
     "message": "Remove",
-    "description": "Accessible name of the control that starts removing a channel from the Watchlist."
-  },
-  "watchlistRemovePrompt": {
-    "message": "Remove?",
-    "description": "Inline confirmation prompt on a Watchlist row before the channel is deleted."
-  },
-  "watchlistRemoveConfirm": {
-    "message": "Remove",
-    "description": "Confirms the inline removal of a Watchlist channel."
-  },
-  "watchlistRemoveCancel": {
-    "message": "Cancel",
-    "description": "Cancels the inline removal of a Watchlist channel."
+    "description": "Menu item that removes the channel from the Watchlist immediately, with no confirmation."
   },
   "watchlistFavoriteAdd": {
     "message": "Add to favourites",
-    "description": "Accessible name of the star when the channel is not a favourite."
+    "description": "Menu item that marks the channel as a favourite."
   },
   "watchlistFavoriteRemove": {
     "message": "Remove from favourites",
-    "description": "Accessible name of the star when the channel is already a favourite."
+    "description": "Menu item that unmarks the channel as a favourite."
   },
   "watchlistOpenChannel": {
     "message": "Open $TITLE$",

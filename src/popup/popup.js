@@ -28,7 +28,6 @@ const view = {
   searchResults: null,
   error: '',
   busy: false,
-  pendingRemoveId: null,
   sweeping: false,
   feedNotice: '',
   backupNotice: null,
@@ -300,43 +299,61 @@ function channelRow(ch, locale) {
 
   const actions = document.createElement('div');
   actions.className = 'channel-row__actions';
-
-  if (view.pendingRemoveId === ch.id) {
-    // A modal dialog blocks the popup and can wedge the extension, so
-    // removal confirms on the row itself.
-    const prompt = textEl('span', 'confirm-prompt', t('watchlistRemovePrompt'));
-    const yes = buttonEl('btn btn--primary', t('watchlistRemoveConfirm'), () => {
-      void removeChannel(ch.id);
-    });
-    const no = buttonEl('btn', t('watchlistRemoveCancel'), () => {
-      view.pendingRemoveId = null;
-      render();
-    });
-    actions.appendChild(prompt);
-    actions.appendChild(yes);
-    actions.appendChild(no);
-  } else {
-    const fav = buttonEl('icon-btn', '★', () => {
-      void toggleFavorite(ch.id, !ch.favorite);
-    });
-    fav.classList.toggle('is-on', !!ch.favorite);
-    fav.setAttribute('aria-pressed', ch.favorite ? 'true' : 'false');
-    fav.setAttribute('aria-label', t(ch.favorite ? 'watchlistFavoriteRemove' : 'watchlistFavoriteAdd'));
-    fav.title = fav.getAttribute('aria-label');
-
-    const remove = buttonEl('icon-btn', '×', () => {
-      view.pendingRemoveId = ch.id;
-      render();
-    });
-    remove.setAttribute('aria-label', t('watchlistRemove'));
-    remove.title = t('watchlistRemove');
-
-    actions.appendChild(fav);
-    actions.appendChild(remove);
-  }
-
+  actions.appendChild(channelMenu(ch));
   row.appendChild(actions);
   return row;
+}
+
+function closeAllMenus() {
+  let closed = false;
+  for (const list of document.querySelectorAll('.menu__list')) {
+    if (!list.hidden) closed = true;
+    list.hidden = true;
+  }
+  for (const toggle of document.querySelectorAll('.menu__toggle')) {
+    toggle.setAttribute('aria-expanded', 'false');
+  }
+  return closed;
+}
+
+function channelMenu(ch) {
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+
+  const list = document.createElement('div');
+  list.className = 'menu__list';
+  list.hidden = true;
+
+  const toggle = buttonEl('icon-btn menu__toggle', '⋯', (event) => {
+    event.stopPropagation?.();
+    const willOpen = list.hidden;
+    closeAllMenus();
+    if (willOpen) {
+      list.hidden = false;
+      toggle.setAttribute('aria-expanded', 'true');
+    }
+  });
+  toggle.title = t('watchlistActions');
+  toggle.setAttribute('aria-label', t('watchlistActions'));
+  toggle.setAttribute('aria-haspopup', 'true');
+  toggle.setAttribute('aria-expanded', 'false');
+
+  const fav = buttonEl(
+    'menu__item',
+    t(ch.favorite ? 'watchlistFavoriteRemove' : 'watchlistFavoriteAdd'),
+    () => {
+      closeAllMenus();
+      void toggleFavorite(ch.id, !ch.favorite);
+    },
+  );
+  const remove = buttonEl('menu__item menu__item--danger', t('watchlistRemove'), () => {
+    closeAllMenus();
+    void removeChannel(ch.id);
+  });
+
+  list.append(fav, remove);
+  menu.append(toggle, list);
+  return menu;
 }
 
 function feedTag(item, locale) {
@@ -792,7 +809,6 @@ async function toggleFavorite(id, on) {
 async function removeChannel(id) {
   await withBusy(async () => {
     const res = await send({ type: 'removeChannel', id });
-    view.pendingRemoveId = null;
     if (res && res.ok === false) {
       view.error = formatError(res.error);
       return;
@@ -1018,11 +1034,17 @@ function bindChannelSheet() {
   });
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
+    if (closeAllMenus()) {
+      event.preventDefault();
+      return;
+    }
     if (!view.sheetId) return;
     event.preventDefault();
     closeChannelSheet();
   });
 }
+
+document.addEventListener('click', closeAllMenus);
 
 bindWatchlist();
 bindFeeds();
