@@ -23,12 +23,15 @@ const BROWSE_VIDEOS_TAB_PARAMS = 'EgZ2aWRlb3PyBgQKAjoA';
 
 const THUMB_SIZES = new Set(['default', 'mq', 'hq', 'sd', 'maxres']);
 const CHANNEL_ID_RE = /^UC[\w-]{22}$/;
+const VIDEO_ID_RE = /^[\w-]{11}$/;
 
 const YT_HOSTS = new Set([
   'youtube.com',
   'www.youtube.com',
   'm.youtube.com',
   'music.youtube.com',
+  'youtu.be',
+  'www.youtu.be',
 ]);
 
 /**
@@ -181,9 +184,12 @@ async function innertubePost(method, extra, fetchImpl) {
 /* ---- pure helpers --------------------------------------------------- */
 
 /**
- * A bare word with no @ is treated as a handle — typing "mkbhd" means
- * @mkbhd, not a search. Channel ids are the 24-character UC… form and
- * are recognised before that fallback.
+ * A bare token with no @ is a handle — typing "mkbhd" means @mkbhd, not
+ * a name search. Dots are legal in handles (`mr.beast`), so a dot is not
+ * a URL signal; a slash or a scheme is. Spaces are a name, not a handle.
+ * Channel ids are the 24-character UC… form and win before that fallback.
+ * A watch / shorts / youtu.be URL is kind `video`; resolveChannelId reads
+ * the uploader off the player payload.
  */
 export function normalizeChannelInput(input) {
   if (input == null) return null;
@@ -192,9 +198,10 @@ export function normalizeChannelInput(input) {
 
   if (CHANNEL_ID_RE.test(raw)) return { kind: 'id', id: raw };
 
-  if (!/[./:]/.test(raw)) {
+  if (!/[/:]/.test(raw) && !/\s/.test(raw)) {
     const handle = raw.startsWith('@') ? raw.slice(1) : raw;
     if (!handle) return null;
+    if (YT_HOSTS.has(handle.toLowerCase()) || YT_HOSTS.has(raw.toLowerCase())) return null;
     return { kind: 'url', url: `${YT_ORIGIN}/@${handle}` };
   }
 
@@ -207,6 +214,9 @@ export function normalizeChannelInput(input) {
   }
 
   if (!YT_HOSTS.has(url.hostname.toLowerCase())) return null;
+
+  const videoId = videoIdFromParsedUrl(url);
+  if (videoId) return { kind: 'video', id: videoId };
 
   const parts = url.pathname.split('/').filter(Boolean);
   if (parts.length === 0) return null;
@@ -224,6 +234,25 @@ export function normalizeChannelInput(input) {
     return { kind: 'url', url: `${YT_ORIGIN}/${headLower}/${parts[1]}` };
   }
   return null;
+}
+
+function videoIdFromParsedUrl(url) {
+  const host = url.hostname.toLowerCase();
+  if (host === 'youtu.be' || host === 'www.youtu.be') {
+    const id = url.pathname.split('/').filter(Boolean)[0] || '';
+    return VIDEO_ID_RE.test(id) ? id : '';
+  }
+  const parts = url.pathname.split('/').filter(Boolean);
+  if (parts.length === 0) return '';
+  const head = parts[0].toLowerCase();
+  if (head === 'watch') {
+    const id = url.searchParams.get('v') || '';
+    return VIDEO_ID_RE.test(id) ? id : '';
+  }
+  if ((head === 'shorts' || head === 'embed' || head === 'live' || head === 'v') && parts[1]) {
+    return VIDEO_ID_RE.test(parts[1]) ? parts[1] : '';
+  }
+  return '';
 }
 
 export function thumbUrl(videoId, size = 'mq') {
@@ -514,6 +543,15 @@ export async function resolveChannelId(input, { fetch = globalThis.fetch } = {})
   const norm = normalizeChannelInput(input);
   if (!norm) return null;
   if (norm.kind === 'id') return norm.id;
+  if (norm.kind === 'video') {
+    try {
+      const json = await innertubePost('player', { videoId: norm.id }, fetch);
+      const channelId = parsePlayer(json).channelId;
+      return CHANNEL_ID_RE.test(channelId) ? channelId : null;
+    } catch {
+      return null;
+    }
+  }
   const json = await innertubePost('navigation/resolve_url', { url: norm.url }, fetch);
   return parseResolveUrl(json);
 }

@@ -30,10 +30,11 @@ export default async function run(t) {
     'alarms',
     'notifications',
     'declarativeNetRequestWithHostAccess',
+    'activeTab',
   ];
   const perms = manifest.permissions || [];
   t.check(
-    'has storage, alarms, notifications, declarativeNetRequestWithHostAccess',
+    'has storage, alarms, notifications, declarativeNetRequestWithHostAccess, activeTab',
     perms.length === expectedPerms.length && expectedPerms.every((p) => perms.includes(p)),
     JSON.stringify(perms),
   );

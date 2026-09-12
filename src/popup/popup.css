@@ -122,16 +122,52 @@ body {
   margin-block-end: 10px;
 }
 
+/* Holds the input and its ✕ in one box: the clear sits inside the field
+   rather than beside it, so the row stays field-then-Add. */
+.add-row__field {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
 .add-row__input {
   flex: 1;
   min-width: 0;
+  width: 100%;
   padding-block: 7px;
-  padding-inline: 10px;
+  padding-inline-start: 10px;
+  padding-inline-end: 28px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font: inherit;
+}
+
+.add-row__clear {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  padding: 0;
+  padding-inline: 9px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.add-row__clear:hover {
+  color: var(--text);
+}
+
+.add-row__count {
+  margin: 0;
+  margin-block-start: -4px;
+  margin-block-end: 10px;
 }
 
 .add-row__input:focus {
@@ -178,6 +214,7 @@ body {
 
 .btn:focus-visible,
 .icon-btn:focus-visible,
+.add-row__clear:focus-visible,
 .menu__item:focus-visible,
 .channel-row__main:focus-visible,
 .feed-row:focus-visible,
@@ -375,12 +412,6 @@ body {
 
 .menu__item--danger:hover {
   color: var(--accent);
-}
-
-.added-mark {
-  flex: none;
-  color: var(--text-dim);
-  font-size: 12px;
 }
 
 .confirm-prompt {

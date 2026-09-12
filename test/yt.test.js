@@ -104,6 +104,12 @@ export default async function run(t) {
     JSON.stringify(asId('mkbhd')) === JSON.stringify({ kind: 'url', url: 'https://www.youtube.com/@mkbhd' }),
   );
   t.check(
+    'a dotted handle is still a handle',
+    JSON.stringify(asId('mr.beast')) === JSON.stringify({ kind: 'url', url: 'https://www.youtube.com/@mr.beast' }),
+  );
+  t.check('a name with spaces is not a handle', asId('marques brownlee') === null);
+  t.check('a bare youtube host is not a handle', asId('youtube.com') === null);
+  t.check(
     'youtube.com/@handle',
     asId('youtube.com/@mkbhd')?.url === 'https://www.youtube.com/@mkbhd',
   );
@@ -140,7 +146,25 @@ export default async function run(t) {
       JSON.stringify({ kind: 'url', url: 'https://www.youtube.com/user/SomeName' }),
   );
 
-  t.check('watch URL is rejected', asId('https://www.youtube.com/watch?v=Od6M0AXpcxQ') === null);
+  t.check(
+    'watch URL is a video',
+    JSON.stringify(asId('https://www.youtube.com/watch?v=Od6M0AXpcxQ')) ===
+      JSON.stringify({ kind: 'video', id: 'Od6M0AXpcxQ' }),
+  );
+  t.check(
+    'shorts URL is a video',
+    asId('https://www.youtube.com/shorts/5mU6SRS2Bxo')?.id === '5mU6SRS2Bxo'
+      && asId('https://www.youtube.com/shorts/5mU6SRS2Bxo')?.kind === 'video',
+  );
+  t.check(
+    'youtu.be URL is a video',
+    JSON.stringify(asId('https://youtu.be/Od6M0AXpcxQ')) ===
+      JSON.stringify({ kind: 'video', id: 'Od6M0AXpcxQ' }),
+  );
+  t.check(
+    'watch URL keeps v= among other params',
+    asId('https://www.youtube.com/watch?t=30&v=Od6M0AXpcxQ')?.id === 'Od6M0AXpcxQ',
+  );
   t.check(
     'playlist URL is rejected',
     asId('https://www.youtube.com/playlist?list=PLxxxxxxxxxxxxxxxxxxxxxx') === null,
@@ -620,6 +644,18 @@ export default async function run(t) {
     });
     const id = await resolveChannelId('@mkbhd', { fetch });
     t.check('resolveChannelId(@mkbhd) returns the id', id === mkbhdId, String(id));
+  }
+
+  {
+    const fetch = recordFetch((url, opts) => {
+      t.check('watch URL hits player, not resolve_url', /\/player/.test(url) && !/resolve_url/.test(url), url);
+      const body = JSON.parse(opts.body);
+      t.check('player videoId is the watch id', body.videoId === 'Od6M0AXpcxQ', body.videoId);
+      t.check("player omits credentials", opts.credentials === 'omit', String(opts.credentials));
+      return jsonRes(playerNormal);
+    });
+    const id = await resolveChannelId('https://www.youtube.com/watch?v=Od6M0AXpcxQ', { fetch });
+    t.check('watch URL resolves to the uploader', id === mkbhdId, String(id));
   }
 
   {

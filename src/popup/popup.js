@@ -1,7 +1,8 @@
 /**
  * Popup: three tabs plus the channel sheet overlay. Feeds is the merged
- * timeline; the Watchlist tab adds, searches, favourites and removes
- * channels. The worker owns all network; this page only renders.
+ * timeline; the Watchlist tab adds by URL or handle, filters the list as
+ * you type, favourites and removes channels. Empty Add reads the focused
+ * tab. The worker owns all network; this page only renders.
  */
 
 import { normalizeChannelInput, thumbUrl } from '../lib/yt.js';
@@ -25,7 +26,6 @@ const view = {
   channels: [],
   feed: [],
   pollState: {},
-  searchResults: null,
   error: '',
   busy: false,
   sweeping: false,
@@ -109,12 +109,6 @@ async function refreshState() {
   }
 }
 
-function syncSearchInList() {
-  if (!Array.isArray(view.searchResults)) return;
-  const ids = new Set(view.channels.map((c) => c.id));
-  view.searchResults = view.searchResults.map((r) => ({ ...r, inList: ids.has(r.id) }));
-}
-
 function readPath(obj, path) {
   return path.split('.').reduce((acc, key) => acc?.[key], obj);
 }
@@ -152,13 +146,44 @@ function ltrRun(el) {
   return el;
 }
 
+function fold(value) {
+  return String(value || '').normalize('NFKC').toLowerCase();
+}
+
 function isChannelRef(input) {
-  const trimmed = String(input).trim();
-  if (!trimmed) return false;
-  // A space is a search name; normalizeChannelInput would otherwise treat
-  // "marques brownlee" as the handle @marques brownlee.
-  if (/\s/.test(trimmed)) return false;
-  return normalizeChannelInput(trimmed) != null;
+  return normalizeChannelInput(String(input || '').trim()) != null;
+}
+
+function handleKey(handle) {
+  return fold(String(handle || '').replace(/^@/, ''));
+}
+
+function handleFromRef(ref) {
+  if (!ref || ref.kind !== 'url') return '';
+  try {
+    const head = new URL(ref.url).pathname.split('/').filter(Boolean)[0] || '';
+    return head.startsWith('@') ? handleKey(head) : '';
+  } catch {
+    return '';
+  }
+}
+
+function listedMatch(input, channels) {
+  const ref = normalizeChannelInput(String(input || '').trim());
+  if (!ref) return null;
+  if (ref.kind === 'id') return channels.find((ch) => ch.id === ref.id) || null;
+  const handle = handleFromRef(ref);
+  if (!handle) return null;
+  return channels.find((ch) => handleKey(ch.handle) === handle) || null;
+}
+
+function matchesWatchlist(ch, raw) {
+  const term = fold(raw);
+  if (!term) return true;
+  const handleTerm = term.replace(/^@/, '');
+  return fold(ch.title).includes(term)
+    || handleKey(ch.handle).includes(handleTerm)
+    || String(ch.id || '').toLowerCase().includes(term);
 }
 
 function avatarEl(url) {
@@ -215,47 +240,6 @@ function closeChannelSheet() {
   view.sheetId = null;
   view.sheetError = '';
   render();
-}
-
-function searchRow(result, locale) {
-  const row = document.createElement('div');
-  row.className = 'channel-row';
-
-  const body = document.createElement('div');
-  body.className = 'channel-row__main';
-  body.appendChild(avatarEl(result.avatar));
-
-  const text = document.createElement('div');
-  text.className = 'channel-row__text';
-  text.appendChild(textEl('span', 'channel-row__title', result.title || result.handle || result.id));
-
-  const meta = document.createElement('div');
-  meta.className = 'channel-row__meta';
-  if (result.handle) meta.appendChild(ltrRun(textEl('span', 'handle', result.handle)));
-  if (Number(result.subscribers) > 0) {
-    meta.appendChild(textEl(
-      'span',
-      '',
-      t('watchlistSubscribers', [compactCount(result.subscribers, locale)]),
-    ));
-  }
-  text.appendChild(meta);
-  body.appendChild(text);
-  row.appendChild(body);
-
-  const actions = document.createElement('div');
-  actions.className = 'channel-row__actions';
-  if (result.inList) {
-    const mark = textEl('span', 'added-mark', `✓ ${t('watchlistAdded')}`);
-    actions.appendChild(mark);
-  } else {
-    const add = buttonEl('btn btn--primary', t('watchlistAdd'), () => {
-      void addChannel(result.id, { fromSearch: true });
-    });
-    actions.appendChild(add);
-  }
-  row.appendChild(actions);
-  return row;
 }
 
 function channelRow(ch, locale) {
@@ -568,18 +552,30 @@ function render() {
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
   const addBtn = document.getElementById('watchlist-add-btn');
+  const clearBtn = document.getElementById('watchlist-clear');
   const spinner = document.getElementById('watchlist-spinner');
   const errorEl = document.getElementById('watchlist-error');
-  const resultsEl = document.getElementById('watchlist-results');
-  const noResultsEl = document.getElementById('watchlist-no-results');
+  const countEl = document.getElementById('watchlist-count');
   const listEl = document.getElementById('watchlist-list');
   const emptyEl = document.getElementById('watchlist-empty');
+  const missEl = document.getElementById('watchlist-nomatch');
+
+  const q = (input.value || '').trim();
+  const channels = sortChannelsForDisplay(view.channels, view.feed);
+  const shown = q ? channels.filter((ch) => matchesWatchlist(ch, q)) : channels;
+  const onList = !!listedMatch(q, channels);
+  const addable = !q || (isChannelRef(q) && !onList);
 
   form.classList.toggle('is-busy', view.busy);
   form.setAttribute('aria-busy', view.busy ? 'true' : 'false');
   input.disabled = view.busy;
-  addBtn.disabled = view.busy;
+  addBtn.disabled = view.busy || !addable;
+  addBtn.textContent = onList ? t('watchlistOnList') : t('watchlistAdd');
+  addBtn.title = onList
+    ? t('watchlistOnList')
+    : (q ? t('watchlistAddPlaceholder') : t('watchlistAddFromTab'));
   spinner.hidden = !view.busy;
+  if (clearBtn) clearBtn.hidden = !q || view.busy;
 
   if (view.error) {
     errorEl.hidden = false;
@@ -589,22 +585,22 @@ function render() {
     errorEl.textContent = '';
   }
 
-  const results = view.searchResults;
-  const showResults = Array.isArray(results);
-  const hasHits = showResults && results.length > 0;
+  const searching = !!q;
+  countEl.hidden = !searching;
+  countEl.textContent = searching
+    ? t('watchlistShowing', [String(shown.length), String(channels.length)])
+    : '';
 
-  resultsEl.hidden = !hasHits;
-  resultsEl.replaceChildren();
-  if (hasHits) {
-    for (const r of results) resultsEl.appendChild(searchRow(r, locale));
-  }
-
-  noResultsEl.hidden = !(showResults && results.length === 0 && !view.busy);
-
-  const channels = sortChannelsForDisplay(view.channels, view.feed);
   listEl.replaceChildren();
-  for (const ch of channels) listEl.appendChild(channelRow(ch, locale));
-  emptyEl.hidden = channels.length > 0;
+  for (const ch of shown) listEl.appendChild(channelRow(ch, locale));
+  emptyEl.hidden = channels.length > 0 || searching;
+  const noMatch = shown.length === 0 && searching && !view.error;
+  missEl.hidden = !noMatch;
+  if (noMatch) {
+    missEl.textContent = addable
+      ? t('watchlistNoMatchAdd', [q])
+      : t('watchlistNoMatch', [q]);
+  }
   renderSettings(locale);
   renderChannelSheet();
 }
@@ -761,37 +757,16 @@ async function withBusy(fn) {
   }
 }
 
-async function addChannel(input, { fromSearch }) {
+async function addChannel(input) {
   await withBusy(async () => {
     const res = await send({ type: 'addChannel', input });
     if (!res || res.ok === false) {
       view.error = formatError(res?.error);
       return;
     }
-    if (!fromSearch) {
-      const box = document.getElementById('watchlist-input');
-      if (box) box.value = '';
-      view.searchResults = null;
-    }
+    const box = document.getElementById('watchlist-input');
+    if (box) box.value = '';
     await refreshState();
-    if (fromSearch) syncSearchInList();
-  });
-}
-
-async function runSearch(query) {
-  await withBusy(async () => {
-    const res = await send({ type: 'searchChannels', query });
-    if (res && res.ok === false) {
-      view.searchResults = null;
-      view.error = formatError(res.error);
-      return;
-    }
-    if (!Array.isArray(res)) {
-      view.searchResults = null;
-      view.error = formatError(res?.error);
-      return;
-    }
-    view.searchResults = res;
   });
 }
 
@@ -817,11 +792,37 @@ async function removeChannel(id) {
   });
 }
 
+async function currentTabUrl() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    return String(tabs?.[0]?.url || '');
+  } catch {
+    return '';
+  }
+}
+
 async function submitAdd(raw) {
-  const input = String(raw || '').trim();
-  if (!input || view.busy) return;
-  if (isChannelRef(input)) await addChannel(input, { fromSearch: false });
-  else await runSearch(input);
+  if (view.busy) return;
+  let input = String(raw || '').trim();
+  let fromTab = false;
+  if (!input) {
+    fromTab = true;
+    input = await currentTabUrl();
+    if (!isChannelRef(input)) {
+      view.error = t('watchlistNoCurrentTab');
+      render();
+      return;
+    }
+  }
+  if (!isChannelRef(input)) return;
+  if (listedMatch(input, view.channels)) {
+    if (fromTab) {
+      view.error = t('watchlistAlreadyAdded');
+      render();
+    }
+    return;
+  }
+  await addChannel(input);
 }
 
 async function requestSweep({ onlyId = null } = {}) {
@@ -1004,19 +1005,35 @@ function bindSettings() {
   });
 }
 
+function clearWatchlistQuery() {
+  const input = document.getElementById('watchlist-input');
+  if (!input || !input.value) return;
+  input.value = '';
+  view.error = '';
+  render();
+  input.focus();
+}
+
 function bindWatchlist() {
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
+  const clear = document.getElementById('watchlist-clear');
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     void submitAdd(input.value);
   });
   input.addEventListener('input', () => {
-    if (input.value.trim()) return;
-    if (view.searchResults == null && !view.error) return;
-    view.searchResults = null;
     view.error = '';
     render();
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!input.value) return;
+    event.preventDefault();
+    clearWatchlistQuery();
+  });
+  clear.addEventListener('click', () => {
+    clearWatchlistQuery();
   });
 }
 

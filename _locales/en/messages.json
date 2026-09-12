@@ -43,19 +43,61 @@
   },
   "watchlistAdd": {
     "message": "Add",
-    "description": "Button that adds a channel from the Watchlist input, or from a search result."
+    "description": "Button that adds a channel from the Watchlist input by URL or handle."
   },
   "watchlistAddPlaceholder": {
-    "message": "Channel URL, @handle, or name",
-    "description": "Placeholder and accessible name for the Watchlist add/search input."
+    "message": "Search your list, or a URL / @handle",
+    "description": "Placeholder and accessible name for the Watchlist box. The box filters the list as you type, and Add resolves a URL or handle."
   },
-  "watchlistAdded": {
-    "message": "Added",
-    "description": "Shown on a search result that is already in the Watchlist, in place of the Add button."
+  "watchlistOnList": {
+    "message": "On your list ✓",
+    "description": "Add button label when the typed URL or handle is already on the Watchlist."
   },
-  "watchlistNoResults": {
-    "message": "No channels found",
-    "description": "Shown under the Watchlist add box when a name search returns no hits."
+  "watchlistAddFromTab": {
+    "message": "Add the channel from this tab",
+    "description": "Tooltip on the Add button when the Watchlist box is empty. Pressing Add then uses the focused browser tab."
+  },
+  "watchlistNoCurrentTab": {
+    "message": "Open a YouTube channel or video first",
+    "description": "Inline error when Add is pressed with an empty box and the focused tab is not a YouTube channel or video."
+  },
+  "watchlistClear": {
+    "message": "Clear the search",
+    "description": "Accessible name of the ✕ that clears the Watchlist box."
+  },
+  "watchlistShowing": {
+    "message": "Showing $SHOWN$ of $TOTAL$",
+    "description": "Shown under the Watchlist box while it is filtering the list. $SHOWN$ is how many rows match; $TOTAL$ is the full list.",
+    "placeholders": {
+      "shown": {
+        "content": "$1",
+        "example": "1"
+      },
+      "total": {
+        "content": "$2",
+        "example": "37"
+      }
+    }
+  },
+  "watchlistNoMatch": {
+    "message": "Nobody on your watchlist matches \"$QUERY$\".",
+    "description": "Empty state when the Watchlist box filtered the list to nothing and the text is not a URL or handle that can be added. $QUERY$ is what is in the box.",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "mkbhd"
+      }
+    }
+  },
+  "watchlistNoMatchAdd": {
+    "message": "Nobody on your watchlist matches \"$QUERY$\". Press Add to start watching them.",
+    "description": "Empty state when the Watchlist box filtered the list to nothing but the text is a URL or handle that can be added. $QUERY$ is what is in the box.",
+    "placeholders": {
+      "query": {
+        "content": "$1",
+        "example": "mkbhd"
+      }
+    }
   },
   "watchlistAlreadyAdded": {
     "message": "Already in your list",
@@ -72,16 +114,6 @@
       "error": {
         "content": "$1",
         "example": "network error"
-      }
-    }
-  },
-  "watchlistSubscribers": {
-    "message": "$COUNT$ subscribers",
-    "description": "Subscriber count on a channel search result. $COUNT$ is a compact number such as 1.4M.",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "1.4M"
       }
     }
   },

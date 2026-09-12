@@ -80,6 +80,27 @@ export default async function run(t) {
   t.check('has add input', /id="watchlist-input"/.test(w));
   t.check('has add button', /id="watchlist-add-btn"/.test(w));
   t.check('has list container', /id="watchlist-list"/.test(w));
+  t.check('has a clear control', /id="watchlist-clear"/.test(w));
+  t.check('has a local-filter count', /id="watchlist-count"/.test(w));
+  t.check('has no YouTube search-results list', !/id="watchlist-results"/.test(w));
+  t.check(
+    'popup does not search YouTube by name',
+    !/searchChannels/.test(js) && !/runSearch/.test(js),
+  );
+  t.check('typed Add only fires for a channel ref', /isChannelRef\(input\)/.test(js));
+  t.check(
+    'already-listed handle disables Add rather than erroring',
+    /listedMatch\(input,\s*view\.channels\)/.test(js) && /watchlistOnList/.test(js),
+  );
+  t.check('the box filters the local watchlist', /matchesWatchlist\(ch,\s*q\)/.test(js));
+  t.check(
+    'Add stays available when the box is empty',
+    /addable = !q \|\|/.test(js),
+  );
+  t.check(
+    'empty Add reads the focused tab',
+    /tabs\.query\s*\(\s*\{[^}]*active:\s*true/.test(js) && /watchlistNoCurrentTab/.test(js),
+  );
 
   t.section('watchlist row menu');
 

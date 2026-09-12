@@ -57,6 +57,7 @@ export function installChromeMock(initial = {}) {
     badgeTexts: [],
     badgeColor: null,
     tabsCreated: [],
+    activeTab: null,
     windowsCreated: [],
     windowsUpdated: [],
     windowRemovedListeners: [],
@@ -256,6 +257,12 @@ export function installChromeMock(initial = {}) {
         handle.tabsCreated.push({ ...tab });
         return tab;
       },
+      async query(info) {
+        if (info?.active && info?.currentWindow) {
+          return handle.activeTab ? [handle.activeTab] : [];
+        }
+        return [];
+      },
     },
 
     windows: {
@@ -333,6 +340,7 @@ export function installChromeMock(initial = {}) {
     handle.notifications.length = 0;
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
+    handle.activeTab = null;
     handle.windowsCreated.length = 0;
     handle.windowsUpdated.length = 0;
     for (const key of Object.keys(alarms)) delete alarms[key];

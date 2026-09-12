@@ -94,27 +94,39 @@
 
     <section id="watchlist" class="panel" role="tabpanel" aria-labelledby="tab-watchlist" hidden>
       <form id="watchlist-add-form" class="add-row">
-        <input
-          id="watchlist-input"
-          class="add-row__input"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="Channel URL, @handle, or name"
-          data-i18n-placeholder="watchlistAddPlaceholder"
-          data-i18n-label="watchlistAddPlaceholder"
-          aria-label="Channel URL, @handle, or name"
-        />
+        <span class="add-row__field">
+          <input
+            id="watchlist-input"
+            class="add-row__input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="Search your list, or a URL / @handle"
+            data-i18n-placeholder="watchlistAddPlaceholder"
+            data-i18n-label="watchlistAddPlaceholder"
+            aria-label="Search your list, or a URL / @handle"
+          />
+          <button
+            id="watchlist-clear"
+            class="add-row__clear"
+            type="button"
+            hidden
+            data-i18n-title="watchlistClear"
+            data-i18n-label="watchlistClear"
+            title="Clear the search"
+            aria-label="Clear the search"
+          >✕</button>
+        </span>
         <button id="watchlist-add-btn" class="btn btn--primary" type="submit" data-i18n="watchlistAdd">
           Add
         </button>
         <span id="watchlist-spinner" class="spinner" hidden></span>
       </form>
+      <p id="watchlist-count" class="footnote add-row__count" hidden></p>
       <p id="watchlist-error" class="banner banner--error" role="status" hidden></p>
-      <div id="watchlist-results" class="list" hidden></div>
-      <p id="watchlist-no-results" class="banner" data-i18n="watchlistNoResults" hidden>No channels found</p>
       <div id="watchlist-list" class="list"></div>
       <p id="watchlist-empty" class="empty" data-i18n="emptyWatchlist">Watchlist is empty</p>
+      <p id="watchlist-nomatch" class="empty" hidden></p>
     </section>
 
     <section id="settings" class="panel" role="tabpanel" aria-labelledby="tab-settings" hidden>

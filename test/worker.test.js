@@ -737,6 +737,36 @@ export default async function run(t) {
       JSON.stringify(already),
     );
 
+    const fromWatch = await handleMessage({
+      type: 'addChannel',
+      input: 'https://www.youtube.com/watch?v=Od6M0AXpcxQ',
+    });
+    t.check(
+      'a watch URL of an already-listed uploader is already added',
+      fromWatch.ok === false && fromWatch.error === 'already added' && fromWatch.id === MKBHD,
+      JSON.stringify(fromWatch),
+    );
+
+    const VIA = 'UC0000000000000000000001';
+    installFetch({
+      players: {
+        watchadd001: playerJson('watchadd001', { channelId: VIA, author: 'Via Watch' }),
+      },
+      browse: headerJson(VIA, 'Via Watch', '@viawatch', 'https://yt3.ggpht.com/via'),
+      feeds: {
+        [VIA]: rssXml(VIA, 'Via Watch', []),
+      },
+    });
+    const viaWatch = await handleMessage({
+      type: 'addChannel',
+      input: 'https://www.youtube.com/watch?v=watchadd001',
+    });
+    t.check(
+      'a watch URL adds the uploader',
+      viaWatch.ok === true && viaWatch.channel?.id === VIA,
+      JSON.stringify(viaWatch),
+    );
+
     installFetch({
       resolveId: BEAST,
       browse: headerJson(BEAST, 'MrBeast', '@MrBeast', 'https://yt3.ggpht.com/beast'),

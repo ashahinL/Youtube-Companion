@@ -50,7 +50,7 @@ loadable; job 10 is the remaining one. Update this table as each one lands.
 | 2 | `lib/yt.js` + fixtures — every endpoint and parser | **done** |
 | 3 | `lib/settings.js`, `lib/store.js` | **done** |
 | 4 | Worker: alarms, sweep, silent seed, notifications, badge | **done** |
-| 5 | Watchlist tab: add by URL, add by search, favourite, remove | **done** |
+| 5 | Watchlist tab: add by URL/handle, filter the list, favourite, remove | **done** |
 | 6 | Feeds tab: render, tags, filter, refresh, click-through | **done** |
 | 7 | Channel sheet (in-popup overlay of stored videos) | **done** |
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
