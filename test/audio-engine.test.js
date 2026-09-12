@@ -917,4 +917,62 @@ export default async function run(t) {
   vm.runInContext(contentSrc, bootBox, { filename: 'src/content/content.js' });
   t.check('boot sets the DOM beacon', html.dataset.amBeacon === 'loaded', String(html.dataset.amBeacon));
   t.check('boot does not inject the MAIN-world bridge', injected.length === 0, String(injected.length));
+
+  t.section('audioMode.state');
+
+  const stateListeners = [];
+  const stateBox = {
+    __ytcHarness: true,
+    URL,
+    chrome: {
+      runtime: {
+        id: 'test-id',
+        getURL(p) { return 'chrome-extension://test/' + p; },
+        onMessage: {
+          addListener(fn) { stateListeners.push(fn); },
+        },
+      },
+    },
+    document: {
+      documentElement: { dataset: {} },
+      head: { appendChild() {} },
+      createElement() { return {}; },
+      getElementById() { return null; },
+    },
+    addEventListener() {},
+  };
+  stateBox.window = stateBox;
+  vm.createContext(stateBox);
+  vm.runInContext(coreSrc, stateBox, { filename: 'src/content/core.js' });
+  vm.runInContext(contentSrc, stateBox, { filename: 'src/content/content.js' });
+  t.check('boot registers an onMessage listener', stateListeners.length === 1, String(stateListeners.length));
+
+  const stateReplies = [];
+  const stateRet = stateListeners[0](
+    { type: 'audioMode.state' },
+    {},
+    (r) => { stateReplies.push(r); },
+  );
+  t.check(
+    'state reports off without changing it',
+    stateReplies.length === 1 && stateReplies[0].ok === true && stateReplies[0].on === false,
+    JSON.stringify(stateReplies[0]),
+  );
+  t.check('state reply is synchronous', stateRet !== true, String(stateRet));
+
+  const otherReplies = [];
+  const otherRet = stateListeners[0](
+    { type: 'nope' },
+    {},
+    (r) => { otherReplies.push(r); },
+  );
+  t.check('unknown message is ignored', otherReplies.length === 0 && otherRet === undefined);
+
+  const toggleReplies = [];
+  const toggleRet = stateListeners[0](
+    { type: 'audioMode.toggle' },
+    {},
+    (r) => { toggleReplies.push(r); },
+  );
+  t.check('toggle is still async', toggleRet === true, String(toggleRet));
 }

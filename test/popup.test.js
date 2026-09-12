@@ -55,23 +55,62 @@ export default async function run(t) {
   const tabButtons = [...html.matchAll(/<button\b[^>]*>/gi)]
     .map((m) => attrs(m[0]))
     .filter((a) => a.role === 'tab');
-  t.check('has exactly three role="tab" buttons', tabButtons.length === 3, String(tabButtons.length));
+  t.check('has exactly four role="tab" buttons', tabButtons.length === 4, String(tabButtons.length));
 
   const dataTabs = tabButtons.map((a) => a['data-tab']);
-  for (const name of ['feeds', 'watchlist', 'settings']) {
+  t.check(
+    'tab order is audio, feeds, watchlist, settings',
+    dataTabs.join() === 'audio,feeds,watchlist,settings',
+    JSON.stringify(dataTabs),
+  );
+  for (const name of ['audio', 'feeds', 'watchlist', 'settings']) {
     t.check(`has a tab with data-tab="${name}"`, dataTabs.includes(name), JSON.stringify(dataTabs));
   }
+
+  const audioTab = tabButtons.find((a) => a['data-tab'] === 'audio') || {};
+  const feedsTab = tabButtons.find((a) => a['data-tab'] === 'feeds') || {};
+  t.check(
+    'Audio is selected at rest',
+    audioTab.class === 'tab tab--active'
+      && audioTab['aria-selected'] === 'true'
+      && audioTab.tabindex === '0',
+    JSON.stringify(audioTab),
+  );
+  t.check(
+    'Feeds is not selected at rest',
+    feedsTab.class === 'tab'
+      && feedsTab['aria-selected'] === 'false'
+      && feedsTab.tabindex === '-1',
+    JSON.stringify(feedsTab),
+  );
 
   t.section('panels');
 
   const panels = [...html.matchAll(/<[^>]*\brole="tabpanel"[^>]*>/gi)].map((m) => attrs(m[0]));
-  for (const name of ['feeds', 'watchlist', 'settings']) {
+  t.check(
+    'audio panel is first',
+    panels[0]?.id === 'audio',
+    JSON.stringify(panels.map((p) => p.id)),
+  );
+  for (const name of ['audio', 'feeds', 'watchlist', 'settings']) {
     t.check(
       `has a tabpanel whose id is ${name}`,
       panels.some((p) => p.id === name),
       JSON.stringify(panels.map((p) => p.id)),
     );
   }
+  const audioPanelTag = html.match(/<section\b[^>]*\bid="audio"[^>]*>/);
+  t.check(
+    'audio panel is visible at rest',
+    !!audioPanelTag && !/\bhidden\b/.test(audioPanelTag[0]),
+    audioPanelTag ? audioPanelTag[0] : 'missing',
+  );
+  const feedsPanelTag = html.match(/<section\b[^>]*\bid="feeds"[^>]*>/);
+  t.check(
+    'feeds panel is hidden at rest',
+    !!feedsPanelTag && /\bhidden\b/.test(feedsPanelTag[0]),
+    feedsPanelTag ? feedsPanelTag[0] : 'missing',
+  );
 
   t.section('app bar');
 
@@ -258,6 +297,66 @@ export default async function run(t) {
     feedEmptyTag ? feedEmptyTag[0] : 'missing',
   );
 
+  t.section('audio');
+
+  const audio = html.match(/<section\b[^>]*\bid="audio"[^>]*>[\s\S]*?<\/section>/);
+  t.check('audio panel exists', !!audio);
+  const a = audio ? audio[0] : '';
+  t.check('has the master toggle', /id="audio-toggle"/.test(a));
+  t.check('has the page notice', /id="audio-page-notice"/.test(a));
+  t.check(
+    'page notice starts hidden',
+    /<p[^>]*\bid="audio-page-notice"[^>]*\bhidden\b/.test(a),
+  );
+  t.check('has restore-quality select', /id="audio-restore-quality"/.test(a));
+  t.check(
+    'restore quality is bound to settings.audio.restoreQuality',
+    /data-setting="audio.restoreQuality"/.test(a),
+  );
+  const qualityValues = [...a.matchAll(/<option\b[^>]*\bvalue="([^"]+)"/g)].map((m) => m[1]);
+  t.check(
+    'restore quality offers the ten PLAYBACK_QUALITIES',
+    qualityValues.slice().sort().join() === 'auto,hd1080,hd1440,hd2160,hd720,highres,large,medium,small,tiny',
+    JSON.stringify(qualityValues),
+  );
+  t.check('hd720 is selected in markup', /<option\b[^>]*\bvalue="hd720"[^>]*\bselected\b/.test(a));
+  t.check('has a shortcut hint', /id="audio-shortcut"/.test(a));
+  t.check(
+    'empty shortcut uses audioShortcutNone',
+    /audioShortcutNone/.test(js),
+  );
+  t.check(
+    'bound shortcut uses audioShortcutBound',
+    /audioShortcutBound/.test(js),
+  );
+  t.check(
+    'shortcut hint does not invent Alt+Shift+A when empty',
+    /audioShortcutNone/.test(js) && !/audioShortcutNone[\s\S]{0,80}Alt\+Shift\+A/.test(js),
+  );
+  t.check(
+    'clicking the shortcut hint opens chrome://extensions/shortcuts',
+    /chrome:\/\/extensions\/shortcuts/.test(js),
+  );
+  t.check(
+    'popup queries audioMode.state without toggling',
+    /audioMode\.state/.test(js),
+  );
+  t.check(
+    'popup toggles with audioMode.toggle',
+    /audioMode\.toggle/.test(js),
+  );
+  t.check(
+    'tabs.sendMessage is caught so a missing content script cannot reject unhandled',
+    /sendToFrontTab/.test(js) && /catch\s*\{/.test(js),
+  );
+  t.check('does not stub the open-tab picker', !/id="watch-tab-list"/.test(a));
+  t.check('does not stub the player card', !/id="musicPlayer"/.test(a) && !/am-play-pause/.test(a));
+  t.check('does not stub statistics', !/id="data-used-value"/.test(a) && !/stats-section/.test(a));
+  t.check(
+    'Watchlist still opens via activate(tab-watchlist)',
+    /getElementById\('tab-watchlist'\)/.test(js) && /activate\(tab\)/.test(js),
+  );
+
   t.section('settings');
 
   const settings = html.match(/<section\b[^>]*\bid="settings"[^>]*>[\s\S]*?<\/section>/);
@@ -268,11 +367,22 @@ export default async function run(t) {
     'settings-checking',
     'settings-feed',
     'settings-language',
+    'settings-audio-look',
     'settings-backup',
   ];
   for (const id of groupIds) {
     t.check(`has settings group ${id}`, new RegExp(`id="${id}"`).test(s), id);
   }
+  t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
+  const presets = [...s.matchAll(/\bdata-preset="([^"]+)"/g)].map((m) => m[1]);
+  t.check(
+    'look group has the six presets',
+    presets.join() === 'midnight,slate,ember,amber,forest,sunset',
+    JSON.stringify(presets),
+  );
+  t.check('look group has a custom colour picker', /id="audio-custom-color"/.test(s));
+  t.check('look group has an image URL field', /id="audio-image-url"/.test(s));
+  t.check('look group has an Apply control', /id="audio-image-apply"/.test(s));
   t.check('import offers merge', /id="settings-import-merge"/.test(s));
   t.check('import offers replace', /id="settings-import-replace"/.test(s));
   t.check(
@@ -479,21 +589,69 @@ export default async function run(t) {
 
   t.section('message types');
 
-  const sent = [...js.matchAll(/\btype:\s*['"](\w+)['"]/g)].map((m) => m[1]);
-  const implemented = new Set([...worker.matchAll(/case\s+['"](\w+)['"]/g)].map((m) => m[1]));
+  const sent = [...js.matchAll(/\btype:\s*['"]([\w.]+)['"]/g)].map((m) => m[1]);
+  const implemented = new Set([...worker.matchAll(/case\s+['"]([\w.]+)['"]/g)].map((m) => m[1]));
+  const contentTypes = new Set(['audioMode.state', 'audioMode.toggle']);
   t.check('popup sends at least one message', sent.length > 0, String(sent.length));
   for (const type of sent) {
+    if (contentTypes.has(type)) {
+      t.check(
+        `popup message type "${type}" is sent to the tab, not the worker`,
+        /tabs\.sendMessage/.test(js) && js.includes(type),
+      );
+      continue;
+    }
     t.check(
       `popup message type "${type}" is implemented by the worker`,
       implemented.has(type),
       [...implemented].join(','),
     );
   }
-  for (const type of ['updateSettings', 'importBackup']) {
+  for (const type of ['updateSettings', 'importBackup', 'audioMode.shortcut']) {
     t.check(
       `worker implements "${type}"`,
       implemented.has(type),
       [...implemented].join(','),
     );
   }
+
+  t.section('swatch colours match the overlay');
+
+  const overlayCss = fs.readFileSync(path.join(ROOT, 'src/content/overlay.css'), 'utf8');
+  function audioStops(src) {
+    const out = {};
+    const re = /--ytc-audio-([a-z]+)-(from|to)\s*:\s*(#[0-9a-fA-F]{6})/g;
+    let m;
+    while ((m = re.exec(src))) out[`${m[1]}-${m[2]}`] = m[3].toLowerCase();
+    return out;
+  }
+  const overlayStops = audioStops(overlayCss);
+  const popupStops = audioStops(css);
+  const stopNames = [
+    'midnight-from', 'midnight-to',
+    'slate-from', 'slate-to',
+    'ember-from', 'ember-to',
+    'amber-from', 'amber-to',
+    'forest-from', 'forest-to',
+    'sunset-from', 'sunset-to',
+  ];
+  t.check(
+    'overlay.css declares all six preset stops',
+    stopNames.every((name) => overlayStops[name]),
+    JSON.stringify(overlayStops),
+  );
+  t.check(
+    'popup.css declares all six preset stops',
+    stopNames.every((name) => popupStops[name]),
+    JSON.stringify(popupStops),
+  );
+  for (const name of stopNames) {
+    t.check(
+      `popup.css ${name} matches overlay.css`,
+      popupStops[name] === overlayStops[name],
+      `${popupStops[name]} vs ${overlayStops[name]}`,
+    );
+  }
+  t.check('overlay.css angle is 165deg', /--ytc-audio-angle:\s*165deg/.test(overlayCss));
+  t.check('popup.css angle is 165deg', /--ytc-audio-angle:\s*165deg/.test(css));
 }

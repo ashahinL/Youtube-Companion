@@ -1,10 +1,10 @@
 /**
- * Popup: three tabs plus the channel sheet overlay. Feeds is the merged
- * timeline; its box filters videos, and Add adds a channel the same way
- * the Watchlist box does. The Watchlist tab adds by URL or handle,
- * filters the list as you type, favourites and removes channels. Empty
- * Add reads the focused tab. The worker owns all network; this page
- * only renders.
+ * Popup: four tabs plus the channel sheet overlay. Audio is first and
+ * is the tab the popup opens on. Feeds is the merged timeline; its box
+ * filters videos, and Add adds a channel the same way the Watchlist box
+ * does. The Watchlist tab adds by URL or handle, filters the list as
+ * you type, favourites and removes channels. Empty Add reads the
+ * focused tab. The worker owns all network; this page only renders.
  */
 
 import { thumbUrl } from '../lib/yt.js';
@@ -49,6 +49,10 @@ const view = {
   sheetError: '',
   feedError: '',
   feedOk: '',
+  audioKnown: false,
+  audioReachable: false,
+  audioOn: false,
+  audioShortcut: '',
 };
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -688,6 +692,7 @@ function render() {
       ? t('watchlistNoMatchAdd', [q])
       : t('watchlistNoMatch', [q]);
   }
+  renderAudio();
   renderSettings(locale);
   renderChannelSheet();
 }
@@ -771,12 +776,68 @@ function renderChannelSheet() {
   }
 }
 
+function renderAudio() {
+  const reachable = view.audioReachable;
+  const notice = document.getElementById('audio-page-notice');
+  if (notice) notice.hidden = !view.audioKnown || reachable;
+
+  const toggle = document.getElementById('audio-toggle');
+  if (toggle) {
+    toggle.disabled = !reachable;
+    toggle.checked = reachable && view.audioOn;
+  }
+
+  const restore = document.getElementById('audio-restore-quality');
+  if (restore) {
+    restore.disabled = !reachable;
+    const q = view.settings?.audio?.restoreQuality || 'hd720';
+    if (restore.value !== q) restore.value = q;
+  }
+
+  const hint = document.getElementById('audio-shortcut');
+  if (hint) {
+    hint.disabled = view.audioKnown && !reachable;
+    const shortcut = view.audioShortcut;
+    const text = shortcut
+      ? t('audioShortcutBound', [shortcut])
+      : t('audioShortcutNone');
+    hint.textContent = text;
+    hint.title = text;
+  }
+}
+
 function renderSettings(locale) {
   const s = view.settings || {};
   for (const input of document.querySelectorAll('#settings [data-setting]')) {
     const value = readPath(s, input.dataset.setting);
     if (input.type === 'checkbox') input.checked = !!value;
     else input.value = value ?? '';
+  }
+
+  const audio = s.audio || {};
+  const usingImage = audio.backgroundType === 'image';
+  const colorBlock = document.getElementById('settings-audio-color');
+  const imageBlock = document.getElementById('settings-audio-image');
+  if (colorBlock) colorBlock.hidden = usingImage;
+  if (imageBlock) imageBlock.hidden = !usingImage;
+
+  const preset = audio.preset || 'midnight';
+  for (const btn of document.querySelectorAll('.swatch[data-preset]')) {
+    const on = !usingImage && btn.dataset.preset === preset;
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  const customWrap = document.querySelector('.swatch--custom');
+  const customInput = document.getElementById('audio-custom-color');
+  if (customWrap) customWrap.classList.toggle('is-selected', !usingImage && preset === 'custom');
+  if (customInput) {
+    const color = audio.customColor || '#0f0f14';
+    if (customInput.value !== color) customInput.value = color;
+    customWrap?.style.setProperty('background', color);
+  }
+
+  const imageInput = document.getElementById('audio-image-url');
+  if (imageInput && document.activeElement !== imageInput) {
+    imageInput.value = audio.imageUrl || '';
   }
 
   const locked = view.importBusy;
@@ -1086,6 +1147,114 @@ async function importBackup(mode) {
   }
 }
 
+async function frontTabId() {
+  try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const id = tabs?.[0]?.id;
+    return id == null ? null : id;
+  } catch {
+    return null;
+  }
+}
+
+async function sendToFrontTab(message) {
+  const id = await frontTabId();
+  if (id == null) throw new Error('no tab');
+  return chrome.tabs.sendMessage(id, message);
+}
+
+async function refreshAudioState() {
+  try {
+    const res = await sendToFrontTab({ type: 'audioMode.state' });
+    view.audioKnown = true;
+    if (res && res.ok) {
+      view.audioReachable = true;
+      view.audioOn = !!res.on;
+    } else {
+      view.audioReachable = false;
+      view.audioOn = false;
+    }
+  } catch {
+    view.audioKnown = true;
+    view.audioReachable = false;
+    view.audioOn = false;
+  }
+}
+
+async function refreshAudioShortcut() {
+  try {
+    const res = await send({ type: 'audioMode.shortcut' });
+    const raw = res && res.shortcut;
+    view.audioShortcut = typeof raw === 'string' ? raw.trim() : '';
+  } catch {
+    view.audioShortcut = '';
+  }
+}
+
+async function toggleAudioMode() {
+  try {
+    const res = await sendToFrontTab({ type: 'audioMode.toggle' });
+    view.audioKnown = true;
+    if (res && res.ok) {
+      view.audioReachable = true;
+      view.audioOn = !!res.on;
+    } else {
+      view.audioReachable = false;
+      view.audioOn = false;
+    }
+  } catch {
+    view.audioKnown = true;
+    view.audioReachable = false;
+    view.audioOn = false;
+  }
+  render();
+}
+
+function bindAudio() {
+  const toggle = document.getElementById('audio-toggle');
+  toggle?.addEventListener('change', () => {
+    void toggleAudioMode();
+  });
+
+  const panel = document.getElementById('audio');
+  panel?.addEventListener('change', (event) => {
+    const el = event.target;
+    if (!(el instanceof HTMLElement)) return;
+    const path = el.dataset.setting;
+    if (!path) return;
+    void patchSettings(buildPatch(path, el.value));
+  });
+
+  document.getElementById('audio-shortcut')?.addEventListener('click', () => {
+    openUrl('chrome://extensions/shortcuts');
+  });
+}
+
+function bindLookSettings() {
+  for (const btn of document.querySelectorAll('.swatch[data-preset]')) {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.preset;
+      if (!name) return;
+      void patchSettings({ audio: { preset: name, backgroundType: 'color' } });
+    });
+  }
+
+  document.getElementById('audio-custom-color')?.addEventListener('change', (event) => {
+    const el = event.target;
+    if (!(el instanceof HTMLInputElement)) return;
+    void patchSettings({
+      audio: { preset: 'custom', customColor: el.value, backgroundType: 'color' },
+    });
+  });
+
+  document.getElementById('audio-image-form')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const input = document.getElementById('audio-image-url');
+    const url = input instanceof HTMLInputElement ? input.value : '';
+    void patchSettings({ audio: { backgroundType: 'image', imageUrl: url } });
+  });
+}
+
 function bindSettings() {
   const panel = document.getElementById('settings');
   panel.addEventListener('change', (event) => {
@@ -1209,6 +1378,8 @@ document.addEventListener('click', closeAllMenus);
 
 bindWatchlist();
 bindFeeds();
+bindAudio();
+bindLookSettings();
 bindSettings();
 bindChannelSheet();
 
@@ -1220,6 +1391,7 @@ void (async () => {
     const snap = await send({ type: 'popupOpened' });
     if (!applySnapshot(snap)) view.error = formatError(snap?.error);
     await applyI18n(view.settings?.ui?.locale);
+    await Promise.all([refreshAudioState(), refreshAudioShortcut()]);
   } catch (err) {
     view.error = formatError(err?.message || err);
   } finally {

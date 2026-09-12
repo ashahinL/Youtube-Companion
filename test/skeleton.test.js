@@ -84,6 +84,8 @@ export default async function run(t) {
 
   const en = json('_locales/en/messages.json');
   const ar = json('_locales/ar/messages.json');
+  t.check('en has tabAudio', 'tabAudio' in en);
+  t.check('ar has tabAudio', 'tabAudio' in ar);
   const enKeys = Object.keys(en).sort();
   const arKeys = Object.keys(ar).sort();
   t.check(

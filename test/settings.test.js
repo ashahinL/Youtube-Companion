@@ -204,6 +204,154 @@ export default async function run(t) {
       clampSettings({ audio: {} }).audio.restoreQuality === 'hd720',
     );
 
+    t.section('clamp: audio look');
+
+    t.check('preset defaults to midnight', DEFAULT_SETTINGS.audio.preset === 'midnight');
+    t.check('backgroundType defaults to color', DEFAULT_SETTINGS.audio.backgroundType === 'color');
+    t.check(
+      'customColor defaults to the midnight from-stop',
+      DEFAULT_SETTINGS.audio.customColor === '#0f0f14',
+    );
+    t.check('imageUrl defaults to empty', DEFAULT_SETTINGS.audio.imageUrl === '');
+
+    const audioOf = (over) =>
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        audio: { ...DEFAULT_SETTINGS.audio, ...over },
+      }).audio;
+
+    for (const p of ['midnight', 'slate', 'ember', 'amber', 'forest', 'sunset', 'custom']) {
+      t.check(`preset '${p}' is kept`, audioOf({ preset: p }).preset === p);
+    }
+    t.check("preset 'neon' falls back to midnight", audioOf({ preset: 'neon' }).preset === 'midnight');
+    t.check("preset '' falls back to midnight", audioOf({ preset: '' }).preset === 'midnight');
+    t.check("preset 'Midnight' falls back to midnight", audioOf({ preset: 'Midnight' }).preset === 'midnight');
+    t.check('preset 1 falls back to midnight', audioOf({ preset: 1 }).preset === 'midnight');
+
+    t.check(
+      "backgroundType 'color' is kept",
+      audioOf({ backgroundType: 'color' }).backgroundType === 'color',
+    );
+    t.check(
+      "backgroundType 'image' is kept",
+      audioOf({ backgroundType: 'image' }).backgroundType === 'image',
+    );
+    t.check(
+      "backgroundType 'gradient' falls back to color",
+      audioOf({ backgroundType: 'gradient' }).backgroundType === 'color',
+    );
+    t.check(
+      "backgroundType '' falls back to color",
+      audioOf({ backgroundType: '' }).backgroundType === 'color',
+    );
+
+    t.check(
+      'customColor #112233 is kept',
+      audioOf({ customColor: '#112233' }).customColor === '#112233',
+    );
+    t.check(
+      'customColor is lowercased',
+      audioOf({ customColor: '#AABBCC' }).customColor === '#aabbcc',
+    );
+    t.check(
+      '3-digit customColor falls back to midnight',
+      audioOf({ customColor: '#fff' }).customColor === '#0f0f14',
+    );
+    t.check(
+      'named customColor falls back to midnight',
+      audioOf({ customColor: 'red' }).customColor === '#0f0f14',
+    );
+    t.check(
+      'empty customColor falls back to midnight',
+      audioOf({ customColor: '' }).customColor === '#0f0f14',
+    );
+    t.check(
+      'non-string customColor falls back to midnight',
+      audioOf({ customColor: 1 }).customColor === '#0f0f14',
+    );
+
+    t.check(
+      'https imageUrl is kept',
+      audioOf({ imageUrl: 'https://example.com/bg.jpg' }).imageUrl === 'https://example.com/bg.jpg',
+    );
+    t.check(
+      'https imageUrl is trimmed',
+      audioOf({ imageUrl: '  https://example.com/bg.jpg  ' }).imageUrl === 'https://example.com/bg.jpg',
+    );
+    t.check(
+      'javascript imageUrl is emptied',
+      audioOf({ imageUrl: 'javascript:alert(1)' }).imageUrl === '',
+    );
+    t.check(
+      'http imageUrl is emptied',
+      audioOf({ imageUrl: 'http://example.com/bg.jpg' }).imageUrl === '',
+    );
+    t.check(
+      'quoted imageUrl is emptied',
+      audioOf({ imageUrl: 'https://example.com/a".jpg' }).imageUrl === '',
+    );
+    t.check(
+      'backslash imageUrl is emptied',
+      audioOf({ imageUrl: 'https://example.com/a\\b.jpg' }).imageUrl === '',
+    );
+    t.check(
+      'newline imageUrl is emptied',
+      audioOf({ imageUrl: 'https://example.com/a\n.jpg' }).imageUrl === '',
+    );
+    t.check(
+      'data:image is kept',
+      audioOf({ imageUrl: 'data:image/png;base64,aaa' }).imageUrl === 'data:image/png;base64,aaa',
+    );
+    t.check(
+      'data:text is emptied',
+      audioOf({ imageUrl: 'data:text/html,hi' }).imageUrl === '',
+    );
+    t.check('non-string imageUrl is emptied', audioOf({ imageUrl: 1 }).imageUrl === '');
+    t.check('empty imageUrl stays empty', audioOf({ imageUrl: '' }).imageUrl === '');
+    t.check(
+      'whitespace imageUrl is emptied',
+      audioOf({ imageUrl: '   ' }).imageUrl === '',
+    );
+
+    const fullLook = {
+      restoreQuality: 'hd1080',
+      preset: 'forest',
+      backgroundType: 'image',
+      customColor: '#14763a',
+      imageUrl: 'https://example.com/bg.jpg',
+    };
+    t.check(
+      'a full audio group round-trips',
+      same(clampSettings({ audio: fullLook }).audio, fullLook),
+    );
+    const partialLook = clampSettings({ audio: { restoreQuality: 'tiny' } }).audio;
+    t.check(
+      'partial audio merge keeps look defaults',
+      partialLook.restoreQuality === 'tiny'
+        && partialLook.preset === 'midnight'
+        && partialLook.backgroundType === 'color'
+        && partialLook.customColor === '#0f0f14'
+        && partialLook.imageUrl === '',
+    );
+    t.check(
+      'junk look keys fall back without dropping restoreQuality',
+      same(clampSettings({
+        audio: {
+          restoreQuality: 'large',
+          preset: 'nope',
+          backgroundType: 'nope',
+          customColor: 'blue',
+          imageUrl: 'ftp://x',
+        },
+      }).audio, {
+        restoreQuality: 'large',
+        preset: 'midnight',
+        backgroundType: 'color',
+        customColor: '#0f0f14',
+        imageUrl: '',
+      }),
+    );
+
     t.section('writeSettings');
 
     await globalThis.chrome.storage.local.clear();

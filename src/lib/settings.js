@@ -31,6 +31,12 @@ export const DEFAULT_SETTINGS = {
   audio: {
     // Fallback only. A captured 720p/1080p/4K still wins on switch-off.
     restoreQuality: 'hd720',
+    // Overlay look. The six named presets match overlay.css; custom
+    // uses customColor (midnight's from-stop when unset).
+    preset: 'midnight',
+    backgroundType: 'color',
+    customColor: '#0f0f14',
+    imageUrl: '',
   },
 };
 
@@ -49,6 +55,45 @@ const PLAYBACK_QUALITIES = new Set([
   'highres',
   'auto',
 ]);
+
+const AUDIO_PRESETS = new Set([
+  'midnight',
+  'slate',
+  'ember',
+  'amber',
+  'forest',
+  'sunset',
+  'custom',
+]);
+
+const AUDIO_BG_TYPES = new Set(['color', 'image']);
+
+// Same rule as AudioModeCore.sanitizeImageUrl. The value is interpolated
+// into `background: url("...")`, so quotes and backslashes must not
+// survive, and only https/data image sources are allowed. A URL the
+// engine will refuse must not be storable as if it were fine.
+function sanitizeImageUrl(value) {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (!v) return null;
+  if (/["\\\r\n]/.test(v)) return null;
+  let u;
+  try {
+    u = new URL(v);
+  } catch {
+    return null;
+  }
+  if (u.protocol === 'https:') return v;
+  if (u.protocol === 'data:' && /^data:image\//i.test(v)) return v;
+  return null;
+}
+
+function clampHexColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const v = value.trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) return '#' + v.slice(1).toLowerCase();
+  return fallback;
+}
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -135,6 +180,12 @@ export function clampSettings(s) {
       restoreQuality: PLAYBACK_QUALITIES.has(audio.restoreQuality)
         ? audio.restoreQuality
         : d.audio.restoreQuality,
+      preset: AUDIO_PRESETS.has(audio.preset) ? audio.preset : d.audio.preset,
+      backgroundType: AUDIO_BG_TYPES.has(audio.backgroundType)
+        ? audio.backgroundType
+        : d.audio.backgroundType,
+      customColor: clampHexColor(audio.customColor, d.audio.customColor),
+      imageUrl: sanitizeImageUrl(audio.imageUrl) || d.audio.imageUrl,
     },
   };
 }

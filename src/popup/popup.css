@@ -19,6 +19,21 @@
   --on-tag-premiere: #1a1408;
   --tag-short: #3a3a48;
   --on-tag-short: #f1f1f4;
+  /* Same stops as src/content/overlay.css. The overlay cannot read
+   * these properties, so the two lists are copies on purpose. */
+  --ytc-audio-angle: 165deg;
+  --ytc-audio-midnight-from: #0f0f14;
+  --ytc-audio-midnight-to: #1e1e28;
+  --ytc-audio-slate-from: #17171f;
+  --ytc-audio-slate-to: #3a3a48;
+  --ytc-audio-ember-from: #14080a;
+  --ytc-audio-ember-to: #8c1220;
+  --ytc-audio-amber-from: #141007;
+  --ytc-audio-amber-to: #8a6210;
+  --ytc-audio-forest-from: #081410;
+  --ytc-audio-forest-to: #14763a;
+  --ytc-audio-sunset-from: #96630d;
+  --ytc-audio-sunset-to: #7a1020;
 }
 
 @media (prefers-color-scheme: light) {
@@ -93,14 +108,16 @@ body {
 }
 
 .tab {
+  flex: 1;
   padding-block: 8px;
-  padding-inline: 12px;
+  padding-inline: 8px;
   border: 0;
   border-block-end: 2px solid transparent;
   background: none;
   color: var(--text-dim);
   font: inherit;
   font-weight: 500;
+  text-align: center;
   cursor: pointer;
 }
 
@@ -232,7 +249,10 @@ body {
 .menu__item:focus-visible,
 .channel-row__main:focus-visible,
 .feed-row:focus-visible,
-.feed-row__channel:focus-visible {
+.feed-row__channel:focus-visible,
+.swatch:focus-visible,
+.audio-shortcut:focus-visible,
+.switch:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -737,6 +757,18 @@ body {
   font: inherit;
 }
 
+.settings-text {
+  flex: 1;
+  min-width: 0;
+  padding-block: 4px;
+  padding-inline: 7px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
 .settings-select {
   flex: 1;
   min-width: 0;
@@ -751,7 +783,8 @@ body {
 }
 
 .settings-num:focus,
-.settings-select:focus {
+.settings-select:focus,
+.settings-text:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
@@ -879,4 +912,185 @@ body {
 .sheet .empty {
   margin-block: 16px;
   margin-inline: 0;
+}
+
+.audio-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-end: 12px;
+}
+
+.audio-head__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch input:disabled {
+  cursor: default;
+}
+
+.switch__track {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-hover);
+}
+
+.switch__track::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-start: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text);
+}
+
+.switch input:checked + .switch__track {
+  background: var(--accent);
+  border-color: transparent;
+}
+
+.switch input:checked + .switch__track::before {
+  inset-inline-start: 18px;
+}
+
+.switch input:disabled + .switch__track {
+  opacity: 0.55;
+}
+
+.audio-shortcut {
+  display: block;
+  width: 100%;
+  margin-block-start: 10px;
+  padding-block: 8px;
+  padding-inline: 10px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  text-align: start;
+  cursor: pointer;
+}
+
+.audio-shortcut:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface);
+}
+
+.audio-shortcut:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.swatches {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.swatch[aria-pressed='true'],
+.swatch--custom.is-selected {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.swatch[data-preset='midnight'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-midnight-from),
+    var(--ytc-audio-midnight-to)
+  );
+}
+
+.swatch[data-preset='slate'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-slate-from),
+    var(--ytc-audio-slate-to)
+  );
+}
+
+.swatch[data-preset='ember'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-ember-from),
+    var(--ytc-audio-ember-to)
+  );
+}
+
+.swatch[data-preset='amber'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-amber-from),
+    var(--ytc-audio-amber-to)
+  );
+}
+
+.swatch[data-preset='forest'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-forest-from),
+    var(--ytc-audio-forest-to)
+  );
+}
+
+.swatch[data-preset='sunset'] {
+  background: linear-gradient(
+    var(--ytc-audio-angle),
+    var(--ytc-audio-sunset-from),
+    var(--ytc-audio-sunset-to)
+  );
+}
+
+.swatch--custom {
+  position: relative;
+  overflow: hidden;
+  background: var(--ytc-audio-midnight-from);
+}
+
+.swatch--custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
 }

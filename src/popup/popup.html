@@ -12,14 +12,27 @@
     <nav class="tabs" role="tablist">
       <button
         class="tab tab--active"
+        id="tab-audio"
+        data-tab="audio"
+        data-i18n="tabAudio"
+        type="button"
+        role="tab"
+        aria-selected="true"
+        aria-controls="audio"
+        tabindex="0"
+      >
+        Audio
+      </button>
+      <button
+        class="tab"
         id="tab-feeds"
         data-tab="feeds"
         data-i18n="tabFeeds"
         type="button"
         role="tab"
-        aria-selected="true"
+        aria-selected="false"
         aria-controls="feeds"
-        tabindex="0"
+        tabindex="-1"
       >
         Feeds
       </button>
@@ -51,7 +64,61 @@
       </button>
     </nav>
 
-    <section id="feeds" class="panel" role="tabpanel" aria-labelledby="tab-feeds">
+    <section id="audio" class="panel" role="tabpanel" aria-labelledby="tab-audio">
+      <div class="audio-head">
+        <span id="audio-mode-label" class="audio-head__label" data-i18n="audioModeLabel">Audio mode</span>
+        <label
+          class="switch"
+          title="Turn audio mode on or off on the front tab."
+          data-i18n-title="audioModeToggleTitle"
+        >
+          <input
+            id="audio-toggle"
+            type="checkbox"
+            data-i18n-label="audioModeToggle"
+            aria-labelledby="audio-mode-label"
+          />
+          <span class="switch__track" aria-hidden="true"></span>
+        </label>
+      </div>
+      <p id="audio-page-notice" class="banner" role="status" hidden data-i18n="audioPageNotice">
+        Open a YouTube video to use audio mode.
+      </p>
+      <div id="audio-controls">
+        <label
+          class="row row--inline"
+          title="Fallback only. A captured 720p, 1080p or 4K still wins on switch-off."
+          data-i18n-title="audioRestoreQualityTitle"
+        >
+          <span data-i18n="audioRestoreQuality">Restore quality</span>
+          <select
+            id="audio-restore-quality"
+            class="settings-select"
+            data-setting="audio.restoreQuality"
+          >
+            <option value="auto" data-i18n="audioQualityAuto">Auto</option>
+            <option value="tiny" data-i18n="audioQualityTiny">144p</option>
+            <option value="small" data-i18n="audioQualitySmall">240p</option>
+            <option value="medium" data-i18n="audioQualityMedium">360p</option>
+            <option value="large" data-i18n="audioQualityLarge">480p</option>
+            <option value="hd720" data-i18n="audioQualityHd720" selected>720p</option>
+            <option value="hd1080" data-i18n="audioQualityHd1080">1080p</option>
+            <option value="hd1440" data-i18n="audioQualityHd1440">1440p</option>
+            <option value="hd2160" data-i18n="audioQualityHd2160">4K</option>
+            <option value="highres" data-i18n="audioQualityHighres">Highest</option>
+          </select>
+        </label>
+        <button
+          id="audio-shortcut"
+          class="audio-shortcut"
+          type="button"
+          title="Click to set the keyboard shortcut."
+          data-i18n-title="audioShortcutTitle"
+        ></button>
+      </div>
+    </section>
+
+    <section id="feeds" class="panel" role="tabpanel" aria-labelledby="tab-feeds" hidden>
       <form id="feed-add-form" class="add-row">
         <span class="add-row__field">
           <input
@@ -259,6 +326,137 @@
             <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
           </select>
         </label>
+      </fieldset>
+
+      <fieldset class="group" id="settings-audio-look">
+        <legend class="group__legend" data-i18n="settingsAudioLook">Audio mode look</legend>
+        <label
+          class="row row--inline"
+          title="Colour paints a gradient or a custom colour. Image uses the URL below."
+          data-i18n-title="settingsAudioBgTypeTitle"
+        >
+          <span data-i18n="settingsAudioBgType">Background type</span>
+          <select class="settings-select" data-setting="audio.backgroundType">
+            <option value="color" data-i18n="settingsAudioBgColor">Colour</option>
+            <option value="image" data-i18n="settingsAudioBgImage">Image</option>
+          </select>
+        </label>
+        <div id="settings-audio-color">
+          <div
+            class="row"
+            title="The overlay on the page uses the same colours as these swatches."
+            data-i18n-title="settingsAudioPresetsTitle"
+          >
+            <span data-i18n="settingsAudioPresets">Presets</span>
+            <div
+              class="swatches"
+              role="group"
+              data-i18n-label="settingsAudioPresets"
+              aria-label="Presets"
+            >
+              <button
+                type="button"
+                class="swatch"
+                data-preset="midnight"
+                data-i18n-title="audioPresetMidnight"
+                data-i18n-label="audioPresetMidnight"
+                title="Midnight"
+                aria-label="Midnight"
+                aria-pressed="true"
+              ></button>
+              <button
+                type="button"
+                class="swatch"
+                data-preset="slate"
+                data-i18n-title="audioPresetSlate"
+                data-i18n-label="audioPresetSlate"
+                title="Slate"
+                aria-label="Slate"
+                aria-pressed="false"
+              ></button>
+              <button
+                type="button"
+                class="swatch"
+                data-preset="ember"
+                data-i18n-title="audioPresetEmber"
+                data-i18n-label="audioPresetEmber"
+                title="Ember"
+                aria-label="Ember"
+                aria-pressed="false"
+              ></button>
+              <button
+                type="button"
+                class="swatch"
+                data-preset="amber"
+                data-i18n-title="audioPresetAmber"
+                data-i18n-label="audioPresetAmber"
+                title="Amber"
+                aria-label="Amber"
+                aria-pressed="false"
+              ></button>
+              <button
+                type="button"
+                class="swatch"
+                data-preset="forest"
+                data-i18n-title="audioPresetForest"
+                data-i18n-label="audioPresetForest"
+                title="Forest"
+                aria-label="Forest"
+                aria-pressed="false"
+              ></button>
+              <button
+                type="button"
+                class="swatch"
+                data-preset="sunset"
+                data-i18n-title="audioPresetSunset"
+                data-i18n-label="audioPresetSunset"
+                title="Sunset"
+                aria-label="Sunset"
+                aria-pressed="false"
+              ></button>
+              <label
+                class="swatch swatch--custom"
+                data-i18n-title="audioPresetCustom"
+                title="Custom"
+              >
+                <input
+                  id="audio-custom-color"
+                  type="color"
+                  value="#0f0f14"
+                  data-i18n-label="audioPresetCustom"
+                  aria-label="Custom"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+        <div id="settings-audio-image" hidden>
+          <form
+            id="audio-image-form"
+            class="row row--inline"
+            title="Paste a direct link to an image. Only https and data:image URLs are kept."
+            data-i18n-title="settingsAudioImageUrlTitle"
+          >
+            <span data-i18n="settingsAudioImageUrl">Image URL</span>
+            <input
+              id="audio-image-url"
+              class="settings-text"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              dir="ltr"
+              placeholder="https://example.com/image.jpg"
+              data-i18n-label="settingsAudioImageUrl"
+              aria-label="Image URL"
+            />
+            <button id="audio-image-apply" class="btn" type="submit" data-i18n="settingsAudioImageApply">
+              Apply
+            </button>
+          </form>
+          <p class="settings-note" data-i18n="settingsAudioImageHint">
+            Paste a direct link to an image.
+          </p>
+        </div>
       </fieldset>
 
       <fieldset class="group" id="settings-backup">

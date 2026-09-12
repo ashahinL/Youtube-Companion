@@ -858,7 +858,12 @@
     const ch = root.chrome;
     if (ch && ch.runtime && ch.runtime.onMessage && ch.runtime.onMessage.addListener) {
       ch.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {
-        if (!msg || msg.type !== 'audioMode.toggle') return;
+        if (!msg) return;
+        if (msg.type === 'audioMode.state') {
+          sendResponse({ ok: true, on: !!session });
+          return;
+        }
+        if (msg.type !== 'audioMode.toggle') return;
         toggle().then(
           function () { sendResponse({ ok: true, on: !!session }); },
           function () { sendResponse({ ok: false, on: !!session }); },

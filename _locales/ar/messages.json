@@ -19,6 +19,10 @@
     "message": "قائمة المتابعة",
     "description": "Popup tab label for the channel list."
   },
+  "tabAudio": {
+    "message": "الصوت",
+    "description": "Popup tab label for audio mode."
+  },
   "tabSettings": {
     "message": "الإعدادات",
     "description": "Popup tab label for settings."
@@ -520,5 +524,159 @@
         "example": "Alt+Shift+A"
       }
     }
+  },
+  "audioModeLabel": {
+    "message": "وضع الصوت",
+    "description": "Label next to the master audio-mode toggle on the Audio tab."
+  },
+  "audioModeToggle": {
+    "message": "تشغيل أو إيقاف وضع الصوت",
+    "description": "Accessible name of the master audio-mode toggle."
+  },
+  "audioModeToggleTitle": {
+    "message": "تشغيل أو إيقاف وضع الصوت في التبويب الأمامي.",
+    "description": "Tooltip on the master audio-mode toggle."
+  },
+  "audioPageNotice": {
+    "message": "افتح فيديو على يوتيوب لاستخدام وضع الصوت.",
+    "description": "Notice on the Audio tab when the front tab is not a YouTube page the content script can reach."
+  },
+  "audioRestoreQuality": {
+    "message": "جودة الاستعادة",
+    "description": "Label of the select that sets the fallback quality used when audio mode turns off."
+  },
+  "audioRestoreQualityTitle": {
+    "message": "احتياطي فقط. إذا كان الفيديو عند 720p أو 1080p أو 4K عند التشغيل، تُستعاد تلك الجودة.",
+    "description": "Tooltip on the restore-quality select. The value is the fallback when switch-on capture is tiny, small, missing, or unrecognised."
+  },
+  "audioQualityAuto": {
+    "message": "تلقائي",
+    "description": "Restore-quality option that lets YouTube pick the level."
+  },
+  "audioQualityTiny": {
+    "message": "دقة 144p",
+    "description": "Restore-quality option for 144p (tiny)."
+  },
+  "audioQualitySmall": {
+    "message": "دقة 240p",
+    "description": "Restore-quality option for 240p (small)."
+  },
+  "audioQualityMedium": {
+    "message": "دقة 360p",
+    "description": "Restore-quality option for 360p (medium)."
+  },
+  "audioQualityLarge": {
+    "message": "دقة 480p",
+    "description": "Restore-quality option for 480p (large)."
+  },
+  "audioQualityHd720": {
+    "message": "دقة 720p",
+    "description": "Restore-quality option for 720p. The default fallback."
+  },
+  "audioQualityHd1080": {
+    "message": "دقة 1080p",
+    "description": "Restore-quality option for 1080p."
+  },
+  "audioQualityHd1440": {
+    "message": "دقة 1440p",
+    "description": "Restore-quality option for 1440p."
+  },
+  "audioQualityHd2160": {
+    "message": "دقة 4K",
+    "description": "Restore-quality option for 2160p (4K)."
+  },
+  "audioQualityHighres": {
+    "message": "الأعلى",
+    "description": "Restore-quality option that asks for the player's highest level."
+  },
+  "audioShortcutBound": {
+    "message": "الاختصار $SHORTCUT$ — انقر للتغيير",
+    "description": "Audio tab hint when a keyboard shortcut is bound. $SHORTCUT$ is the real combination from chrome.commands, such as Alt+Shift+A.",
+    "placeholders": {
+      "shortcut": {
+        "content": "$1",
+        "example": "Alt+Shift+A"
+      }
+    }
+  },
+  "audioShortcutNone": {
+    "message": "لا يوجد اختصار — انقر لتعيين واحد",
+    "description": "Audio tab hint when Chrome registered the command with no shortcut. Clicking opens chrome://extensions/shortcuts."
+  },
+  "audioShortcutTitle": {
+    "message": "انقر لتعيين اختصار لوحة المفاتيح.",
+    "description": "Tooltip on the Audio tab shortcut hint before JavaScript replaces it with the bound or empty copy."
+  },
+  "settingsAudioLook": {
+    "message": "مظهر وضع الصوت",
+    "description": "Settings group heading for the in-page overlay appearance."
+  },
+  "settingsAudioBgType": {
+    "message": "نوع الخلفية",
+    "description": "Label of the Colour / Image select for the audio-mode overlay."
+  },
+  "settingsAudioBgTypeTitle": {
+    "message": "اللون يرسم تدرجاً أو لوناً مخصصاً. الصورة تستخدم الرابط أدناه.",
+    "description": "Tooltip on the overlay background-type select."
+  },
+  "settingsAudioBgColor": {
+    "message": "لون",
+    "description": "Background-type option that uses a preset gradient or a custom colour."
+  },
+  "settingsAudioBgImage": {
+    "message": "صورة",
+    "description": "Background-type option that uses an image URL."
+  },
+  "settingsAudioPresets": {
+    "message": "الإعدادات الجاهزة",
+    "description": "Label of the overlay gradient swatches and the custom colour picker."
+  },
+  "settingsAudioPresetsTitle": {
+    "message": "الطبقة على الصفحة تستخدم نفس ألوان هذه العينات.",
+    "description": "Tooltip on the overlay preset swatches."
+  },
+  "audioPresetMidnight": {
+    "message": "منتصف الليل",
+    "description": "Name of the default dark overlay gradient preset."
+  },
+  "audioPresetSlate": {
+    "message": "أردوازي",
+    "description": "Name of the slate overlay gradient preset."
+  },
+  "audioPresetEmber": {
+    "message": "جمرة",
+    "description": "Name of the ember overlay gradient preset."
+  },
+  "audioPresetAmber": {
+    "message": "عنبر",
+    "description": "Name of the amber overlay gradient preset."
+  },
+  "audioPresetForest": {
+    "message": "غابة",
+    "description": "Name of the forest overlay gradient preset."
+  },
+  "audioPresetSunset": {
+    "message": "غروب",
+    "description": "Name of the sunset overlay gradient preset."
+  },
+  "audioPresetCustom": {
+    "message": "مخصص",
+    "description": "Accessible name of the custom overlay colour picker."
+  },
+  "settingsAudioImageUrl": {
+    "message": "رابط الصورة",
+    "description": "Label of the overlay background image URL field."
+  },
+  "settingsAudioImageUrlTitle": {
+    "message": "الصق رابطاً مباشراً لصورة. يُحفظ فقط https وروابط data:image.",
+    "description": "Tooltip on the overlay image URL field."
+  },
+  "settingsAudioImageApply": {
+    "message": "تطبيق",
+    "description": "Button that saves the overlay image URL."
+  },
+  "settingsAudioImageHint": {
+    "message": "الصق رابطاً مباشراً لصورة.",
+    "description": "Hint under the overlay image URL field."
   }
 }

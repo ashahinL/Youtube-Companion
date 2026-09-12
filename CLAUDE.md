@@ -57,7 +57,7 @@ loadable; job 10 is the remaining one. Update this table as each one lands.
 | 7 | Channel sheet (in-popup overlay of stored videos) | **done** |
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
 | 9 | i18n + Arabic + RTL over finished markup | **done** |
-| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | later stage, after 1-9 |
+| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **tab shell + look settings done**; player card, tab picker, statistics remain |
 
 **Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3.
 Read it before touching the audio-mode code, and keep that discussion in the
