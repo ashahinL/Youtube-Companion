@@ -121,9 +121,10 @@ The full list is [DESIGN.md §12](DESIGN.md). The ones that have teeth:
 - **The channel feed has no `ETag` and no 304 path**, and is cached for 900
   seconds. A poll without `cache: 'no-cache'` returns identical bytes and looks
   like "nothing new" for 15 minutes.
-- **The row id in a `browse` response is `contentId`, not `videoId`.**
+- **The row id in a Videos-tab `browse` response is `contentId`, not `videoId`.**
   `videoId` is there 210 times on nested endpoint objects, so harvesting it
-  returns each video several times. Read `contentId` off the lockup.
+  returns each video several times. Nothing parses that video list now — the
+  channel sheet reads the stored feed — so this is for whoever calls it next.
 - **The first `"channelId":"UC..."` in channel HTML belongs to a different
   channel.** Use `resolve_url`; if you ever must parse HTML, trust only
   `<link rel="canonical">` or `"externalId"`.
