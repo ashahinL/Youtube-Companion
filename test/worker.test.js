@@ -123,38 +123,6 @@ function headerJson(id, title, handle, avatar) {
   };
 }
 
-function searchJson(hits) {
-  return {
-    contents: {
-      twoColumnSearchResultsRenderer: {
-        primaryContents: {
-          sectionListRenderer: {
-            contents: [{
-              itemSectionRenderer: {
-                contents: hits.map((h) => ({
-                  channelRenderer: {
-                    channelId: h.id,
-                    title: { simpleText: h.title },
-                    navigationEndpoint: {
-                      browseEndpoint: {
-                        browseId: h.id,
-                        canonicalBaseUrl: h.handle ? `/${h.handle}` : '',
-                      },
-                    },
-                    thumbnail: { thumbnails: [{ url: h.avatar || 'https://yt3.ggpht.com/x' }] },
-                    subscriberCountText: { simpleText: h.handle || '' },
-                    videoCountText: { simpleText: '1M subscribers' },
-                  },
-                })),
-              },
-            }],
-          },
-        },
-      },
-    },
-  };
-}
-
 function bodyOf(opts) {
   try {
     return JSON.parse(opts.body);
@@ -203,9 +171,6 @@ function installFetch(spec = {}) {
     if (u.includes('/youtubei/v1/navigation/resolve_url')) {
       const id = spec.resolveId || MKBHD;
       return jsonRes({ endpoint: { browseEndpoint: { browseId: id } } });
-    }
-    if (u.includes('/youtubei/v1/search')) {
-      return jsonRes(spec.search || searchJson([]));
     }
     if (u.includes('/youtubei/v1/browse')) {
       return jsonRes(spec.browse || headerJson(MKBHD, 'Marques Brownlee', '@mkbhd', 'https://yt3.ggpht.com/mkbhd'));
@@ -805,19 +770,6 @@ export default async function run(t) {
     const sweepMsg = await handleMessage({ type: 'sweep', scope: 'all' });
     t.check('sweep message returns ok', sweepMsg.ok === true, JSON.stringify(sweepMsg));
     t.check('sweep message added the item', (await readFeed())[0]?.v === 'viaSweep001');
-
-    installFetch({
-      search: searchJson([
-        { id: MKBHD, title: 'Marques Brownlee', handle: '@mkbhd' },
-        { id: BEAST, title: 'MrBeast', handle: '@MrBeast' },
-      ]),
-    });
-    const search = await handleMessage({ type: 'searchChannels', query: 'marques' });
-    t.check('searchChannels returns an array', Array.isArray(search), String(typeof search));
-    const mkHit = search.find((r) => r.id === MKBHD);
-    const beastHit = search.find((r) => r.id === BEAST);
-    t.check('in-list result is marked inList: true', mkHit?.inList === true, JSON.stringify(mkHit));
-    t.check('new result is marked inList: false', beastHit?.inList === false, JSON.stringify(beastHit));
 
     const notChannel = await handleMessage({ type: 'addChannel', input: 'https://example.com/nope' });
     t.check(

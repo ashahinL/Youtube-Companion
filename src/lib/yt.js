@@ -18,7 +18,8 @@ const INNERTUBE_CONTEXT = {
   },
 };
 
-const SEARCH_CHANNELS_PARAMS = 'EgIQAg%3D%3D';
+// Videos-tab browse. The channel header (title, handle, avatar, subscribers)
+// is on this same payload; we do not read the video lockups.
 const BROWSE_VIDEOS_TAB_PARAMS = 'EgZ2aWRlb3PyBgQKAjoA';
 
 const THUMB_SIZES = new Set(['default', 'mq', 'hq', 'sd', 'maxres']);
@@ -346,63 +347,6 @@ export function parseResolveUrl(json) {
   return CHANNEL_ID_RE.test(id) ? id : null;
 }
 
-function extractSearchChannel(obj) {
-  const id =
-    (typeof obj.channelId === 'string' && obj.channelId) ||
-    obj.navigationEndpoint?.browseEndpoint?.browseId ||
-    obj.browseEndpoint?.browseId ||
-    (typeof obj.browseId === 'string' ? obj.browseId : '');
-  if (!CHANNEL_ID_RE.test(id)) return null;
-
-  const handleRaw =
-    obj.navigationEndpoint?.browseEndpoint?.canonicalBaseUrl ||
-    obj.browseEndpoint?.canonicalBaseUrl ||
-    obj.canonicalBaseUrl ||
-    '';
-  const handleMatch = String(handleRaw).match(/@[\w.-]+/);
-  const handle = handleMatch ? handleMatch[0] : '';
-
-  const title = ytText(obj.title);
-
-  const thumbs = obj.thumbnail?.thumbnails || obj.thumbnails || [];
-  const avatar = pickThumbUrl(thumbs);
-
-  // Search payloads swap the labels: subscriberCountText is the handle,
-  // videoCountText holds "21.2M subscribers". Trust the text, not the key.
-  let subscribers = 0;
-  for (const node of [obj.subscriberCountText, obj.videoCountText]) {
-    const t = ytText(node);
-    if (/subscriber/i.test(t)) {
-      subscribers = parseCompactCount(t);
-      break;
-    }
-  }
-
-  return { id, handle, title, avatar, subscribers };
-}
-
-function fillChannel(base, extra) {
-  const out = { ...base };
-  for (const k of ['handle', 'title', 'avatar', 'subscribers']) {
-    if (!out[k] && extra[k]) out[k] = extra[k];
-  }
-  return out;
-}
-
-export function parseChannelSearch(json) {
-  json = asJson(json, 'search');
-  const seen = new Map();
-  // Each hit repeats the same browseId ~3 times (nav, short byline, long
-  // byline). Keep the first occurrence and fill in any richer fields.
-  walk(json, (obj) => {
-    const ch = extractSearchChannel(obj);
-    if (!ch) return;
-    const prev = seen.get(ch.id);
-    seen.set(ch.id, prev ? fillChannel(prev, ch) : ch);
-  });
-  return [...seen.values()];
-}
-
 export function parseChannelHeader(json) {
   json = asJson(json, 'browse');
   const meta = json.metadata?.channelMetadataRenderer || {};
@@ -434,92 +378,6 @@ export function parseChannelHeader(json) {
     pickThumbUrl(headerThumbs, 120) || pickThumbUrl(meta.avatar?.thumbnails || []);
 
   return { id, title, handle, avatar, subscribers };
-}
-
-function parseLockup(lockup) {
-  const v = lockup.contentId;
-  const meta = lockup.metadata?.lockupMetadataViewModel;
-  const title = ytText(meta?.title);
-
-  let durationText = '';
-  let live = false;
-  walk(lockup.contentImage, (n) => {
-    const badge = n.thumbnailBadgeViewModel;
-    if (!badge || badge.text == null) return;
-    const t = String(badge.text);
-    if (/^live$/i.test(t)) live = true;
-    else if (t.includes(':') && !durationText) durationText = t;
-  });
-
-  let viewsText = '';
-  let ageText = '';
-  const rows = meta?.metadata?.contentMetadataViewModel?.metadataRows || [];
-  for (const row of rows) {
-    for (const part of row.metadataParts || []) {
-      const t = ytText(part.text || part);
-      if (/view/i.test(t) && !viewsText) viewsText = t;
-      else if (/\bago\b/i.test(t) && !ageText) ageText = t;
-    }
-  }
-
-  return {
-    v,
-    title,
-    d: live ? 0 : parseDuration(durationText),
-    viewsText,
-    views: parseCompactCount(viewsText),
-    // Age on the Videos tab is relative ("6 days ago"). Converting it to a
-    // timestamp would invent precision the payload does not have.
-    ageText,
-    live,
-  };
-}
-
-function isVideoLockup(obj) {
-  return (
-    obj &&
-    typeof obj.contentId === 'string' &&
-    obj.contentId &&
-    obj.metadata &&
-    obj.contentImage
-  );
-}
-
-function gridContinuation(json) {
-  let token = null;
-  const visit = (node) => {
-    if (node == null || typeof node !== 'object') return;
-    if (Array.isArray(node)) {
-      let hasLockup = false;
-      let found = null;
-      for (const item of node) {
-        if (item && typeof item === 'object') {
-          if (item.richItemRenderer?.content?.lockupViewModel || isVideoLockup(item)) {
-            hasLockup = true;
-          }
-          const t = item.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
-          if (t) found = t;
-        }
-      }
-      if (hasLockup && found) token = found;
-      for (const item of node) visit(item);
-      return;
-    }
-    for (const v of Object.values(node)) visit(v);
-  };
-  visit(json);
-  return token;
-}
-
-export function parseChannelVideos(json) {
-  json = asJson(json, 'browse');
-  const items = [];
-  // The Videos-tab row is a lockupViewModel whose id is contentId, not
-  // videoId. videoId only shows up later, on watch-later / share commands.
-  walk(json, (obj) => {
-    if (isVideoLockup(obj)) items.push(parseLockup(obj));
-  });
-  return { items, continuation: gridContinuation(json) };
 }
 
 export function parsePlayer(json) {
@@ -565,15 +423,6 @@ export async function resolveChannelId(input, { fetch = globalThis.fetch } = {})
   return parseResolveUrl(json);
 }
 
-export async function searchChannels(query, { fetch = globalThis.fetch } = {}) {
-  const json = await innertubePost(
-    'search',
-    { query: String(query), params: SEARCH_CHANNELS_PARAMS },
-    fetch,
-  );
-  return parseChannelSearch(json);
-}
-
 export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } = {}) {
   const url = `${YT_ORIGIN}/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
   let res;
@@ -594,22 +443,9 @@ export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } =
   return parseFeedXml(xml);
 }
 
-function browseBody(channelId, continuation) {
-  if (continuation) return { continuation };
-  return { browseId: channelId, params: BROWSE_VIDEOS_TAB_PARAMS };
-}
-
 export async function fetchChannelHeader(channelId, { fetch = globalThis.fetch } = {}) {
-  const json = await innertubePost('browse', browseBody(channelId), fetch);
+  const json = await innertubePost('browse', { browseId: channelId, params: BROWSE_VIDEOS_TAB_PARAMS }, fetch);
   return parseChannelHeader(json);
-}
-
-export async function fetchChannelVideos(
-  channelId,
-  { fetch = globalThis.fetch, continuation } = {},
-) {
-  const json = await innertubePost('browse', browseBody(channelId, continuation), fetch);
-  return parseChannelVideos(json);
 }
 
 export async function isShort(videoId, { fetch = globalThis.fetch } = {}) {
@@ -627,12 +463,12 @@ export async function isShort(videoId, { fetch = globalThis.fetch } = {}) {
   return true;
 }
 
-export async function fetchPlayer(videoId, { fetch = globalThis.fetch } = {}) {
+async function fetchPlayer(videoId, { fetch = globalThis.fetch } = {}) {
   const json = await innertubePost('player', { videoId }, fetch);
   return parsePlayer(json);
 }
 
-export async function classifyPlayer(p, { fetch = globalThis.fetch } = {}) {
+async function classifyPlayer(p, { fetch = globalThis.fetch } = {}) {
   if (p.isUpcoming) return { k: 'premiere', d: 0, st: p.startsAt };
   if (p.isLive) return { k: 'live', d: 0, st: p.startsAt };
   // Shorts max out at 3 minutes, so a longer video cannot be one.

@@ -16,15 +16,11 @@ import {
   parseCompactCount,
   parseFeedXml,
   parseResolveUrl,
-  parseChannelSearch,
   parseChannelHeader,
-  parseChannelVideos,
   parsePlayer,
   resolveChannelId,
-  searchChannels,
   fetchChannelFeed,
   fetchChannelHeader,
-  fetchChannelVideos,
   isShort,
   classifyVideo,
 } from '../src/lib/yt.js';
@@ -82,7 +78,6 @@ export default async function run(t) {
   const rssMkbhd = read('rss.mkbhd.xml');
   const rssBeast = read('rss.mrbeast-with-shorts.xml');
   const resolveJson = readJson('resolve_url.mkbhd.json');
-  const searchJson = readJson('search.channels.json');
   const browseJson = readJson('browse.videos-tab.mrbeast.json');
   const playerNormal = readJson('player.normal-video.json');
   const playerLive = readJson('player.live.json');
@@ -334,45 +329,8 @@ export default async function run(t) {
   t.check('resolve_url accepts a JSON string', parseResolveUrl(JSON.stringify(resolveJson)) === mkbhdId);
   t.check('resolve_url without a browseId returns null', parseResolveUrl({}) === null);
 
-  /* ---- parseChannelSearch ------------------------------------------- */
-  t.section('parseChannelSearch');
-
-  const searchHits = parseChannelSearch(searchJson);
-  const searchIds = searchHits.map((c) => c.id);
-  t.check('search returns 20 channels', searchHits.length === 20, String(searchHits.length));
-  t.check(
-    'search ids are unique (payload repeats each browseId ~3x)',
-    new Set(searchIds).size === searchIds.length,
-    String(searchIds.length - new Set(searchIds).size),
-  );
-
-  const mkbhdHits = searchHits.filter((c) => c.id === mkbhdId);
-  t.check('MKBHD appears exactly once', mkbhdHits.length === 1, String(mkbhdHits.length));
-  const mkbhdHit = mkbhdHits[0];
-  t.check('MKBHD handle is @mkbhd', mkbhdHit.handle === '@mkbhd', mkbhdHit.handle);
-  t.check('MKBHD title', mkbhdHit.title === 'Marques Brownlee', mkbhdHit.title);
-  t.check('MKBHD subscribers is 21.2M', mkbhdHit.subscribers === 21200000, String(mkbhdHit.subscribers));
-  t.check(
-    'MKBHD avatar is the s176 yt3 thumbnail',
-    mkbhdHit.avatar ===
-      'https://yt3.ggpht.com/qu4TmIaYUlS41-dJ9gZ7DUR3nilvmB5_11i6OKSdvNnBNiyOusZP1bMN6ICnuxtjFBb6ioKgRQ=s176-c-k-c0x00ffffff-no-rj-mo',
-    mkbhdHit.avatar,
-  );
-
-  t.check('first result is MKBHD (document order)', searchHits[0].id === mkbhdId);
-  t.check(
-    'second result is Auto Focus',
-    searchHits[1].id === 'UC2J-0g_nxlwcD9JBK1eTleQ' && searchHits[1].handle === '@AutoFocus',
-    JSON.stringify({ id: searchHits[1]?.id, handle: searchHits[1]?.handle }),
-  );
-  t.check('results with no id are dropped', searchHits.every((c) => CHANNEL_OK(c.id)));
-
-  function CHANNEL_OK(id) {
-    return typeof id === 'string' && /^UC[\w-]{22}$/.test(id);
-  }
-
-  /* ---- parseChannelHeader / parseChannelVideos ---------------------- */
-  t.section('parseChannelHeader / parseChannelVideos');
+  /* ---- parseChannelHeader ------------------------------------------- */
+  t.section('parseChannelHeader');
 
   const header = parseChannelHeader(browseJson);
   t.check('header id', header.id === 'UCX6OQ3DkcsbYNE6H8uQQuVA', header.id);
@@ -385,104 +343,6 @@ export default async function run(t) {
       'https://yt3.googleusercontent.com/nxYrc_1_2f77DoBadyxMTmv7ZpRZapHR5jbuYe7PlPd5cIRJxtNNEYyOC0ZsxaDyJJzXrnJiuDE=s120-c-k-c0x00ffffff-no-rj',
     header.avatar,
   );
-
-  const videos = parseChannelVideos(browseJson);
-  t.check('videos tab has 30 items', videos.items.length === 30, String(videos.items.length));
-
-  const v0 = videos.items[0];
-  t.check('first video contentId', v0.v === 'gTKS8SAwUzE', v0.v);
-  t.check(
-    'first video title',
-    v0.title === 'I Survived The Most Extreme Places On Earth',
-    v0.title,
-  );
-  t.check('first video duration 23:28 is 1408s', v0.d === 1408, String(v0.d));
-  t.check('first video viewsText', v0.viewsText === '79M views', v0.viewsText);
-  t.check('first video views', v0.views === 79000000, String(v0.views));
-  t.check('first video ageText is the raw relative string', v0.ageText === '6 days ago', v0.ageText);
-  t.check('first video is not live', v0.live === false);
-
-  const shortish = videos.items.find((it) => it.v === 'F0OkwXKcPSE');
-  t.check('3:14 badge parses to 194s', shortish?.d === 194, String(shortish?.d));
-
-  const expectedToken =
-    browseJson.contents.twoColumnBrowseResultsRenderer.tabs[1].tabRenderer.content
-      .richGridRenderer.contents[30].continuationItemRenderer.continuationEndpoint
-      .continuationCommand.token;
-  t.check(
-    'continuation is the grid load-more token, not a chip/description token',
-    videos.continuation === expectedToken,
-    String(videos.continuation).slice(0, 40),
-  );
-
-  const lockupIds = videos.items.map((it) => it.v);
-  t.check(
-    'second video is Qtl8lJwbd4g',
-    lockupIds[1] === 'Qtl8lJwbd4g',
-    lockupIds[1],
-  );
-  t.check(
-    'no lockup used a missing contentId',
-    lockupIds.every((id) => typeof id === 'string' && id.length > 0),
-  );
-
-  const continuationShape = {
-    onResponseReceivedActions: [
-      {
-        appendContinuationItemsAction: {
-          continuationItems: [
-            {
-              richItemRenderer: {
-                content: {
-                  lockupViewModel: {
-                    contentId: 'AAAAAAAAAAA',
-                    contentType: 'LOCKUP_CONTENT_TYPE_VIDEO',
-                    metadata: {
-                      lockupMetadataViewModel: {
-                        title: { content: 'More' },
-                        metadata: {
-                          contentMetadataViewModel: {
-                            metadataRows: [
-                              {
-                                metadataParts: [
-                                  { text: { content: '1K views' } },
-                                  { text: { content: '1 day ago' } },
-                                ],
-                              },
-                            ],
-                          },
-                        },
-                      },
-                    },
-                    contentImage: {
-                      thumbnailViewModel: {
-                        overlays: [
-                          {
-                            thumbnailBottomOverlayViewModel: {
-                              badges: [{ thumbnailBadgeViewModel: { text: '1:00' } }],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            {
-              continuationItemRenderer: {
-                trigger: 'CONTINUATION_TRIGGER_ON_ITEM_SHOWN',
-                continuationEndpoint: { continuationCommand: { token: 'NEXT_TOKEN' } },
-              },
-            },
-          ],
-        },
-      },
-    ],
-  };
-  const more = parseChannelVideos(continuationShape);
-  t.check('continuation response yields the extra item', more.items[0]?.v === 'AAAAAAAAAAA' && more.items[0]?.d === 60);
-  t.check('continuation response carries the next token', more.continuation === 'NEXT_TOKEN', String(more.continuation));
 
   /* ---- parsePlayer -------------------------------------------------- */
   t.section('parsePlayer');
@@ -737,19 +597,6 @@ export default async function run(t) {
 
   {
     const fetch = recordFetch((url, opts) => {
-      t.check('search endpoint', url === 'https://www.youtube.com/youtubei/v1/search?prettyPrint=false', url);
-      t.check('search has no key=', !url.includes('key='));
-      const body = JSON.parse(opts.body);
-      t.check('search channels-only params', body.params === 'EgIQAg%3D%3D', body.params);
-      t.check('search query', body.query === 'marques brownlee', body.query);
-      return jsonRes(searchJson);
-    });
-    const hits = await searchChannels('marques brownlee', { fetch });
-    t.check('searchChannels returns parsed rows', hits[0].handle === '@mkbhd');
-  }
-
-  {
-    const fetch = recordFetch((url, opts) => {
       t.check('browse endpoint', url === 'https://www.youtube.com/youtubei/v1/browse?prettyPrint=false', url);
       t.check('browse has no key=', !url.includes('key='));
       const body = JSON.parse(opts.body);
@@ -759,39 +606,6 @@ export default async function run(t) {
     });
     const h = await fetchChannelHeader('UCX6OQ3DkcsbYNE6H8uQQuVA', { fetch });
     t.check('fetchChannelHeader title', h.title === 'MrBeast');
-    const v = await fetchChannelVideos('UCX6OQ3DkcsbYNE6H8uQQuVA', { fetch });
-    t.check('fetchChannelVideos first id', v.items[0].v === 'gTKS8SAwUzE');
-  }
-
-  {
-    const fetch = recordFetch((_url, opts) => {
-      const body = JSON.parse(opts.body);
-      t.check('continuation body has the token', body.continuation === 'NEXT_TOKEN', JSON.stringify(body));
-      t.check('continuation body has no browseId', body.browseId === undefined);
-      t.check('continuation body has no params', body.params === undefined);
-      return jsonRes({ onResponseReceivedActions: [] });
-    });
-    const got = await fetchChannelVideos('UCX6OQ3DkcsbYNE6H8uQQuVA', { fetch, continuation: 'NEXT_TOKEN' });
-    t.check('empty continuation parse yields no items', got.items.length === 0 && got.continuation === null);
-  }
-
-  {
-    const fetch = recordFetch(() => ({
-      ok: false,
-      status: 500,
-      json: async () => ({}),
-      text: async () => '',
-    }));
-    let err = null;
-    try {
-      await searchChannels('x', { fetch });
-    } catch (e) {
-      err = e;
-    }
-    t.check('500 throws YtError', err instanceof YtError, String(err));
-    t.check("500 kind is 'http'", err?.kind === 'http', String(err?.kind));
-    t.check('500 status is 500', err?.status === 500, String(err?.status));
-    t.check('500 message names the endpoint', /search/.test(err?.message) && /500/.test(err?.message), err?.message);
   }
 
   {

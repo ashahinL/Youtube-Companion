@@ -127,14 +127,6 @@ export async function writeSettings(patch) {
   return next;
 }
 
-export async function resetSettings() {
-  const next = clampSettings(structuredClone(DEFAULT_SETTINGS));
-  // Only the settings key — channels, feed, and the rest live elsewhere
-  // on purpose, so a reset cannot wipe them.
-  await globalThis.chrome.storage.local.set({ settings: next });
-  return next;
-}
-
 export function onSettingsChanged(callback) {
   const listener = (changes, area) => {
     if (area !== 'local' || !changes || !changes.settings) return;

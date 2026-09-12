@@ -1,6 +1,6 @@
 /**
- * Settings storage: defaults, deep merge, clamp, reset isolation, and
- * the onChanged subscription.
+ * Settings storage: defaults, deep merge, clamp, and the onChanged
+ * subscription.
  */
 
 import { installChromeMock } from './helpers/chrome-mock.js';
@@ -8,7 +8,6 @@ import {
   DEFAULT_SETTINGS,
   readSettings,
   writeSettings,
-  resetSettings,
   clampSettings,
   onSettingsChanged,
 } from '../src/lib/settings.js';
@@ -188,26 +187,9 @@ export default async function run(t) {
       later.alerts.enabled === false && later.poll.intervalMinutes === 45);
     t.check('poll siblings survive a nested patch', later.poll.enabled === true);
 
-    t.section('resetSettings');
-
-    mock.storage.channels = [{ id: 'UC1', title: 'Kept' }];
-    mock.storage.feed = [{ v: 'abc', c: 'UC1', at: 1 }];
-    mock.storage.videoMeta = { abc: { k: 'video', at: 1 } };
-    mock.storage.pollState = { running: true };
-    await writeSettings({ poll: { intervalMinutes: 99 } });
-    await resetSettings();
-    const afterReset = await readSettings();
-    t.check('reset restores DEFAULT_SETTINGS',
-      same(afterReset, DEFAULT_SETTINGS), JSON.stringify(afterReset));
-    t.check('reset leaves channels untouched',
-      mock.storage.channels?.[0]?.id === 'UC1', JSON.stringify(mock.storage.channels));
-    t.check('reset leaves feed untouched',
-      mock.storage.feed?.[0]?.v === 'abc', JSON.stringify(mock.storage.feed));
-    t.check('reset leaves videoMeta untouched', mock.storage.videoMeta?.abc?.k === 'video');
-    t.check('reset leaves pollState untouched', mock.storage.pollState?.running === true);
-
     t.section('onSettingsChanged');
 
+    await globalThis.chrome.storage.local.clear();
     const seen = [];
     const stop = onSettingsChanged((s) => seen.push(s));
     await writeSettings({ feed: { showShorts: true } });

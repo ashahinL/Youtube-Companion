@@ -55,12 +55,5 @@ ok('every seeded id is marked notified',
   `${state.pollState.notified.length} marked, ${state.feed.length} items`);
 ok('channels are flagged seeded', state.channels.every((c) => c.seeded));
 
-console.log('\nsearch');
-const hits = await send({ type: 'searchChannels', query: 'fireship' });
-ok('search returns channels', Array.isArray(hits) && hits.length > 0, `${hits.length} hits`);
-ok('ids are unique', new Set(hits.map((h) => h.id)).size === hits.length);
-ok('handles came through', hits.every((h) => !h.handle || h.handle.startsWith('@')));
-ok('already-added channels are marked', hits.every((h) => typeof h.inList === 'boolean'));
-
 console.log(`\n${failures ? `${failures} FAILED` : 'all live checks passed'}\n`);
 process.exit(failures ? 1 : 0);

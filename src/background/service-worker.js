@@ -8,7 +8,6 @@
 import {
   normalizeChannelInput,
   resolveChannelId,
-  searchChannels,
   fetchChannelFeed,
   fetchChannelHeader,
   classifyVideo,
@@ -486,11 +485,6 @@ export async function handleMessage(msg, _sender) {
           scope: msg.scope || 'all',
           onlyId: msg.onlyId || null,
         });
-      case 'searchChannels': {
-        const results = await searchChannels(String(msg.query ?? ''), ytOpts());
-        const ids = new Set((await readChannels()).map((ch) => ch.id));
-        return results.map((r) => ({ ...r, inList: ids.has(r.id) }));
-      }
       case 'addChannel':
         return await addChannelByInput(msg.input);
       case 'removeChannel': {

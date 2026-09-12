@@ -6,8 +6,7 @@ The parser suite runs against these; it must never touch the network.
 | rss.mkbhd.xml | channel feed, 15 entries, all normal videos |
 | rss.mrbeast-with-shorts.xml | channel feed whose 2nd and 4th entries (5mU6SRS2Bxo, LiH-P4rSkLI) are shorts |
 | resolve_url.mkbhd.json | @handle -> channel id |
-| search.channels.json | channels-only search, each channel repeated ~3x |
-| browse.videos-tab.mrbeast.json | Videos tab, no shorts, ids under contentId |
+| browse.videos-tab.mrbeast.json | Videos tab; the channel header parse runs on this. Video ids sit under contentId |
 | player.live.json | a live stream: isLive true, lengthSeconds "0", liveBroadcastDetails present |
 | player.normal-video.json | a normal video, captured with NO ?key= parameter |
 | player.premiere.synthetic.json | SYNTHETIC, not captured — upcoming premiere player response, derived from player.live.json |
