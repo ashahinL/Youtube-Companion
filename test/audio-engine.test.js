@@ -9,6 +9,7 @@ import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 import { installChromeMock } from './helpers/chrome-mock.js';
+import { resolveLocale as libResolveLocale } from '../src/lib/i18n.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -313,6 +314,112 @@ export default async function run(t) {
   t.check('sanitizeHex rejects a CSS injection', engine.sanitizeHex('#fff; background: url(') === null);
   t.check('sanitizeHex accepts 3-digit hex', engine.sanitizeHex('#abc') === '#aabbcc');
 
+  t.section('overlay copy');
+
+  const enMessages = JSON.parse(read('_locales/en/messages.json'));
+  const arMessages = JSON.parse(read('_locales/ar/messages.json'));
+
+  const localeCases = [
+    ['en', 'ar'],
+    ['ar', 'en'],
+    ['auto', 'ar'],
+    ['auto', 'ar-EG'],
+    ['auto', 'en'],
+    ['auto', 'en-GB'],
+    ['auto', 'fr'],
+    ['auto', undefined],
+    ['auto', ''],
+    [undefined, 'ar-EG'],
+  ];
+  for (const [setting, nav] of localeCases) {
+    t.check(
+      `content resolveLocale(${JSON.stringify(setting)}, ${JSON.stringify(nav)}) matches lib/i18n.js`,
+      engine.resolveLocale(setting, nav) === libResolveLocale(setting, nav),
+      `${engine.resolveLocale(setting, nav)} vs ${libResolveLocale(setting, nav)}`,
+    );
+  }
+
+  t.check(
+    'settings.ui.locale en wins over an Arabic browser',
+    engine.localeFromSettings({ ui: { locale: 'en' } }, 'ar') === 'en',
+  );
+  t.check(
+    'settings.ui.locale ar wins over an English browser',
+    engine.localeFromSettings({ ui: { locale: 'ar' } }, 'en-US') === 'ar',
+  );
+  t.check(
+    'auto follows navigator ar-EG',
+    engine.localeFromSettings({ ui: { locale: 'auto' } }, 'ar-EG') === 'ar',
+  );
+  t.check(
+    'missing settings follow the navigator',
+    engine.localeFromSettings(null, 'ar') === 'ar'
+      && engine.localeFromSettings(null, 'en-GB') === 'en',
+  );
+
+  const enUnbound = engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, '', 'en');
+  t.check('en title is Audio-only playback', enUnbound.title === 'Audio-only playback', enUnbound.title);
+  t.check('en unbound exit is Exit audio mode', enUnbound.exit === 'Exit audio mode', enUnbound.exit);
+  t.check('en unbound is ltr', enUnbound.dir === 'ltr' && enUnbound.locale === 'en');
+  t.check(
+    'en unbound exit does not print Alt+Shift+A',
+    !enUnbound.exit.includes('Alt+Shift+A'),
+    enUnbound.exit,
+  );
+  t.check(
+    'en unbound exit does not print a key combination',
+    !/\S\+\S/.test(enUnbound.exit),
+    enUnbound.exit,
+  );
+
+  const enBound = engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, 'Ctrl+Shift+Y', 'en');
+  t.check(
+    'en bound exit names the real shortcut',
+    enBound.exit === 'Press Ctrl+Shift+Y to exit',
+    enBound.exit,
+  );
+  t.check(
+    'en bound exit does not print a different combination',
+    !enBound.exit.includes('Alt+Shift+A'),
+    enBound.exit,
+  );
+
+  const enWhitespace = engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, '   ', 'en');
+  t.check(
+    'whitespace shortcut is treated as unbound',
+    enWhitespace.exit === 'Exit audio mode',
+    enWhitespace.exit,
+  );
+  t.check(
+    'null shortcut is treated as unbound',
+    engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, null, 'en').exit === 'Exit audio mode',
+  );
+  t.check(
+    'missing shortcut property is treated as unbound',
+    engine.boundShortcut(undefined) === '' && engine.exitLabel(enMessages, undefined) === 'Exit audio mode',
+  );
+
+  const arUnbound = engine.overlayCopy({ ui: { locale: 'ar' } }, arMessages, '', 'en-US');
+  t.check(
+    'explicit ar is rtl even if the browser is en',
+    arUnbound.dir === 'rtl' && arUnbound.locale === 'ar',
+    JSON.stringify(arUnbound),
+  );
+  t.check('ar title is تشغيل الصوت فقط', arUnbound.title === 'تشغيل الصوت فقط', arUnbound.title);
+  t.check('ar unbound exit is خروج من وضع الصوت', arUnbound.exit === 'خروج من وضع الصوت', arUnbound.exit);
+
+  const arBound = engine.overlayCopy({ ui: { locale: 'ar' } }, arMessages, 'Alt+Shift+A', 'en');
+  t.check(
+    'ar bound exit includes the real shortcut',
+    arBound.exit === 'اضغط Alt+Shift+A للخروج',
+    arBound.exit,
+  );
+  t.check(
+    'auto + ar-EG uses Arabic copy',
+    engine.overlayCopy({ ui: { locale: 'auto' } }, arMessages, '', 'ar-EG').locale === 'ar'
+      && engine.overlayCopy({ ui: { locale: 'auto' } }, arMessages, '', 'ar-EG').dir === 'rtl',
+  );
+
   t.section('audioStats');
 
   t.check('stats key is audioStats, not settings', engine.AUDIO_STATS_KEY === 'audioStats');
@@ -407,6 +514,84 @@ export default async function run(t) {
     cmdMock.activeTab = null;
     await handleCommand('toggle-audio-mode');
     t.check('does nothing when there is no active tab', cmdMock.messagesSent.length === 0, JSON.stringify(cmdMock.messagesSent));
+
+    const { handleMessage } = await import('../src/background/service-worker.js');
+
+    cmdMock.commandList = [{ name: 'toggle-audio-mode', shortcut: 'Alt+Shift+A' }];
+    const bound = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'worker returns the bound shortcut',
+      bound.ok === true && bound.shortcut === 'Alt+Shift+A',
+      JSON.stringify(bound),
+    );
+
+    cmdMock.commandList = [{ name: 'toggle-audio-mode', shortcut: '' }];
+    const unbound = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'worker returns an empty shortcut when Chrome assigned none',
+      unbound.ok === true && unbound.shortcut === '',
+      JSON.stringify(unbound),
+    );
+    t.check(
+      'unbound reply is not a suggested_key fallback',
+      unbound.shortcut !== 'Alt+Shift+A',
+      JSON.stringify(unbound),
+    );
+
+    cmdMock.commandList = [{ name: 'toggle-audio-mode', shortcut: '   ' }];
+    const blank = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'whitespace-only binding is returned empty',
+      blank.ok === true && blank.shortcut === '',
+      JSON.stringify(blank),
+    );
+
+    cmdMock.commandList = [
+      { name: 'other', shortcut: 'Ctrl+K' },
+      { name: 'toggle-audio-mode', shortcut: 'Ctrl+Shift+Y' },
+    ];
+    const picked = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'worker picks toggle-audio-mode out of the command list',
+      picked.ok === true && picked.shortcut === 'Ctrl+Shift+Y',
+      JSON.stringify(picked),
+    );
+
+    cmdMock.commandList = [{ name: 'other', shortcut: 'Ctrl+K' }];
+    const missing = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'missing toggle-audio-mode is an empty shortcut, not another command',
+      missing.ok === true && missing.shortcut === '',
+      JSON.stringify(missing),
+    );
+
+    cmdMock.commandList = [{ name: 'toggle-audio-mode' }];
+    const noField = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'command with no shortcut field is empty',
+      noField.ok === true && noField.shortcut === '',
+      JSON.stringify(noField),
+    );
+
+    const originalGetAll = globalThis.chrome.commands.getAll;
+    globalThis.chrome.commands.getAll = async () => {
+      throw new Error('commands unavailable');
+    };
+    const threw = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'getAll throw is an empty shortcut, not ok:false',
+      threw.ok === true && threw.shortcut === '',
+      JSON.stringify(threw),
+    );
+    globalThis.chrome.commands.getAll = originalGetAll;
+
+    delete globalThis.chrome.commands.getAll;
+    const noFn = await handleMessage({ type: 'audioMode.shortcut' });
+    t.check(
+      'missing getAll is an empty shortcut',
+      noFn.ok === true && noFn.shortcut === '',
+      JSON.stringify(noFn),
+    );
   } finally {
     cmdMock.restore();
   }

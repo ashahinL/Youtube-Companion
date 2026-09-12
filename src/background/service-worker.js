@@ -506,6 +506,8 @@ export async function handleMessage(msg, _sender) {
         await refreshBadge();
         return await collectState();
       }
+      case 'audioMode.shortcut':
+        return await readAudioModeShortcut();
       case 'importBackup': {
         const raw = msg.data;
         let text;
@@ -598,6 +600,27 @@ onSettingsChanged(() => {
   syncAlarms().catch(() => {});
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
+
+/**
+ * The real binding, not suggested_key. Chrome registers the command with
+ * an empty shortcut when the combination is already taken.
+ */
+async function readAudioModeShortcut() {
+  const api = chromeApi();
+  const getAll = api?.commands?.getAll;
+  if (typeof getAll !== 'function') return { ok: true, shortcut: '' };
+  try {
+    const list = await getAll.call(api.commands);
+    const found = (Array.isArray(list) ? list : []).find(
+      (c) => c && c.name === AUDIO_TOGGLE_COMMAND,
+    );
+    const raw = found && found.shortcut;
+    const shortcut = typeof raw === 'string' ? raw.trim() : '';
+    return { ok: true, shortcut };
+  } catch {
+    return { ok: true, shortcut: '' };
+  }
+}
 
 /**
  * Scoped to the active tab on purpose. Targeting another YouTube tab

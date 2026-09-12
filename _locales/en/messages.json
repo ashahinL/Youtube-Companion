@@ -502,5 +502,23 @@
   "cmdToggleAudioMode": {
     "message": "Toggle audio mode",
     "description": "Keyboard command that pins or unpins 144p audio mode on the active YouTube tab. Chrome may register it with no shortcut if the suggested key is already taken."
+  },
+  "overlayTitle": {
+    "message": "Audio-only playback",
+    "description": "Title on the in-page overlay while audio mode is covering the video."
+  },
+  "overlayExit": {
+    "message": "Exit audio mode",
+    "description": "Label of the overlay button that turns audio mode off, used when no keyboard shortcut is bound."
+  },
+  "overlayExitShortcut": {
+    "message": "Press $SHORTCUT$ to exit",
+    "description": "Label of the overlay button that turns audio mode off, used when a keyboard shortcut is bound. $SHORTCUT$ is the bound combination such as Alt+Shift+A.",
+    "placeholders": {
+      "shortcut": {
+        "content": "$1",
+        "example": "Alt+Shift+A"
+      }
+    }
   }
 }

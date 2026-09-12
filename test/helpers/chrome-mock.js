@@ -59,6 +59,7 @@ export function installChromeMock(initial = {}) {
     tabsCreated: [],
     messagesSent: [],
     commandListeners: [],
+    commandList: [{ name: 'toggle-audio-mode', shortcut: '' }],
     activeTab: null,
     dnrRules: [],
     dnrUpdates: [],
@@ -229,6 +230,9 @@ export function installChromeMock(initial = {}) {
     },
 
     commands: {
+      async getAll() {
+        return (handle.commandList || []).map((c) => ({ ...c }));
+      },
       onCommand: {
         addListener(fn) {
           if (typeof fn === 'function') handle.commandListeners.push(fn);

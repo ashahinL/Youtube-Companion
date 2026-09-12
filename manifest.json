@@ -52,7 +52,11 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["src/content/inject.js"],
+      "resources": [
+        "src/content/inject.js",
+        "_locales/en/messages.json",
+        "_locales/ar/messages.json"
+      ],
       "matches": ["https://www.youtube.com/*"]
     }
   ]

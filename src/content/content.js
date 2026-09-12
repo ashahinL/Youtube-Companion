@@ -113,6 +113,203 @@
     return { kind: 'preset', preset: preset.name, from: preset.from, to: preset.to };
   }
 
+  function escapeRe(s) {
+    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Same rule as lib/i18n.js resolveLocale. Copied because content scripts
+  // cannot import, and chrome.i18n.getMessage follows the browser language.
+  function resolveLocale(setting, navigatorLanguage) {
+    if (setting === 'en' || setting === 'ar') return setting;
+    const lang = String(navigatorLanguage || '').toLowerCase();
+    return lang.startsWith('ar') ? 'ar' : 'en';
+  }
+
+  function localeFromSettings(settings, navigatorLanguage) {
+    const ui = settings && typeof settings === 'object' ? settings.ui : null;
+    const setting = ui && typeof ui === 'object' ? ui.locale : null;
+    return resolveLocale(setting, navigatorLanguage);
+  }
+
+  function navigatorLanguage() {
+    try {
+      const nav = root.navigator;
+      return (nav && nav.language) || '';
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function messageOf(json, key, substitutions) {
+    if (!json || typeof json !== 'object') return '';
+    const entry = json[key];
+    if (!entry || typeof entry.message !== 'string') return '';
+    let msg = entry.message;
+    const placeholders = entry.placeholders;
+    if (placeholders && typeof placeholders === 'object') {
+      for (const name of Object.keys(placeholders)) {
+        const spec = placeholders[name];
+        const content = spec && spec.content != null ? String(spec.content) : '';
+        msg = msg.replace(new RegExp('\\$' + escapeRe(name) + '\\$', 'gi'), content);
+      }
+    }
+    const subs = substitutions == null ? [] : [].concat(substitutions);
+    return msg
+      .replace(/\$(\d+)\$/g, function (_, n) {
+        const idx = Number(n) - 1;
+        return idx >= 0 && idx < subs.length ? String(subs[idx]) : '';
+      })
+      .replace(/\$(\d+)/g, function (_, n) {
+        const idx = Number(n) - 1;
+        return idx >= 0 && idx < subs.length ? String(subs[idx]) : '';
+      });
+  }
+
+  function boundShortcut(value) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  function exitLabel(messages, shortcut) {
+    const bound = boundShortcut(shortcut);
+    if (bound) return messageOf(messages, 'overlayExitShortcut', [bound]);
+    return messageOf(messages, 'overlayExit');
+  }
+
+  function overlayCopy(settings, messages, shortcut, navigatorLanguageValue) {
+    const locale = localeFromSettings(settings, navigatorLanguageValue);
+    return {
+      locale: locale,
+      dir: locale === 'ar' ? 'rtl' : 'ltr',
+      title: messageOf(messages, 'overlayTitle'),
+      exit: exitLabel(messages, shortcut),
+    };
+  }
+
+  const overlayMessages = new Map();
+  let shortcutOnce = null;
+
+  async function loadOverlayMessages(locale) {
+    const loc = locale === 'ar' ? 'ar' : 'en';
+    if (overlayMessages.has(loc)) return overlayMessages.get(loc);
+    const pending = (async function () {
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.getURL !== 'function') return null;
+      const url = ch.runtime.getURL('_locales/' + loc + '/messages.json');
+      const res = await fetch(url);
+      return await res.json();
+    })();
+    overlayMessages.set(loc, pending);
+    try {
+      const json = await pending;
+      if (!json || typeof json !== 'object') {
+        overlayMessages.delete(loc);
+        return null;
+      }
+      overlayMessages.set(loc, json);
+      return json;
+    } catch (err) {
+      overlayMessages.delete(loc);
+      return null;
+    }
+  }
+
+  // Once per page: the binding does not change while this script lives, and
+  // suggested_key is not a substitute for what Chrome actually registered.
+  function requestAudioModeShortcut() {
+    if (shortcutOnce) return shortcutOnce;
+    shortcutOnce = (async function () {
+      try {
+        const ch = root.chrome;
+        if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return '';
+        const res = await ch.runtime.sendMessage({ type: 'audioMode.shortcut' });
+        if (!res || res.ok === false) return '';
+        return boundShortcut(res.shortcut);
+      } catch (err) {
+        return '';
+      }
+    })();
+    return shortcutOnce;
+  }
+
+  const OVERLAY_ICON_SVG =
+    '<svg class="ytc-audio-icon" viewBox="0 0 48 48" aria-hidden="true" focusable="false">' +
+    '<path fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M8 24a16 16 0 0 1 32 0"/>' +
+    '<path fill="currentColor" d="M8 24v8.5A4.5 4.5 0 0 0 12.5 37h2A3.5 3.5 0 0 0 18 33.5V27a3 3 0 0 0-3-3H8z"/>' +
+    '<path fill="currentColor" d="M40 24v8.5A4.5 4.5 0 0 1 35.5 37h-2A3.5 3.5 0 0 1 30 33.5V27a3 3 0 0 1 3-3h7z"/>' +
+    '</svg>';
+
+  function stopFaceEvent(ev) {
+    try {
+      if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function onFaceExit(ev) {
+    stopFaceEvent(ev);
+    try {
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    } catch (err) {
+      // swallow
+    }
+    toggle();
+  }
+
+  function ensureFace(el) {
+    if (!el || typeof el.querySelector !== 'function') return;
+    if (el.querySelector('.ytc-audio-face')) return;
+    const face = document.createElement('div');
+    face.className = 'ytc-audio-face';
+    face.innerHTML = OVERLAY_ICON_SVG +
+      '<p class="ytc-audio-title"></p>' +
+      '<button type="button" class="ytc-audio-exit"></button>';
+    const btn = face.querySelector('.ytc-audio-exit');
+    if (btn) {
+      btn.addEventListener('click', onFaceExit);
+      btn.addEventListener('mousedown', stopFaceEvent);
+      btn.addEventListener('dblclick', stopFaceEvent);
+    }
+    el.appendChild(face);
+  }
+
+  async function paintFace(el, settings) {
+    if (!el) return;
+    const nav = navigatorLanguage();
+    const locale = localeFromSettings(settings, nav);
+    try {
+      el.setAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      el.setAttribute('lang', locale);
+    } catch (err) {
+      // swallow
+    }
+    const messages = await loadOverlayMessages(locale);
+    const shortcut = await requestAudioModeShortcut();
+    let node = null;
+    try { node = document.getElementById(OVERLAY_ID); } catch (err) { node = null; }
+    if (!node || node !== el) return;
+    const copy = overlayCopy(settings, messages, shortcut, nav);
+    try {
+      node.setAttribute('dir', copy.dir);
+      node.setAttribute('lang', copy.locale);
+      const title = node.querySelector('.ytc-audio-title');
+      const btn = node.querySelector('.ytc-audio-exit');
+      if (title) title.textContent = copy.title;
+      if (btn) btn.textContent = copy.exit;
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function scheduleOverlayPaint(el) {
+    readStoredSettings().then(function (settings) {
+      const node = document.getElementById(OVERLAY_ID);
+      if (!node) return;
+      applyLook(node, overlayLookFromSettings(settings));
+      paintFace(node, settings);
+    });
+  }
+
   function mergeAudioStats(stored, delta, now) {
     const listenedIn = stored && stored.listened && typeof stored.listened === 'object'
       ? stored.listened
@@ -315,13 +512,11 @@
       el = document.createElement('div');
       el.id = OVERLAY_ID;
       el.className = 'ytc-audio-overlay';
-      el.setAttribute('aria-hidden', 'true');
       parent.appendChild(el);
     }
-    readStoredSettings().then(function (settings) {
-      const node = document.getElementById(OVERLAY_ID);
-      if (node) applyLook(node, overlayLookFromSettings(settings));
-    });
+    try { el.removeAttribute('aria-hidden'); } catch (err) { /* swallow */ }
+    ensureFace(el);
+    scheduleOverlayPaint(el);
     return el;
   }
 
@@ -442,6 +637,7 @@
       const el = document.getElementById(OVERLAY_ID);
       if (!el) return;
       applyLook(el, overlayLookFromSettings(changes.settings.newValue));
+      paintFace(el, changes.settings.newValue);
     }
     try {
       ch.storage.onChanged.addListener(onChange);
@@ -655,6 +851,12 @@
     persistAudioStats,
     applyLook,
     findOverlayParent,
+    resolveLocale,
+    localeFromSettings,
+    messageOf,
+    boundShortcut,
+    exitLabel,
+    overlayCopy,
   };
 
   // Named API is for the Node suite only. A youtube.com script that can

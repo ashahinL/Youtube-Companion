@@ -90,6 +90,16 @@ const warHit = warList.some((entry) => (
 if (warHit) ok('inject.js is web-accessible on youtube.com');
 else bad('web_accessible_resources does not expose inject.js on youtube.com');
 
+const localeWar = warList.some((entry) => (
+  Array.isArray(entry.resources)
+  && entry.resources.includes('_locales/en/messages.json')
+  && entry.resources.includes('_locales/ar/messages.json')
+  && Array.isArray(entry.matches)
+  && entry.matches.includes('https://www.youtube.com/*')
+));
+if (localeWar) ok('locale files are web-accessible on youtube.com');
+else bad('web_accessible_resources does not expose _locales/{en,ar}/messages.json on youtube.com');
+
 /* ---- source parses -------------------------------------------------- */
 console.log('\nsyntax');
 function walk(dir) {
