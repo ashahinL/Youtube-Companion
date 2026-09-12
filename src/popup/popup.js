@@ -253,9 +253,58 @@ function openChannelSheet(id) {
 
 function closeChannelSheet() {
   if (!view.sheetId) return;
+  // render() throws the opener button away, so hand its channel id on and
+  // find the replacement afterwards.
+  const returnId = view.sheetId;
   view.sheetId = null;
   view.sheetError = '';
   render();
+  focusSheetOpener(returnId);
+}
+
+function focusSheetOpener(channelId) {
+  if (channelId) {
+    const openers = document.querySelectorAll('.channel-row__main, .feed-row__channel');
+    for (const el of openers) {
+      if (el.dataset.channelId !== channelId) continue;
+      if (el.closest('[hidden]')) continue;
+      el.focus();
+      return;
+    }
+  }
+  tabs.find((el) => el.getAttribute('aria-selected') === 'true')?.focus?.();
+}
+
+function sheetFocusables() {
+  const panel = document.querySelector('#channel-sheet .sheet__panel');
+  if (!panel) return [];
+  // render() rebuilds the video list, so a cached node list would point
+  // at elements that are no longer in the document.
+  return [...panel.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )].filter((el) => !el.closest('[hidden]'));
+}
+
+function trapSheetTab(event) {
+  if (event.key !== 'Tab' || !view.sheetId) return;
+  const items = sheetFocusables();
+  if (!items.length) {
+    event.preventDefault();
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  const inCycle = items.includes(active);
+  if (event.shiftKey) {
+    if (!inCycle || active === first) {
+      event.preventDefault();
+      last.focus();
+    }
+  } else if (!inCycle || active === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function channelRow(ch, locale) {
@@ -266,6 +315,7 @@ function channelRow(ch, locale) {
   const main = document.createElement('button');
   main.type = 'button';
   main.className = 'channel-row__main';
+  main.dataset.channelId = ch.id;
   main.setAttribute('aria-label', t('watchlistOpenChannel', [title]));
   main.addEventListener('click', () => openChannelSheet(ch.id));
   main.appendChild(avatarEl(ch.avatar));
@@ -309,6 +359,7 @@ function closeAllMenus() {
   for (const list of document.querySelectorAll('.menu__list')) {
     if (!list.hidden) closed = true;
     list.hidden = true;
+    list.classList.remove('menu__list--above');
   }
   for (const toggle of document.querySelectorAll('.menu__toggle')) {
     toggle.setAttribute('aria-expanded', 'false');
@@ -329,8 +380,15 @@ function channelMenu(ch) {
     const willOpen = list.hidden;
     closeAllMenus();
     if (willOpen) {
+      list.classList.remove('menu__list--above');
       list.hidden = false;
       toggle.setAttribute('aria-expanded', 'true');
+      // The popup itself is the scrollport; an absolute list that
+      // overflows it has nothing to scroll it into view.
+      const rect = list.getBoundingClientRect();
+      if (rect.bottom > window.innerHeight) {
+        list.classList.add('menu__list--above');
+      }
     }
   });
   toggle.title = t('watchlistActions');
@@ -429,6 +487,7 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
       const chBtn = document.createElement('button');
       chBtn.type = 'button';
       chBtn.className = 'feed-row__channel';
+      chBtn.dataset.channelId = channel.id;
       chBtn.textContent = channelName;
       chBtn.setAttribute('aria-label', t('watchlistOpenChannel', [channelName]));
       chBtn.addEventListener('click', (event) => {
@@ -522,16 +581,17 @@ function renderFeeds(locale) {
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
   const favBox = document.getElementById('feed-favorites-only');
 
-  const locked = view.busy || view.sweeping;
+  const sweeping = view.sweeping || !!view.pollState?.running;
+  const locked = view.busy || sweeping;
   refreshBtn.disabled = locked;
-  refreshBtn.hidden = view.sweeping;
+  refreshBtn.hidden = sweeping;
   if (emptyRefresh) emptyRefresh.disabled = locked;
   if (addSpinner) addSpinner.hidden = !view.busy;
-  spinner.hidden = !view.sweeping;
+  spinner.hidden = !sweeping;
   form.classList.toggle('is-busy', view.busy);
   form.setAttribute('aria-busy', view.busy ? 'true' : 'false');
-  statusEl.classList.toggle('is-busy', view.sweeping);
-  statusEl.setAttribute('aria-busy', view.sweeping ? 'true' : 'false');
+  statusEl.classList.toggle('is-busy', sweeping);
+  statusEl.setAttribute('aria-busy', sweeping ? 'true' : 'false');
   refreshBtn.setAttribute('aria-label', t('feedRefresh'));
   refreshBtn.title = t('feedRefresh');
 
@@ -710,8 +770,12 @@ function renderChannelSheet() {
   const id = view.sheetId;
   const ch = id ? view.channels.find((c) => c.id === id) : null;
   if (!id || !ch) {
+    const wasShown = !sheet.hidden;
     view.sheetId = null;
     sheet.hidden = true;
+    // The channel went away while its sheet was open, so closeChannelSheet
+    // never ran and focus is sitting inside a panel that just vanished.
+    if (wasShown && id) focusSheetOpener(id);
     return;
   }
 
@@ -742,7 +806,7 @@ function renderChannelSheet() {
     avatarPh.hidden = false;
   }
 
-  const locked = view.sweeping;
+  const locked = view.sweeping || !!view.pollState?.running;
   refreshBtn.disabled = locked;
   refreshBtn.hidden = locked;
   spinner.hidden = !locked;
@@ -769,6 +833,12 @@ function renderChannelSheet() {
   const hasItems = items.length > 0;
   listEl.hidden = !hasItems;
   emptyEl.hidden = locked || hasItems;
+
+  const itemsNow = sheetFocusables();
+  if (!itemsNow.includes(document.activeElement)) {
+    // The focused video row was rebuilt, or ↻ was hidden under focus.
+    document.getElementById('channel-sheet-close')?.focus?.();
+  }
 }
 
 function renderSettings(locale) {
@@ -1190,6 +1260,10 @@ function bindChannelSheet() {
     if (event.target === sheet) closeChannelSheet();
   });
   document.addEventListener('keydown', (event) => {
+    if (event.key === 'Tab') {
+      trapSheetTab(event);
+      return;
+    }
     if (event.key !== 'Escape') return;
     if (closeAllMenus()) {
       event.preventDefault();

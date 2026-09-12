@@ -403,6 +403,14 @@ body {
   box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
 }
 
+/* Near the bottom of the popup the list would paint past the viewport,
+ * and nothing scrolls it into view — the page must not be a scroll
+ * container. Flip it above the toggle instead. */
+.menu__list--above {
+  inset-block-start: auto;
+  inset-block-end: calc(100% + 4px);
+}
+
 .menu__item {
   padding-block: 7px;
   padding-inline: 9px;

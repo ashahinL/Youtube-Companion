@@ -82,6 +82,12 @@ export default async function run(t) {
   t.check('has list container', /id="watchlist-list"/.test(w));
   t.check('has a clear control', /id="watchlist-clear"/.test(w));
   t.check('has a local-filter count', /id="watchlist-count"/.test(w));
+  const watchEmptyTag = html.match(/<[^>]*\bid="watchlist-empty"[^>]*>/);
+  t.check(
+    'watchlist-empty starts hidden',
+    !!watchEmptyTag && /\bhidden\b/.test(watchEmptyTag[0]),
+    watchEmptyTag ? watchEmptyTag[0] : 'missing',
+  );
   t.check('has no YouTube search-results list', !/id="watchlist-results"/.test(w));
   t.check(
     'popup does not search YouTube by name',
@@ -127,6 +133,26 @@ export default async function run(t) {
     'Escape closes an open menu before the sheet',
     /if \(closeAllMenus\(\)\)/.test(js),
   );
+  t.check(
+    'menu flip class exists in CSS and JS',
+    /menu__list--above/.test(css) && /menu__list--above/.test(js),
+  );
+  const flipRule = css.match(/\.menu__list--above\s*\{[^}]*\}/);
+  t.check('menu flip rule exists', !!flipRule, 'missing .menu__list--above');
+  t.check(
+    'menu flip uses inset-block-end',
+    !!flipRule && /inset-block-end:\s*calc\(100% \+ 4px\)/.test(flipRule[0]),
+    flipRule ? flipRule[0] : '',
+  );
+  t.check(
+    'menu flip clears inset-block-start',
+    !!flipRule && /inset-block-start:\s*auto/.test(flipRule[0]),
+    flipRule ? flipRule[0] : '',
+  );
+  t.check(
+    'menu measures after the list is visible',
+    /getBoundingClientRect/.test(js) && /innerHeight/.test(js),
+  );
 
   t.section('feeds');
 
@@ -165,7 +191,15 @@ export default async function run(t) {
   t.check('a successful add shows channelAdded', /channelAdded/.test(js) && /banner--ok/.test(html));
   t.check(
     'reload hides while its spinner runs',
-    /refreshBtn\.hidden = view\.sweeping/.test(js) && /refreshBtn\.hidden = locked/.test(js),
+    /refreshBtn\.hidden = sweeping/.test(js) && /refreshBtn\.hidden = locked/.test(js),
+  );
+  t.check(
+    'render treats pollState.running as sweeping',
+    (js.match(/view\.sweeping \|\| !!view\.pollState\?\.running/g) || []).length >= 2,
+  );
+  t.check(
+    'requestSweep does not assign pollState.running into view.sweeping',
+    !/view\.sweeping\s*=\s*[^\n]*pollState/.test(js),
   );
   t.check('has a favourites-only checkbox', /id="feed-favorites-only"/.test(f));
   t.check(
@@ -191,6 +225,12 @@ export default async function run(t) {
       emptyIds.includes('feed-empty-filter') &&
       emptyIds.includes('feed-empty-favorites'),
     JSON.stringify(emptyIds),
+  );
+  const feedEmptyTag = html.match(/<[^>]*\bid="feed-empty-no-channels"[^>]*>/);
+  t.check(
+    'feed-empty-no-channels starts hidden',
+    !!feedEmptyTag && /\bhidden\b/.test(feedEmptyTag[0]),
+    feedEmptyTag ? feedEmptyTag[0] : 'missing',
   );
 
   t.section('settings');
@@ -382,6 +422,33 @@ export default async function run(t) {
   t.check(
     'sheet is position fixed',
     /\.sheet\s*\{[^}]*position:\s*fixed/.test(css),
+  );
+  t.check(
+    'sheet traps Tab inside the panel',
+    /function trapSheetTab/.test(js)
+      && /function sheetFocusables/.test(js)
+      && /sheet__panel/.test(js),
+  );
+  t.check(
+    'sheet focusables are queried on the key, not cached',
+    /function trapSheetTab/.test(js) && /sheetFocusables\(\)/.test(js),
+  );
+  t.check(
+    'watchlist opener sets data-channel-id',
+    /channel-row__main[\s\S]{0,120}dataset\.channelId/.test(js),
+  );
+  t.check(
+    'feed opener sets data-channel-id',
+    /feed-row__channel[\s\S]{0,120}dataset\.channelId/.test(js),
+  );
+  t.check(
+    'closing the sheet restores focus to the opener',
+    /function closeChannelSheet/.test(js) && /focusSheetOpener/.test(js),
+  );
+  t.check(
+    'missing opener falls back to the active tab',
+    /function focusSheetOpener/.test(js)
+      && /getAttribute\(\s*'aria-selected'\s*\)/.test(js),
   );
 
   t.section('message types');
