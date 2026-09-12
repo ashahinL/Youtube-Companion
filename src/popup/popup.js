@@ -279,7 +279,20 @@ function channelRow(ch, locale) {
 
   const text = document.createElement('div');
   text.className = 'channel-row__text';
-  text.appendChild(textEl('span', 'channel-row__title', title));
+
+  const name = document.createElement('div');
+  name.className = 'channel-row__name';
+  name.appendChild(textEl('span', 'channel-row__title', title));
+  if (ch.favorite) {
+    const star = textEl('span', 'channel-row__fav', '\u2605');
+    // Sorting already floats favourites, but order alone does not say why a
+    // row is where it is, and a filtered list has no order to read.
+    star.setAttribute('role', 'img');
+    star.setAttribute('aria-label', t('watchlistFavorite'));
+    star.title = t('watchlistFavorite');
+    name.appendChild(star);
+  }
+  text.appendChild(name);
 
   const meta = document.createElement('div');
   meta.className = 'channel-row__meta';

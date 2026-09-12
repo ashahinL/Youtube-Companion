@@ -129,6 +129,10 @@
     "message": "أضف إلى المفضلة",
     "description": "Menu item that marks the channel as a favourite."
   },
+  "watchlistFavorite": {
+    "message": "مفضّلة",
+    "description": "Marks a channel row as a favourite"
+  },
   "watchlistFavoriteRemove": {
     "message": "أزل من المفضلة",
     "description": "Menu item that unmarks the channel as a favourite."

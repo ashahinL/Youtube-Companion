@@ -65,6 +65,18 @@ html {
   width: 400px;
 }
 
+.appbar {
+  padding-block: 11px 7px;
+  padding-inline: 12px;
+}
+
+.appbar__name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 body {
   width: 400px;
   margin: 0;
@@ -322,12 +334,28 @@ body {
   min-width: 0;
 }
 
+/* The star keeps its width while the title ellipsises, so the name is its own
+ * flex row. Inside the title, the star would be clipped away with the text. */
+.channel-row__name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .channel-row__title {
   display: block;
   overflow: hidden;
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.channel-row__fav {
+  flex: none;
+  color: var(--tag-premiere);
+  font-size: 11px;
+  line-height: 1;
 }
 
 .channel-row__meta {

@@ -73,6 +73,18 @@ export default async function run(t) {
     );
   }
 
+  t.section('app bar');
+
+  const barAt = html.indexOf('class="appbar"');
+  const navAt = html.indexOf('<nav class="tabs"');
+  t.check('an app bar exists', barAt >= 0);
+  t.check('the app bar sits above the tabs', barAt >= 0 && navAt > barAt, `${barAt} ${navAt}`);
+  t.check(
+    'the app bar shows the extension name, not a hardcoded string',
+    /<h1[^>]*\bdata-i18n="extName"/.test(html),
+  );
+  t.check('the app bar is styled', /\.appbar\s*\{/.test(css) && /\.appbar__name\s*\{/.test(css));
+
   t.section('watchlist');
 
   const watchlist = html.match(/<section\b[^>]*\bid="watchlist"[^>]*>[\s\S]*?<\/section>/);
@@ -83,6 +95,18 @@ export default async function run(t) {
   t.check('has list container', /id="watchlist-list"/.test(w));
   t.check('has a clear control', /id="watchlist-clear"/.test(w));
   t.check('has a local-filter count', /id="watchlist-count"/.test(w));
+  t.check(
+    'a favourite row is marked, not left to sort order alone',
+    /ch\.favorite/.test(js) && /channel-row__fav/.test(js) && /channel-row__fav\s*\{/.test(css),
+  );
+  t.check(
+    'the favourite mark carries an accessible name',
+    /channel-row__fav[\s\S]{0,240}watchlistFavorite/.test(js),
+  );
+  t.check(
+    'the title keeps its own row so it can still ellipsis beside the mark',
+    /channel-row__name/.test(js) && /\.channel-row__name\s*\{[^}]*display:\s*flex/.test(css),
+  );
   const watchEmptyTag = html.match(/<[^>]*\bid="watchlist-empty"[^>]*>/);
   t.check(
     'watchlist-empty starts hidden',
