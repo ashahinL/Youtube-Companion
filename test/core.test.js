@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const src = fs.readFileSync(path.join(ROOT, 'src/content/core.js'), 'utf8');
-const sandbox = { URL };
+const sandbox = { URL, __ytcHarness: true };
 vm.createContext(sandbox);
 vm.runInContext(src, sandbox, { filename: 'src/content/core.js' });
 const core = sandbox.AudioModeCore;
@@ -36,6 +36,14 @@ export default async function run(t) {
   t.section('classic-script load');
 
   t.check('core.js loads as a plain browser script and attaches its global', !!sandbox.AudioModeCore);
+
+  const bare = { URL };
+  vm.createContext(bare);
+  vm.runInContext(src, bare, { filename: 'src/content/core.js' });
+  t.check(
+    'core.js attaches AudioModeCore without the harness (content.js reads it in the isolated world)',
+    !!bare.AudioModeCore && typeof bare.AudioModeCore.dayKey === 'function',
+  );
   t.check('dayKey is a function', typeof sandbox.AudioModeCore.dayKey === 'function');
   t.check('createStatsAccumulator is a function', typeof sandbox.AudioModeCore.createStatsAccumulator === 'function');
   t.check('pickTargetTab is a function', typeof sandbox.AudioModeCore.pickTargetTab === 'function');

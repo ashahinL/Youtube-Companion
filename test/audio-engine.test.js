@@ -20,7 +20,7 @@ const overlayCss = read('src/content/overlay.css');
 
 const PAGE = 'https://www.youtube.com';
 
-function loadBridge(player) {
+function loadBridge(player, opts) {
   const posts = [];
   const sandbox = {
     URL,
@@ -37,6 +37,7 @@ function loadBridge(player) {
       },
     },
   };
+  if (!opts || opts.harness !== false) sandbox.__ytcHarness = true;
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   vm.runInContext(injectSrc, sandbox, { filename: 'src/content/inject.js' });
@@ -52,8 +53,9 @@ function loadBridge(player) {
   return { sandbox, win, fire, posts, bridge: sandbox.AudioModeBridge };
 }
 
-function loadEngine(chrome) {
+function loadEngine(chrome, opts) {
   const sandbox = { URL, chrome };
+  if (!opts || opts.harness !== false) sandbox.__ytcHarness = true;
   vm.createContext(sandbox);
   vm.runInContext(coreSrc, sandbox, { filename: 'src/content/core.js' });
   vm.runInContext(contentSrc, sandbox, { filename: 'src/content/content.js' });
@@ -279,6 +281,10 @@ export default async function run(t) {
     t.check(`overlay.css declares ${name} to ${to}`, overlayCss.includes(to));
   }
   t.check('overlay.css scopes rules to #ytc-audio-overlay', overlayCss.includes('#ytc-audio-overlay'));
+  t.check(
+    'overlay z-index stays 10 so player controls remain above it',
+    /z-index:\s*10;/.test(overlayCss),
+  );
 
   t.section('overlay look from settings');
 
@@ -404,4 +410,92 @@ export default async function run(t) {
   } finally {
     cmdMock.restore();
   }
+
+  t.section('suite APIs stay off the page global');
+
+  const quietBridge = loadBridge(player, { harness: false });
+  t.check('inject.js does not attach AudioModeBridge without the harness', quietBridge.bridge === undefined);
+  t.check('double-install guard is set without the API object', quietBridge.sandbox.__ytcAudioBridgeInstalled === true);
+  const listenersOnce = (quietBridge.sandbox._listeners || quietBridge.win._listeners || []).length;
+  vm.runInContext(injectSrc, quietBridge.sandbox, { filename: 'src/content/inject.js' });
+  const listenersTwice = (quietBridge.sandbox._listeners || quietBridge.win._listeners || []).length;
+  t.check(
+    'second inject.js is a no-op when the API object is absent',
+    listenersTwice === listenersOnce && listenersOnce === 1,
+    String(listenersTwice),
+  );
+
+  const quietEngine = loadEngine(undefined, { harness: false });
+  t.check('content.js does not attach AudioModeContent without the harness', quietEngine.engine === undefined);
+  t.check(
+    'core.js still attaches AudioModeCore (content.js reads it in the isolated world)',
+    !!quietEngine.core && typeof quietEngine.core.dayKey === 'function',
+  );
+
+  t.section('overlay parent');
+
+  const container = { className: 'html5-video-container' };
+  const moviePlayer = {
+    querySelector(sel) {
+      return sel === '.html5-video-container' ? container : null;
+    },
+  };
+  const overlayBox = {
+    __ytcHarness: true,
+    URL,
+    chrome: {},
+    document: {
+      getElementById(id) {
+        return id === 'movie_player' ? moviePlayer : null;
+      },
+    },
+  };
+  vm.createContext(overlayBox);
+  vm.runInContext(coreSrc, overlayBox, { filename: 'src/content/core.js' });
+  vm.runInContext(contentSrc, overlayBox, { filename: 'src/content/content.js' });
+  t.check(
+    'overlay hangs off #movie_player, not .html5-video-container',
+    overlayBox.AudioModeContent.findOverlayParent() === moviePlayer,
+  );
+
+  t.section('boot beacon, no bridge');
+
+  const html = { dataset: {} };
+  const injected = [];
+  html.appendChild = function (el) {
+    injected.push(el);
+    return el;
+  };
+  const head = {
+    appendChild(el) {
+      injected.push(el);
+      return el;
+    },
+  };
+  const bootBox = {
+    __ytcHarness: true,
+    URL,
+    chrome: {
+      runtime: {
+        id: 'test-id',
+        getURL(p) { return 'chrome-extension://test/' + p; },
+        onMessage: { addListener() {} },
+      },
+    },
+    document: {
+      documentElement: html,
+      head,
+      createElement(tag) {
+        return { tagName: tag, src: '', parentNode: null, onload: null, onerror: null };
+      },
+      getElementById() { return null; },
+    },
+    addEventListener() {},
+  };
+  bootBox.window = bootBox;
+  vm.createContext(bootBox);
+  vm.runInContext(coreSrc, bootBox, { filename: 'src/content/core.js' });
+  vm.runInContext(contentSrc, bootBox, { filename: 'src/content/content.js' });
+  t.check('boot sets the DOM beacon', html.dataset.amBeacon === 'loaded', String(html.dataset.amBeacon));
+  t.check('boot does not inject the MAIN-world bridge', injected.length === 0, String(injected.length));
 }

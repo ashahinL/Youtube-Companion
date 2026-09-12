@@ -294,10 +294,16 @@
     }
   }
 
+  // .html5-video-container is 1879×0 on a live watch page: its <video>
+  // child is position:absolute, so the box has no in-flow height. The
+  // overlay is inset:0, so hanging it there paints nothing. #movie_player
+  // is the positioning context that actually has size (1879×995).
   function findOverlayParent() {
-    const player = document.getElementById('movie_player');
-    if (!player) return null;
-    return player.querySelector('.html5-video-container') || player;
+    try {
+      return document.getElementById('movie_player');
+    } catch (err) {
+      return null;
+    }
   }
 
   function ensureOverlay() {
@@ -609,6 +615,8 @@
   }
 
   function boot() {
+    // Isolated-world console is not the page console. This attribute is
+    // how you prove which content-script revision is live after a reload.
     try {
       document.documentElement.dataset.amBeacon = 'loaded';
     } catch (err) {
@@ -620,7 +628,6 @@
     } catch (err) {
       // swallow
     }
-    ensureBridge();
     const ch = root.chrome;
     if (ch && ch.runtime && ch.runtime.onMessage && ch.runtime.onMessage.addListener) {
       ch.runtime.onMessage.addListener(function (msg, _sender, sendResponse) {
@@ -647,16 +654,21 @@
     mergeAudioStats,
     persistAudioStats,
     applyLook,
+    findOverlayParent,
   };
 
-  try {
-    Object.defineProperty(root, 'AudioModeContent', {
-      value: api,
-      enumerable: false,
-      configurable: true,
-    });
-  } catch (err) {
-    root.AudioModeContent = api;
+  // Named API is for the Node suite only. A youtube.com script that can
+  // read AudioModeContent would know this extension is installed.
+  if (root.__ytcHarness) {
+    try {
+      Object.defineProperty(root, 'AudioModeContent', {
+        value: api,
+        enumerable: false,
+        configurable: true,
+      });
+    } catch (err) {
+      root.AudioModeContent = api;
+    }
   }
 
   if (shouldBoot()) boot();

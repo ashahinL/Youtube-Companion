@@ -356,7 +356,7 @@
     return null;
   }
 
-  root.AudioModeCore = {
+  const api = {
     DATA_RATES,
     dayKey,
     monthKey,
@@ -376,4 +376,8 @@
     pickTargetTab,
     sanitizeImageUrl,
   };
+
+  // content.js is next in the isolated-world js list and cannot import.
+  // YouTube's own scripts cannot see this world.
+  root.AudioModeCore = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

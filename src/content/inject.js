@@ -9,6 +9,7 @@
   'use strict';
 
   // A second copy of this file would double-reply to every request.
+  // AudioModeBridge is suite-only, so this flag is the browser-side guard.
   if (root.__ytcAudioBridgeInstalled) return;
   root.__ytcAudioBridgeInstalled = true;
 
@@ -161,13 +162,18 @@
     onMessage,
   };
 
-  try {
-    Object.defineProperty(root, 'AudioModeBridge', {
-      value: api,
-      enumerable: false,
-      configurable: true,
-    });
-  } catch (err) {
-    root.AudioModeBridge = api;
+  // Named API is for the Node suite only. This file runs in MAIN world,
+  // so a youtube.com script that can read AudioModeBridge would know
+  // this extension is installed.
+  if (root.__ytcHarness) {
+    try {
+      Object.defineProperty(root, 'AudioModeBridge', {
+        value: api,
+        enumerable: false,
+        configurable: true,
+      });
+    } catch (err) {
+      root.AudioModeBridge = api;
+    }
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
