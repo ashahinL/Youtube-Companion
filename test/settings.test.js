@@ -171,6 +171,39 @@ export default async function run(t) {
       }).feed.favoritesOnly === true,
     );
 
+    t.section('clamp: audio.restoreQuality');
+
+    t.check(
+      'audio.restoreQuality defaults to hd720',
+      DEFAULT_SETTINGS.audio.restoreQuality === 'hd720',
+    );
+    const rq = (q) =>
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        audio: { ...DEFAULT_SETTINGS.audio, restoreQuality: q },
+      }).audio.restoreQuality;
+    t.check("restoreQuality 'hd720' is kept", rq('hd720') === 'hd720');
+    t.check("restoreQuality 'hd1080' is kept", rq('hd1080') === 'hd1080');
+    t.check("restoreQuality 'hd1440' is kept", rq('hd1440') === 'hd1440');
+    t.check("restoreQuality 'hd2160' is kept", rq('hd2160') === 'hd2160');
+    t.check("restoreQuality 'highres' is kept", rq('highres') === 'highres');
+    t.check("restoreQuality 'auto' is kept", rq('auto') === 'auto');
+    t.check("restoreQuality 'medium' is kept", rq('medium') === 'medium');
+    t.check("restoreQuality 'large' is kept", rq('large') === 'large');
+    t.check("restoreQuality 'tiny' is kept", rq('tiny') === 'tiny');
+    t.check("restoreQuality 'small' is kept", rq('small') === 'small');
+    t.check("restoreQuality 'unknown' falls back to hd720", rq('unknown') === 'hd720');
+    t.check("restoreQuality '' falls back to hd720", rq('') === 'hd720');
+    t.check('restoreQuality 720 falls back to hd720', rq(720) === 'hd720');
+    t.check(
+      'missing audio group is filled from defaults',
+      clampSettings({ ...DEFAULT_SETTINGS, audio: undefined }).audio.restoreQuality === 'hd720',
+    );
+    t.check(
+      'partial audio merge keeps restoreQuality at default',
+      clampSettings({ audio: {} }).audio.restoreQuality === 'hd720',
+    );
+
     t.section('writeSettings');
 
     await globalThis.chrome.storage.local.clear();

@@ -81,6 +81,140 @@ function req(over) {
   }, over);
 }
 
+function makeEl(tag) {
+  const kids = [];
+  const attrs = {};
+  const node = {
+    tagName: String(tag).toUpperCase(),
+    className: '',
+    innerHTML: '',
+    textContent: '',
+    parentNode: null,
+    style: {
+      backgroundImage: '',
+      setProperty() {},
+      removeProperty() {},
+    },
+    dataset: {},
+    setAttribute(k, v) { attrs[k] = String(v); },
+    getAttribute(k) { return Object.prototype.hasOwnProperty.call(attrs, k) ? attrs[k] : null; },
+    removeAttribute(k) { delete attrs[k]; },
+    querySelector() { return null; },
+    querySelectorAll() { return []; },
+    appendChild(child) {
+      child.parentNode = node;
+      kids.push(child);
+      return child;
+    },
+    removeChild(child) {
+      const i = kids.indexOf(child);
+      if (i >= 0) kids.splice(i, 1);
+      child.parentNode = null;
+      return child;
+    },
+    addEventListener() {},
+  };
+  return node;
+}
+
+async function loadSession(opts) {
+  const chrome = globalThis.chrome;
+  const calls = [];
+  let reported = opts.quality;
+  const video = {
+    currentTime: 0,
+    paused: false,
+    ended: false,
+    addEventListener() {},
+  };
+  const moviePlayer = makeEl('div');
+  moviePlayer.id = 'movie_player';
+  moviePlayer.querySelector = function (sel) {
+    if (sel === 'video.html5-main-video' || sel === 'video') return video;
+    return null;
+  };
+
+  const nodesById = { movie_player: moviePlayer };
+  const html = { dataset: {}, appendChild() { return arguments[0]; } };
+  const head = {
+    appendChild(el) {
+      if (typeof el.onload === 'function') el.onload();
+      return el;
+    },
+  };
+
+  const box = { win: null, listeners: [] };
+  const sandbox = {
+    __ytcHarness: true,
+    URL,
+    chrome,
+    AbortController,
+    setTimeout,
+    clearTimeout,
+    setInterval,
+    clearInterval,
+    location: { href: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' },
+    navigator: { language: 'en-US' },
+    document: {
+      documentElement: html,
+      head,
+      getElementById(id) { return nodesById[id] || null; },
+      createElement(tag) {
+        const el = makeEl(tag);
+        Object.defineProperty(el, 'id', {
+          get() { return el._id || ''; },
+          set(v) {
+            if (el._id) delete nodesById[el._id];
+            el._id = v;
+            if (v) nodesById[v] = el;
+          },
+        });
+        return el;
+      },
+      addEventListener() {},
+    },
+    addEventListener(type, fn) {
+      if (type === 'message') box.listeners.push(fn);
+    },
+    postMessage(data) {
+      if (!data || data.dir !== 'request') return;
+      calls.push([data.method].concat(Array.isArray(data.args) ? data.args : []));
+      let result;
+      if (data.method === 'getPlaybackQuality') result = reported;
+      else if (data.method === 'getAvailableQualityLevels') {
+        result = ['hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
+      } else if (data.method === 'setPlaybackQuality') {
+        reported = data.args && data.args[0];
+      }
+      const event = {
+        source: box.win,
+        origin: PAGE,
+        data: {
+          type: data.type,
+          dir: 'response',
+          id: data.id,
+          ok: true,
+          result: result,
+        },
+      };
+      for (let i = 0; i < box.listeners.length; i++) box.listeners[i](event);
+    },
+  };
+  sandbox.window = undefined;
+  vm.createContext(sandbox);
+  box.win = vm.runInContext('globalThis', sandbox);
+  vm.runInContext(coreSrc, sandbox, { filename: 'src/content/core.js' });
+  vm.runInContext(contentSrc, sandbox, { filename: 'src/content/content.js' });
+  return {
+    engine: sandbox.AudioModeContent,
+    calls,
+    async restoreLastQuality() {
+      const sets = calls.filter((c) => c[0] === 'setPlaybackQuality');
+      return sets.length ? sets[sets.length - 1][1] : undefined;
+    },
+  };
+}
+
 export default async function run(t) {
   t.section('bridge message shape');
 
@@ -251,6 +385,81 @@ export default async function run(t) {
   t.check('accepts a comma-separated string of levels', engine.pickAudioQuality('hd1080,hd720,small') === 'small');
   t.check('does not treat medium as audio quality', engine.pickAudioQuality(['medium', 'large', 'hd720']) === 'tiny');
 
+  t.section('restore quality');
+
+  t.check('hd1080 is restored as captured', engine.restorableQuality('hd1080', 'hd720') === 'hd1080');
+  t.check('hd720 is restored as captured', engine.restorableQuality('hd720', 'hd1080') === 'hd720');
+  t.check('hd2160 is restored as captured', engine.restorableQuality('hd2160', 'hd720') === 'hd2160');
+  t.check('medium is restored as captured', engine.restorableQuality('medium', 'hd720') === 'medium');
+  t.check('auto is restored as captured', engine.restorableQuality('auto', 'hd720') === 'auto');
+  t.check('tiny falls back', engine.restorableQuality('tiny', 'hd720') === 'hd720');
+  t.check('small falls back', engine.restorableQuality('small', 'hd720') === 'hd720');
+  t.check('missing capture falls back', engine.restorableQuality(undefined, 'hd720') === 'hd720');
+  t.check('unrecognised capture falls back', engine.restorableQuality('nope', 'hd720') === 'hd720');
+  t.check('tiny uses a configured fallback', engine.restorableQuality('tiny', 'hd1080') === 'hd1080');
+  t.check(
+    'tiny with a bad fallback uses hd720',
+    engine.restorableQuality('tiny', 'nope') === 'hd720',
+  );
+  t.check(
+    'missing settings fallback is hd720',
+    engine.restoreFallbackFromSettings(null) === 'hd720',
+  );
+  t.check(
+    'settings.audio.restoreQuality is honoured as fallback',
+    engine.restoreFallbackFromSettings({ audio: { restoreQuality: 'hd2160' } }) === 'hd2160',
+  );
+  t.check(
+    'unknown settings.audio.restoreQuality falls back to hd720',
+    engine.restoreFallbackFromSettings({ audio: { restoreQuality: 'nope' } }) === 'hd720',
+  );
+
+  t.section('restore quality through a session');
+
+  async function runRestoreSession(quality, settings) {
+    await globalThis.chrome.storage.local.clear();
+    if (settings) await globalThis.chrome.storage.local.set({ settings });
+    const sess = await loadSession({ quality });
+    try {
+      await sess.engine.enable();
+      await sess.engine.disable();
+      return sess;
+    } catch (err) {
+      try { await sess.engine.disable(); } catch (err2) { /* swallow */ }
+      throw err;
+    }
+  }
+
+  const capturedHd = await runRestoreSession('hd1080');
+  t.check(
+    'a session that captured hd1080 restores to hd1080',
+    (await capturedHd.restoreLastQuality()) === 'hd1080',
+    JSON.stringify(capturedHd.calls),
+  );
+
+  const capturedTiny = await runRestoreSession('tiny');
+  t.check(
+    'a session that captured tiny restores to the fallback',
+    (await capturedTiny.restoreLastQuality()) === 'hd720',
+    JSON.stringify(capturedTiny.calls),
+  );
+
+  const capturedSmall = await runRestoreSession('small');
+  t.check(
+    'a session that captured small restores to the fallback',
+    (await capturedSmall.restoreLastQuality()) === 'hd720',
+    JSON.stringify(capturedSmall.calls),
+  );
+
+  const capturedTinyCustom = await runRestoreSession('tiny', { audio: { restoreQuality: 'hd2160' } });
+  t.check(
+    'a tiny capture uses settings.audio.restoreQuality as fallback',
+    (await capturedTinyCustom.restoreLastQuality()) === 'hd2160',
+    JSON.stringify(capturedTinyCustom.calls),
+  );
+
+  await globalThis.chrome.storage.local.clear();
+
   t.section('preset lookup');
 
   t.check('midnight is the default for missing names', engine.lookupPreset(undefined).name === 'midnight');
@@ -285,6 +494,31 @@ export default async function run(t) {
   t.check(
     'overlay z-index stays 10 so player controls remain above it',
     /z-index:\s*10;/.test(overlayCss),
+  );
+
+  const cssRules = overlayCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  t.check(
+    'overlay rules do not use rem (YouTube html is 10px)',
+    !/[0-9.]rem\b/.test(cssRules),
+    cssRules.match(/[^\n]*[0-9.]rem[^\n]*/g) && cssRules.match(/[^\n]*[0-9.]rem[^\n]*/g).join('\n'),
+  );
+  t.check('icon max is 52px', /clamp\(\s*28px,\s*10vmin,\s*52px\s*\)/.test(cssRules));
+  t.check(
+    'title max is 21.6px',
+    /clamp\(\s*13\.6px,\s*2\.2vmin \+ 6\.4px,\s*21\.6px\s*\)/.test(cssRules),
+  );
+  t.check(
+    'button max is 15.2px',
+    /clamp\(\s*11\.2px,\s*1\.6vmin \+ 5\.6px,\s*15\.2px\s*\)/.test(cssRules),
+  );
+  t.check('vmin halves are unchanged', cssRules.includes('10vmin') && cssRules.includes('2.2vmin') && cssRules.includes('1.6vmin'));
+  t.check(
+    'container title-hide breakpoint is px',
+    cssRules.includes('max-width: 224px') && cssRules.includes('max-height: 144px'),
+  );
+  t.check(
+    'container exit-hide breakpoint is px',
+    cssRules.includes('max-width: 112px') && cssRules.includes('max-height: 80px'),
   );
 
   t.section('overlay look from settings');

@@ -45,6 +45,34 @@
     auto: true,
   };
 
+  function fallbackQuality(fallback) {
+    if (typeof fallback === 'string' && QUALITY_SET[fallback]) return fallback;
+    return DEFAULT_RESTORE;
+  }
+
+  function restoreFallbackFromSettings(settings) {
+    const audio = settings && typeof settings === 'object' ? settings.audio : null;
+    const q = audio && typeof audio === 'object' ? audio.restoreQuality : null;
+    return fallbackQuality(q);
+  }
+
+  // tiny and small are what audio mode itself asks for, so restoring to
+  // one cannot be told apart from not restoring at all. Adaptive
+  // streaming also reports them in the first seconds of a page load,
+  // before the player has climbed. Someone who genuinely chose 144p
+  // therefore gets the configured fallback (hd720 by default) instead.
+  function restorableQuality(captured, fallback) {
+    if (
+      typeof captured === 'string'
+      && QUALITY_SET[captured]
+      && captured !== 'tiny'
+      && captured !== 'small'
+    ) {
+      return captured;
+    }
+    return fallbackQuality(fallback);
+  }
+
   let session = null;
   let gate = Promise.resolve();
   let bridgePromise = null;
@@ -605,7 +633,8 @@
   }
 
   async function restoreQuality(q) {
-    const quality = typeof q === 'string' && QUALITY_SET[q] ? q : DEFAULT_RESTORE;
+    const settings = await readStoredSettings();
+    const quality = restorableQuality(q, restoreFallbackFromSettings(settings));
     if (quality === 'auto') {
       await callPlayer('setPlaybackQualityRange', ['tiny', 'highres']);
       await callPlayer('setPlaybackQuality', ['auto']);
@@ -770,7 +799,9 @@
 
     const prev = await callPlayer('getPlaybackQuality');
     if (current.signal.aborted || session !== current) return;
-    if (typeof prev === 'string' && QUALITY_SET[prev]) current.previousQuality = prev;
+    const settings = await readStoredSettings();
+    if (current.signal.aborted || session !== current) return;
+    current.previousQuality = restorableQuality(prev, restoreFallbackFromSettings(settings));
 
     ensureOverlay();
     bindSession(current);
@@ -857,6 +888,10 @@
     boundShortcut,
     exitLabel,
     overlayCopy,
+    restorableQuality,
+    restoreFallbackFromSettings,
+    enable,
+    disable,
   };
 
   // Named API is for the Node suite only. A youtube.com script that can

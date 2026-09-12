@@ -28,9 +28,27 @@ export const DEFAULT_SETTINGS = {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
     locale: 'auto',
   },
+  audio: {
+    // Fallback only. A captured 720p/1080p/4K still wins on switch-off.
+    restoreQuality: 'hd720',
+  },
 };
 
 const LOCALES = new Set(['auto', 'en', 'ar']);
+
+// Same strings as the player API / DESIGN.md §13.6.
+const PLAYBACK_QUALITIES = new Set([
+  'tiny',
+  'small',
+  'medium',
+  'large',
+  'hd720',
+  'hd1080',
+  'hd1440',
+  'hd2160',
+  'highres',
+  'auto',
+]);
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -84,6 +102,7 @@ export function clampSettings(s) {
   const alerts = isPlainObject(src.alerts) ? src.alerts : {};
   const feed = isPlainObject(src.feed) ? src.feed : {};
   const ui = isPlainObject(src.ui) ? src.ui : {};
+  const audio = isPlainObject(src.audio) ? src.audio : {};
   const d = DEFAULT_SETTINGS;
 
   return {
@@ -111,6 +130,11 @@ export function clampSettings(s) {
     ui: {
       // Anything outside the shipped locales follows the browser language.
       locale: LOCALES.has(ui.locale) ? ui.locale : 'auto',
+    },
+    audio: {
+      restoreQuality: PLAYBACK_QUALITIES.has(audio.restoreQuality)
+        ? audio.restoreQuality
+        : d.audio.restoreQuality,
     },
   };
 }
