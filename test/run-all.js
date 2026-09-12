@@ -22,6 +22,7 @@ const SUITES = [
   ['store',              './store.test.js'],
   ['backup',             './backup.test.js'],
   ['service worker',     './worker.test.js'],
+  ['audio-mode core',    './core.test.js'],
 ];
 
 const results = [];
