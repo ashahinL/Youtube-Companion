@@ -1479,47 +1479,13 @@ export default async function run(t) {
   const badVolume = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 50.5 });
   t.check('a non-integer volume is refused', badVolume && badVolume.ok === false, JSON.stringify(badVolume));
 
-  t.section('audioMode.changed');
-
-  function changed(sent) {
-    return sent.filter((m) => m && m.type === 'audioMode.changed');
-  }
+  t.section('boot asks the worker');
 
   const page = bootPage();
-  const bootMsgs = changed(page.sent);
   t.check(
-    'boot sends audioMode.boot and not audioMode.changed',
-    page.sent.some((m) => m && m.type === 'audioMode.boot')
-      && bootMsgs.length === 0,
+    'boot sends audioMode.boot',
+    page.sent.some((m) => m && m.type === 'audioMode.boot'),
     JSON.stringify(page.sent),
-  );
-
-  page.sent.length = 0;
-  const onReply = await page.ask({ type: 'audioMode.toggle' });
-  t.check(
-    'toggle on with a player replies on:true',
-    onReply && onReply.ok === true && onReply.on === true,
-    JSON.stringify(onReply),
-  );
-  const onMsgs = changed(page.sent);
-  t.check(
-    'toggle on sends audioMode.changed on:true',
-    onMsgs.length === 1 && onMsgs[0].on === true,
-    JSON.stringify(onMsgs),
-  );
-
-  page.sent.length = 0;
-  const offReply = await page.ask({ type: 'audioMode.toggle' });
-  t.check(
-    'toggle off replies on:false',
-    offReply && offReply.ok === true && offReply.on === false,
-    JSON.stringify(offReply),
-  );
-  const offMsgs = changed(page.sent);
-  t.check(
-    'toggle off sends audioMode.changed on:false',
-    offMsgs.length === 1 && offMsgs[0].on === false,
-    JSON.stringify(offMsgs),
   );
 
   const throwsPage = bootPage({ sendThrows: true });
@@ -1581,17 +1547,15 @@ export default async function run(t) {
     autoOn.sent[0] && autoOn.sent[0].type === 'audioMode.boot',
     JSON.stringify(autoOn.sent[0]),
   );
-  await waitUntil(() => changed(autoOn.sent).some((m) => m.on === true), 1500);
+  await waitUntil(async () => {
+    const res = await autoOn.ask({ type: 'audioMode.state' });
+    return !!(res && res.on === true);
+  }, 1500);
   const autoState = await autoOn.ask({ type: 'audioMode.state' });
   t.check(
     'openInAudioMode true with a player ends on',
     autoState && autoState.ok === true && autoState.on === true,
     JSON.stringify(autoState),
-  );
-  t.check(
-    'openInAudioMode true sends audioMode.changed on:true',
-    changed(autoOn.sent).some((m) => m.on === true),
-    JSON.stringify(changed(autoOn.sent)),
   );
 
   const stayOff = bootPage({ bootReply: { ok: true, openInAudioMode: false } });

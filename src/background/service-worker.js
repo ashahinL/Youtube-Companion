@@ -40,7 +40,6 @@ import {
 const ALARM_ALL = 'poll-all';
 const ALARM_FAV = 'poll-fav';
 const BADGE_COLOR = '#cc0000';
-const AUDIO_BADGE_TEXT = 'ON';
 const EXT_ICON = 'icons/icon128.png';
 const AUDIO_TOGGLE_COMMAND = 'toggle-audio-mode';
 
@@ -262,19 +261,6 @@ export async function refreshBadge() {
   const n = newSinceCount(feed, poll.lastSeenAt, settings.feed.showShorts, channelIds);
   const text = n > 0 ? String(n) : '';
   await chromeApi().action.setBadgeText({ text });
-}
-
-export async function setAudioBadge(tabId, on) {
-  try {
-    if (on) {
-      await chromeApi().action.setBadgeText({ tabId, text: AUDIO_BADGE_TEXT });
-    } else {
-      // '' would blank this tab instead of restoring the feed count.
-      await chromeApi().action.setBadgeText({ tabId, text: null });
-    }
-  } catch {
-    // Tab already gone; a pagehide report can arrive after close.
-  }
 }
 
 async function collectState() {
@@ -558,12 +544,6 @@ export async function handleMessage(msg, sender) {
       }
       case 'audioMode.shortcut':
         return await readAudioModeShortcut();
-      case 'audioMode.changed': {
-        const tabId = sender?.tab?.id;
-        if (tabId == null) return { ok: false, error: 'no tab' };
-        await setAudioBadge(tabId, !!msg.on);
-        return { ok: true };
-      }
       case 'openInAudioMode': {
         const parsed = normalizeVideoInput(msg && msg.v);
         if (!parsed || parsed.kind !== 'video') {
@@ -584,7 +564,6 @@ export async function handleMessage(msg, sender) {
       case 'audioMode.boot': {
         const tabId = sender?.tab?.id;
         if (tabId == null) return { ok: false, error: 'no tab' };
-        await setAudioBadge(tabId, false);
         await audioOpenInFlight.then(() => {}, () => {});
         const key = `audioOpen:${tabId}`;
         // MV3 can kill the worker before the page loads, so an in-memory

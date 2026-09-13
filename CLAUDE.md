@@ -59,7 +59,7 @@ loadable. Update this table as new work lands.
 | 7 | Channel sheet (in-popup overlay of stored videos) | **done** |
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
 | 9 | i18n + Arabic + RTL over finished markup | **done** |
-| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **done** — tab, look settings, player card, tab picker, statistics, feed-badge yield, open in audio mode from the feed (§13.10) |
+| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **done** — tab, look settings, player card, tab picker, statistics, open in audio mode from the feed (§13.10); the badge keeps the feed count while audio mode is on |
 
 **Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3.
 Read it before touching the audio-mode code, and keep that discussion in the

@@ -925,21 +925,6 @@
     }
   }
 
-  // Fire-and-forget: an orphaned script's sendMessage throws, and with no
-  // listener the promise rejects. Neither must reach the page.
-  function reportAudioMode(on) {
-    try {
-      const ch = root.chrome;
-      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
-      const result = ch.runtime.sendMessage({ type: 'audioMode.changed', on: !!on });
-      if (result && typeof result.then === 'function') {
-        result.then(function () {}, function () {});
-      }
-    } catch (err) {
-      // swallow
-    }
-  }
-
   function bindSession(current) {
     const signal = current.signal;
     const onNav = function () { onNavigate(current); };
@@ -947,18 +932,7 @@
       document.addEventListener('yt-navigate-finish', onNav, { signal: signal });
       document.addEventListener('yt-page-data-updated', onNav, { signal: signal });
       const win = root.window || root;
-      if (win && win.addEventListener) {
-        win.addEventListener('popstate', onNav, { signal: signal });
-        win.addEventListener('pagehide', function () {
-          // Leaving YouTube by a full navigation: nothing boots on the
-          // next page to clear this tab's badge.
-          if (session === current) reportAudioMode(false);
-        }, { signal: signal });
-        win.addEventListener('pageshow', function (event) {
-          // bfcache restore: the session is still live in this document.
-          if (event && event.persisted && session === current) reportAudioMode(true);
-        }, { signal: signal });
-      }
+      if (win && win.addEventListener) win.addEventListener('popstate', onNav, { signal: signal });
     } catch (err) {
       // swallow
     }
@@ -1032,7 +1006,6 @@
 
     ensureOverlay();
     bindSession(current);
-    if (session === current) reportAudioMode(true);
     await pinQuality(current);
     if (session !== current) return;
     sample(current);
@@ -1042,7 +1015,6 @@
     const current = session;
     if (!current) return;
     session = null;
-    reportAudioMode(false);
     sample(current);
     const delta = current.accumulator.drain();
     current.controller.abort();
@@ -1151,8 +1123,7 @@
         return true;
       });
     }
-    // A new content-script lifetime has no session. The worker clears a
-    // leftover per-tab "ON" and says whether this tab was opened in audio mode.
+    // The worker says whether this tab was opened in audio mode.
     requestAudioModeBoot();
   }
 
