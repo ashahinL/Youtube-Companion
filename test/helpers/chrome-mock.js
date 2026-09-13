@@ -50,6 +50,7 @@ export function installChromeMock(initial = {}) {
     storage,
     alarms,
     i18nMessages,
+    storageChangedListeners: listeners,
     alarmsCreated: [],
     alarmsCleared: [],
     notifications: [],
@@ -145,8 +146,20 @@ export function installChromeMock(initial = {}) {
 
     alarms: {
       async create(name, info) {
-        const rec = { name, ...(info || {}) };
-        handle.alarmsCreated.push({ ...rec });
+        const opts = info && typeof info === 'object' ? info : {};
+        const rec = { name };
+        if (opts.periodInMinutes != null) rec.periodInMinutes = opts.periodInMinutes;
+        if (opts.when != null) {
+          rec.when = opts.when;
+          rec.scheduledTime = opts.when;
+        } else if (opts.delayInMinutes != null) {
+          rec.scheduledTime = Date.now() + opts.delayInMinutes * 60_000;
+        } else if (opts.periodInMinutes != null) {
+          rec.scheduledTime = Date.now() + opts.periodInMinutes * 60_000;
+        } else {
+          rec.scheduledTime = Date.now();
+        }
+        handle.alarmsCreated.push({ name, ...opts, scheduledTime: rec.scheduledTime });
         alarms[name] = rec;
       },
       async clear(name) {
@@ -156,10 +169,19 @@ export function installChromeMock(initial = {}) {
         return had;
       },
       async get(name) {
-        return alarms[name] ? { ...alarms[name] } : undefined;
+        const rec = alarms[name];
+        if (!rec) return undefined;
+        const out = { name: rec.name, scheduledTime: rec.scheduledTime };
+        if (rec.periodInMinutes != null) out.periodInMinutes = rec.periodInMinutes;
+        return out;
       },
       async getAll() {
-        return Object.values(alarms).map((a) => ({ ...a }));
+        return Object.keys(alarms).map((n) => {
+          const rec = alarms[n];
+          const out = { name: rec.name, scheduledTime: rec.scheduledTime };
+          if (rec.periodInMinutes != null) out.periodInMinutes = rec.periodInMinutes;
+          return out;
+        });
       },
       onAlarm: {
         addListener(fn) {

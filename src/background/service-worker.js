@@ -146,11 +146,16 @@ function newestForChannel(feed, channelId) {
 /**
  * MV3 can kill the worker between raising and lowering this flag, and
  * storage.local survives the restart. A stranded true would block polling
- * forever.
+ * forever. There is only one worker instance, so a stored running: true
+ * at script start cannot belong to a live sweep.
  */
 export async function reconcileRunning() {
   await writePollState({ running: false });
 }
+
+// Alarm and popup-message wakes do not fire onStartup. Reconcile before
+// any sweep reads the flag, including one delivered in this same wake.
+const reconciled = reconcileRunning().catch(() => {});
 
 let originRulePromise = null;
 
@@ -195,18 +200,43 @@ async function installYtOriginRule() {
   });
 }
 
+// chrome.alarms.create on an existing name restarts the countdown from
+// now. A settings write that is not a period change must not recreate.
+const ALARM_MIN_DELAY_MS = 60_000;
+
+function nextAlarmWhen(lastAt, periodMinutes) {
+  const due = (Number(lastAt) || 0) + Number(periodMinutes) * 60_000;
+  return Math.max(Date.now() + ALARM_MIN_DELAY_MS, due);
+}
+
+async function ensureAlarm(name, periodMinutes, lastAt) {
+  const alarms = chromeApi().alarms;
+  const existing = await alarms.get(name);
+  if (existing && existing.periodInMinutes === periodMinutes) return;
+  await alarms.create(name, {
+    when: nextAlarmWhen(lastAt, periodMinutes),
+    periodInMinutes: periodMinutes,
+  });
+}
+
 export async function syncAlarms() {
   const settings = await readSettings();
   const alarms = chromeApi().alarms;
-  await alarms.clear(ALARM_ALL);
-  await alarms.clear(ALARM_FAV);
-  if (!settings.poll.enabled) return;
-  await alarms.create(ALARM_ALL, { periodInMinutes: settings.poll.intervalMinutes });
-  if (settings.poll.favoriteIntervalMinutes > 0) {
-    await alarms.create(ALARM_FAV, {
-      periodInMinutes: settings.poll.favoriteIntervalMinutes,
-    });
+  if (!settings.poll.enabled) {
+    await alarms.clear(ALARM_ALL);
+    await alarms.clear(ALARM_FAV);
+    return;
   }
+  const poll = await readPollState();
+  const lastAll = Number(poll.lastPollAt) || 0;
+  const lastFav = Math.max(Number(poll.lastFavPollAt) || 0, lastAll);
+  await ensureAlarm(ALARM_ALL, settings.poll.intervalMinutes, lastAll);
+  const favPeriod = settings.poll.favoriteIntervalMinutes;
+  if (!(favPeriod > 0)) {
+    await alarms.clear(ALARM_FAV);
+    return;
+  }
+  await ensureAlarm(ALARM_FAV, favPeriod, lastFav);
 }
 
 export async function refreshBadge() {
@@ -427,6 +457,7 @@ async function performSweep({ scope, onlyId }) {
  * upload as new and fire duplicate alerts.
  */
 export async function runSweep({ scope = 'all', onlyId = null } = {}) {
+  await reconciled;
   await ensureYtOriginRule().catch(() => {});
   if (sweepActive) return { ok: false, error: 'already running' };
   sweepActive = true;
@@ -573,13 +604,13 @@ export async function onNotificationClicked(id) {
 }
 
 function onAlarm(alarm) {
-  if (alarm?.name === ALARM_ALL) runSweep({ scope: 'all' }).catch(() => {});
-  else if (alarm?.name === ALARM_FAV) runSweep({ scope: 'favorites' }).catch(() => {});
+  if (alarm?.name === ALARM_ALL) return runSweep({ scope: 'all' }).catch(() => {});
+  if (alarm?.name === ALARM_FAV) return runSweep({ scope: 'favorites' }).catch(() => {});
 }
 
 function onBoot() {
   ensureYtOriginRule().catch(() => {});
-  reconcileRunning().then(syncAlarms).catch(() => {});
+  syncAlarms().catch(() => {});
 }
 
 chromeApi().runtime.onInstalled.addListener(onBoot);
@@ -648,6 +679,6 @@ chromeApi().commands?.onCommand?.addListener((command, tab) => {
 });
 
 export const ready = Promise.all([
-  reconcileRunning().catch(() => {}),
+  reconciled,
   ensureYtOriginRule().catch(() => {}),
 ]);

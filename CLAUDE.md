@@ -136,11 +136,15 @@ The full list is [DESIGN.md §12](DESIGN.md). The ones that have teeth:
   videos; those must be marked as already-alerted silently, or adding 40
   channels fires 40 alerts.
 - **A stranded `pollState.running: true` survives restarts forever.** MV3 kills
-  the worker without warning between raising and lowering a flag, and
-  `storage.local` outlives reloads. Reconcile it on startup. This is the exact
-  bug poppo hit.
+  the worker, not only the browser, without warning between raising and
+  lowering a flag, and `storage.local` outlives reloads. Reconcile at every
+  worker start, before any sweep reads the flag. This is the exact bug poppo
+  hit.
 - **`confirm()` / `alert()` in a popup** blocks it and can wedge the extension.
   Use inline confirm rows.
+- **`alarms.create` on an existing name restarts its countdown from now.**
+  Recreating alarms on every settings write meant any settings change pushed
+  the next check a full interval away.
 - **Chrome floors alarm periods at 1 minute** and silently clamps anything
   lower.
 - **Innertube POSTs from the extension send `Origin: chrome-extension://…`

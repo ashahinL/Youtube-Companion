@@ -223,6 +223,9 @@ export default async function run(t) {
       'pollState',
       'settings',
     ]);
+    // Removing `settings` kicks the worker's onSettingsChanged listener,
+    // which calls syncAlarms without the test awaiting it.
+    await wait(20);
     mock.resetCalls();
     mock.notifications.length = 0;
     mock.badgeText = '';
@@ -270,7 +273,96 @@ export default async function run(t) {
       JSON.stringify(mock.alarms['poll-fav']),
     );
 
-    await writeSettings({ poll: { favoriteIntervalMinutes: 0 } });
+    const keptScheduled = mock.alarms['poll-all'].scheduledTime;
+    const createdBeforeKeep = mock.alarmsCreated.length;
+    await syncAlarms();
+    t.check(
+      'an existing poll-all with the same period keeps scheduledTime',
+      mock.alarms['poll-all'].scheduledTime === keptScheduled,
+      String(mock.alarms['poll-all']?.scheduledTime),
+    );
+    t.check(
+      'same period does not recreate poll-all',
+      mock.alarmsCreated.length === createdBeforeKeep,
+      String(mock.alarmsCreated.length),
+    );
+
+    await writeSettings({ ui: { locale: 'ar' } });
+    await syncAlarms();
+    t.check(
+      'a settings write keeps poll-all scheduledTime',
+      mock.alarms['poll-all'].scheduledTime === keptScheduled,
+      String(mock.alarms['poll-all']?.scheduledTime),
+    );
+
+    const lastPollForHour = Date.now() - 10 * 60_000;
+    await writePollState({ lastPollAt: lastPollForHour });
+    await writeSettings({ poll: { intervalMinutes: 60 } });
+    await wait(20);
+    await syncAlarms();
+    t.check(
+      'changing intervalMinutes recreates poll-all with period 60',
+      mock.alarms['poll-all']?.periodInMinutes === 60,
+      JSON.stringify(mock.alarms['poll-all']),
+    );
+    t.check(
+      'changed poll-all is due at lastPollAt + 60 min',
+      mock.alarms['poll-all'].scheduledTime === lastPollForHour + 60 * 60_000,
+      String(mock.alarms['poll-all']?.scheduledTime),
+    );
+
+    await writePollState({ lastPollAt: Date.now() - 2 * 60 * 60_000 });
+    await wait(20);
+    await globalThis.chrome.alarms.clear('poll-all');
+    await globalThis.chrome.alarms.clear('poll-fav');
+    const overdueStart = Date.now();
+    await syncAlarms();
+    const overdueEnd = Date.now();
+    const overdueWhen = mock.alarms['poll-all']?.scheduledTime;
+    t.check(
+      'an overdue lastPollAt is due about now + 60s',
+      overdueWhen >= overdueStart + 60_000 && overdueWhen <= overdueEnd + 60_000,
+      String(overdueWhen),
+    );
+
+    await globalThis.chrome.alarms.clear('poll-all');
+    await globalThis.chrome.alarms.clear('poll-fav');
+    await writePollState({ lastPollAt: 0, lastFavPollAt: 0 });
+    const zeroStart = Date.now();
+    await syncAlarms();
+    const zeroEnd = Date.now();
+    const zeroWhen = mock.alarms['poll-all']?.scheduledTime;
+    t.check(
+      'a lastPollAt of 0 is due about now + 60s',
+      zeroWhen >= zeroStart + 60_000 && zeroWhen <= zeroEnd + 60_000,
+      String(zeroWhen),
+    );
+
+    await globalThis.chrome.alarms.clear('poll-all');
+    await globalThis.chrome.alarms.clear('poll-fav');
+    const laterPollAt = Date.now() - 5 * 60_000;
+    const olderFavAt = Date.now() - 40 * 60_000;
+    await writePollState({ lastPollAt: laterPollAt, lastFavPollAt: olderFavAt });
+    await syncAlarms();
+    t.check(
+      'poll-fav uses lastPollAt when it is later than lastFavPollAt',
+      mock.alarms['poll-fav']?.scheduledTime === laterPollAt + 10 * 60_000,
+      String(mock.alarms['poll-fav']?.scheduledTime),
+    );
+
+    await globalThis.chrome.alarms.clear('poll-fav');
+    const olderPollAt = Date.now() - 25 * 60_000;
+    const laterFavAt = Date.now() - 3 * 60_000;
+    await writePollState({ lastPollAt: olderPollAt, lastFavPollAt: laterFavAt });
+    await syncAlarms();
+    t.check(
+      'poll-fav uses lastFavPollAt when it is later than lastPollAt',
+      mock.alarms['poll-fav']?.scheduledTime === laterFavAt + 10 * 60_000,
+      String(mock.alarms['poll-fav']?.scheduledTime),
+    );
+
+    await writeSettings({ poll: { intervalMinutes: 30, favoriteIntervalMinutes: 0 } });
+    await wait(20);
     await syncAlarms();
     t.check('a 0 favourite interval clears poll-fav', mock.alarms['poll-fav'] === undefined);
     t.check(
@@ -292,6 +384,57 @@ export default async function run(t) {
     const afterReconcile = await readPollState();
     t.check('clears a stranded running: true', afterReconcile.running === false);
     t.check('leaves other pollState fields', afterReconcile.lastPollAt === 9, String(afterReconcile.lastPollAt));
+
+    t.section('stranded running on a fresh worker load');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await writePollState({ running: true, lastPollAt: 9 });
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'afterkill01', t: 'After kill', at: AT.newest },
+        ]),
+      },
+    });
+    const listenerCounts = {
+      alarm: mock.alarmListeners.length,
+      notify: mock.notificationClickListeners.length,
+      installed: mock.runtimeListeners.onInstalled.length,
+      startup: mock.runtimeListeners.onStartup.length,
+      message: mock.runtimeListeners.onMessage.length,
+      command: mock.commandListeners.length,
+      storage: mock.storageChangedListeners.length,
+    };
+    const workerHref = new URL('../src/background/service-worker.js', import.meta.url).href;
+    const fresh = await import(`${workerHref}?boot=${Date.now()}`);
+    t.check(
+      'cache-busted import is a new worker instance',
+      fresh.runSweep !== runSweep,
+      String(fresh.runSweep === runSweep),
+    );
+    const alarmFn = mock.alarmListeners[mock.alarmListeners.length - 1];
+    const fromAlarm = await alarmFn({ name: 'poll-all' });
+    t.check(
+      'an alarm in the same tick as a fresh load is not blocked by stored running: true',
+      fromAlarm && fromAlarm.ok === true,
+      JSON.stringify(fromAlarm),
+    );
+    t.check(
+      'fresh-load alarm sweep stored the video',
+      (await readFeed()).some((row) => row.v === 'afterkill01'),
+    );
+    t.check(
+      'running is false after the fresh-load sweep',
+      (await readPollState()).running === false,
+    );
+    mock.alarmListeners.length = listenerCounts.alarm;
+    mock.notificationClickListeners.length = listenerCounts.notify;
+    mock.runtimeListeners.onInstalled.length = listenerCounts.installed;
+    mock.runtimeListeners.onStartup.length = listenerCounts.startup;
+    mock.runtimeListeners.onMessage.length = listenerCounts.message;
+    mock.commandListeners.length = listenerCounts.command;
+    mock.storageChangedListeners.length = listenerCounts.storage;
 
     t.section('sweep refuses while running');
 
@@ -866,11 +1009,23 @@ export default async function run(t) {
       (await readChannels()).some((c) => c.id === LTT),
     );
 
+    await syncAlarms();
+    const favScheduled = mock.alarms['poll-all']?.scheduledTime;
     const beforeFav = mock.alarmsCreated.length;
     const fav = await handleMessage({ type: 'setFavorite', id: BEAST, on: true });
     t.check('setFavorite reports ok', fav.ok === true, JSON.stringify(fav));
     t.check('setFavorite persisted', (await readChannels()).find((c) => c.id === BEAST)?.favorite === true);
-    t.check('setFavorite calls syncAlarms', mock.alarmsCreated.length > beforeFav, String(mock.alarmsCreated.length));
+    t.check(
+      'setFavorite does not restart poll-all',
+      mock.alarms['poll-all']?.scheduledTime === favScheduled
+        && mock.alarmsCreated.length === beforeFav,
+      JSON.stringify({
+        scheduledTime: mock.alarms['poll-all']?.scheduledTime,
+        favScheduled,
+        created: mock.alarmsCreated.length,
+        beforeFav,
+      }),
+    );
 
     const onlyFetch = installFetch({
       feeds: {
