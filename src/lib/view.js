@@ -95,6 +95,19 @@ export function feedItemUrl(item) {
     : `https://www.youtube.com/watch?v=${id}`;
 }
 
+export function audioWatchUrl(item) {
+  const id = String(item?.v || '');
+  if (!id) return '';
+  return `https://www.youtube.com/watch?v=${id}`;
+}
+
+export function rowOpenModes(settings) {
+  if (settings?.audio?.openFeedInAudioMode) {
+    return { row: 'audio', button: 'normal' };
+  }
+  return { row: 'normal', button: 'audio' };
+}
+
 export function feedsView({ feed, channels, settings, query }) {
   const q = String(query || '').trim();
   const onList = !!listedMatch(q, channels, feed);

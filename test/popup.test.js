@@ -403,6 +403,10 @@ export default async function run(t) {
   for (const id of groupIds) {
     t.check(`has settings group ${id}`, new RegExp(`id="${id}"`).test(s), id);
   }
+  t.check(
+    'look group has the open-feed-in-audio-mode checkbox',
+    /data-setting="audio.openFeedInAudioMode"/.test(s),
+  );
   t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
   const presets = [...s.matchAll(/\bdata-preset="([^"]+)"/g)].map((m) => m[1]);
   t.check(
@@ -628,6 +632,11 @@ export default async function run(t) {
     'audioMode.control',
   ]);
   t.check('popup sends at least one message', sent.length > 0, String(sent.length));
+  t.check(
+    'popup sends openInAudioMode',
+    sent.includes('openInAudioMode'),
+    sent.join(','),
+  );
   for (const type of sent) {
     if (contentTypes.has(type)) {
       t.check(

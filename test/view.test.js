@@ -20,6 +20,8 @@ import {
   matchesFeedFilter,
   visibleFeedItems,
   feedItemUrl,
+  audioWatchUrl,
+  rowOpenModes,
   feedsView,
   watchlistView,
   audioTabView,
@@ -144,6 +146,37 @@ export default async function run(t) {
     feedItemUrl(item(VID_NEW, { k: 'premiere' })) === `https://www.youtube.com/watch?v=${VID_NEW}`,
   );
   t.check('missing id is empty', feedItemUrl({}) === '');
+
+  t.section('audioWatchUrl');
+
+  t.check(
+    'a video opens /watch?v=<id>',
+    audioWatchUrl(item(VID_NEW)) === `https://www.youtube.com/watch?v=${VID_NEW}`,
+  );
+  t.check(
+    'a short still opens /watch?v=<id>',
+    audioWatchUrl(item(VID_SHORT, { k: 'short' })) === `https://www.youtube.com/watch?v=${VID_SHORT}`,
+  );
+  t.check(
+    'a live opens /watch?v=<id>',
+    audioWatchUrl(item(VID_NEW, { k: 'live' })) === `https://www.youtube.com/watch?v=${VID_NEW}`,
+  );
+  t.check('audioWatchUrl missing id is empty', audioWatchUrl({}) === '');
+
+  t.section('rowOpenModes');
+
+  t.check(
+    'setting off: row normal, button audio',
+    same(rowOpenModes({ audio: { openFeedInAudioMode: false } }), { row: 'normal', button: 'audio' }),
+  );
+  t.check(
+    'setting on: row audio, button normal',
+    same(rowOpenModes({ audio: { openFeedInAudioMode: true } }), { row: 'audio', button: 'normal' }),
+  );
+  t.check(
+    'missing settings: row normal, button audio',
+    same(rowOpenModes(undefined), { row: 'normal', button: 'audio' }),
+  );
 
   t.section('visibleFeedItems');
 

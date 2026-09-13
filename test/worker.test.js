@@ -961,6 +961,125 @@ export default async function run(t) {
       JSON.stringify(closed),
     );
 
+    t.section('open in audio mode');
+
+    const AUDIO_VID = 'audioOpen01';
+
+    await wipe();
+    const audioOpened = await handleMessage({ type: 'openInAudioMode', v: AUDIO_VID });
+    t.check('openInAudioMode reports ok', audioOpened.ok === true, JSON.stringify(audioOpened));
+    t.check('creates one tab', mock.tabsCreated.length === 1, String(mock.tabsCreated.length));
+    t.check(
+      'tab is the watch URL and focused',
+      mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${AUDIO_VID}`
+        && mock.tabsCreated[0]?.active === true,
+      mock.tabsCreated[0]?.url,
+    );
+    const openedTabId = mock.tabsCreated[0]?.id;
+    const storedFlag = await globalThis.chrome.storage.session.get(`audioOpen:${openedTabId}`);
+    t.check(
+      'stores audioOpen:<tabId>',
+      storedFlag[`audioOpen:${openedTabId}`] === true,
+      JSON.stringify(storedFlag),
+    );
+
+    mock.tabBadgeCalls.length = 0;
+    const bootFromOpen = await handleMessage(
+      { type: 'audioMode.boot' },
+      { tab: { id: openedTabId } },
+    );
+    t.check(
+      'boot from that tab is openInAudioMode true',
+      bootFromOpen.ok === true && bootFromOpen.openInAudioMode === true,
+      JSON.stringify(bootFromOpen),
+    );
+    const consumed = await globalThis.chrome.storage.session.get(`audioOpen:${openedTabId}`);
+    t.check(
+      'boot consumes the key',
+      consumed[`audioOpen:${openedTabId}`] === undefined,
+      JSON.stringify(consumed),
+    );
+    t.check(
+      'boot clears that tab badge',
+      mock.tabBadgeCalls.some((c) => c.tabId === openedTabId && c.text === null),
+      JSON.stringify(mock.tabBadgeCalls),
+    );
+    const bootAgain = await handleMessage(
+      { type: 'audioMode.boot' },
+      { tab: { id: openedTabId } },
+    );
+    t.check(
+      'second boot from the same tab is false',
+      bootAgain.ok === true && bootAgain.openInAudioMode === false,
+      JSON.stringify(bootAgain),
+    );
+
+    mock.resetCalls();
+    const invalid = await handleMessage({ type: 'openInAudioMode', v: 'nope' });
+    t.check(
+      'invalid v is not a video',
+      invalid.ok === false && invalid.error === 'not a video',
+      JSON.stringify(invalid),
+    );
+    t.check('invalid v creates no tab', mock.tabsCreated.length === 0, String(mock.tabsCreated.length));
+    const emptySession = await globalThis.chrome.storage.session.get(null);
+    t.check(
+      'invalid v stores nothing',
+      Object.keys(emptySession).length === 0,
+      JSON.stringify(emptySession),
+    );
+
+    await wipe();
+    await handleMessage({ type: 'openInAudioMode', v: AUDIO_VID });
+    const flaggedId = mock.tabsCreated[0]?.id;
+    const otherTab = await handleMessage(
+      { type: 'audioMode.boot' },
+      { tab: { id: flaggedId + 99 } },
+    );
+    t.check(
+      'boot from a different tab is false',
+      otherTab.ok === true && otherTab.openInAudioMode === false,
+      JSON.stringify(otherTab),
+    );
+
+    const bootNoTab = await handleMessage({ type: 'audioMode.boot' }, {});
+    t.check(
+      'boot with no sender.tab is ok: false',
+      bootNoTab.ok === false && bootNoTab.error === 'no tab',
+      JSON.stringify(bootNoTab),
+    );
+
+    await wipe();
+    let releaseSet;
+    mock.sessionSetHold = new Promise((resolve) => { releaseSet = resolve; });
+    const openInFlight = handleMessage({ type: 'openInAudioMode', v: AUDIO_VID });
+    for (let i = 0; i < 40 && mock.tabsCreated.length === 0; i++) await Promise.resolve();
+    t.check(
+      'in-flight open created a tab',
+      mock.tabsCreated.length === 1,
+      String(mock.tabsCreated.length),
+    );
+    const inflightTabId = mock.tabsCreated[0]?.id;
+    let bootSettled = false;
+    const bootInFlight = handleMessage(
+      { type: 'audioMode.boot' },
+      { tab: { id: inflightTabId } },
+    ).then((res) => {
+      bootSettled = true;
+      return res;
+    });
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+    t.check('boot waits for the in-flight write', bootSettled === false);
+    releaseSet();
+    const inflightBoot = await bootInFlight;
+    t.check(
+      'boot after an in-flight open is true',
+      inflightBoot.ok === true && inflightBoot.openInAudioMode === true,
+      JSON.stringify(inflightBoot),
+    );
+    await openInFlight;
+    mock.sessionSetHold = null;
+
     t.section('live item re-classified');
 
     await wipe();

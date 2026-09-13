@@ -34,9 +34,70 @@ function applyI18n(entry, substitutions) {
   return msg;
 }
 
+function makeStorageArea(store, fire, hold) {
+  return {
+    async get(keys) {
+      if (keys === null || keys === undefined) return clone(store);
+      if (typeof keys === 'string') {
+        return keys in store ? { [keys]: clone(store[keys]) } : {};
+      }
+      if (Array.isArray(keys)) {
+        const out = {};
+        for (const key of keys) {
+          if (key in store) out[key] = clone(store[key]);
+        }
+        return out;
+      }
+      if (keys && typeof keys === 'object') {
+        const out = {};
+        for (const [key, fallback] of Object.entries(keys)) {
+          out[key] = key in store ? clone(store[key]) : clone(fallback);
+        }
+        return out;
+      }
+      return clone(store);
+    },
+
+    async set(items) {
+      if (hold) {
+        const waiting = hold();
+        if (waiting) await waiting;
+      }
+      if (!items || typeof items !== 'object') return;
+      const changes = {};
+      for (const [key, value] of Object.entries(items)) {
+        changes[key] = changeOf(store[key], value);
+        store[key] = clone(value);
+      }
+      fire(changes);
+    },
+
+    async remove(keys) {
+      const list = Array.isArray(keys) ? keys : [keys];
+      const changes = {};
+      for (const key of list) {
+        if (!(key in store)) continue;
+        changes[key] = changeOf(store[key], undefined);
+        delete store[key];
+      }
+      if (Object.keys(changes).length) fire(changes);
+    },
+
+    async clear() {
+      const changes = {};
+      for (const key of Object.keys(store)) {
+        changes[key] = changeOf(store[key], undefined);
+        delete store[key];
+      }
+      if (Object.keys(changes).length) fire(changes);
+    },
+  };
+}
+
 export function installChromeMock(initial = {}) {
   const previous = globalThis.chrome;
   const storage = clone(initial) ?? {};
+  const session = {};
   const listeners = [];
   const alarms = {};
   const i18nMessages = {
@@ -48,6 +109,8 @@ export function installChromeMock(initial = {}) {
 
   const handle = {
     storage,
+    session,
+    sessionSetHold: null,
     alarms,
     i18nMessages,
     storageChangedListeners: listeners,
@@ -75,65 +138,18 @@ export function installChromeMock(initial = {}) {
     notificationClickListeners: [],
   };
 
-  function fire(changes) {
-    for (const fn of [...listeners]) fn(changes, 'local');
+  function fire(changes, area = 'local') {
+    for (const fn of [...listeners]) fn(changes, area);
   }
 
   globalThis.chrome = {
     storage: {
-      local: {
-        async get(keys) {
-          if (keys === null || keys === undefined) return clone(storage);
-          if (typeof keys === 'string') {
-            return keys in storage ? { [keys]: clone(storage[keys]) } : {};
-          }
-          if (Array.isArray(keys)) {
-            const out = {};
-            for (const key of keys) {
-              if (key in storage) out[key] = clone(storage[key]);
-            }
-            return out;
-          }
-          if (keys && typeof keys === 'object') {
-            const out = {};
-            for (const [key, fallback] of Object.entries(keys)) {
-              out[key] = key in storage ? clone(storage[key]) : clone(fallback);
-            }
-            return out;
-          }
-          return clone(storage);
-        },
-
-        async set(items) {
-          if (!items || typeof items !== 'object') return;
-          const changes = {};
-          for (const [key, value] of Object.entries(items)) {
-            changes[key] = changeOf(storage[key], value);
-            storage[key] = clone(value);
-          }
-          fire(changes);
-        },
-
-        async remove(keys) {
-          const list = Array.isArray(keys) ? keys : [keys];
-          const changes = {};
-          for (const key of list) {
-            if (!(key in storage)) continue;
-            changes[key] = changeOf(storage[key], undefined);
-            delete storage[key];
-          }
-          if (Object.keys(changes).length) fire(changes);
-        },
-
-        async clear() {
-          const changes = {};
-          for (const key of Object.keys(storage)) {
-            changes[key] = changeOf(storage[key], undefined);
-            delete storage[key];
-          }
-          if (Object.keys(changes).length) fire(changes);
-        },
-      },
+      local: makeStorageArea(storage, (changes) => fire(changes, 'local')),
+      session: makeStorageArea(
+        session,
+        (changes) => fire(changes, 'session'),
+        () => handle.sessionSetHold,
+      ),
 
       onChanged: {
         addListener(fn) {
@@ -331,7 +347,9 @@ export function installChromeMock(initial = {}) {
     handle.tabsCreated.length = 0;
     handle.messagesSent.length = 0;
     handle.activeTab = null;
+    handle.sessionSetHold = null;
     for (const key of Object.keys(alarms)) delete alarms[key];
+    for (const key of Object.keys(session)) delete session[key];
     handle.badgeText = '';
   };
 

@@ -213,12 +213,29 @@ export default async function run(t) {
       DEFAULT_SETTINGS.audio.customColor === '#0f0f14',
     );
     t.check('imageUrl defaults to empty', DEFAULT_SETTINGS.audio.imageUrl === '');
+    t.check(
+      'openFeedInAudioMode defaults to false',
+      DEFAULT_SETTINGS.audio.openFeedInAudioMode === false,
+    );
 
     const audioOf = (over) =>
       clampSettings({
         ...DEFAULT_SETTINGS,
         audio: { ...DEFAULT_SETTINGS.audio, ...over },
       }).audio;
+
+    t.check(
+      'openFeedInAudioMode true is kept',
+      audioOf({ openFeedInAudioMode: true }).openFeedInAudioMode === true,
+    );
+    t.check(
+      'openFeedInAudioMode false is kept',
+      audioOf({ openFeedInAudioMode: false }).openFeedInAudioMode === false,
+    );
+    t.check(
+      'missing openFeedInAudioMode coerces to false',
+      clampSettings({ audio: {} }).audio.openFeedInAudioMode === false,
+    );
 
     for (const p of ['midnight', 'slate', 'ember', 'amber', 'forest', 'sunset', 'custom']) {
       t.check(`preset '${p}' is kept`, audioOf({ preset: p }).preset === p);
@@ -314,6 +331,7 @@ export default async function run(t) {
     );
 
     const fullLook = {
+      openFeedInAudioMode: false,
       restoreQuality: 'hd1080',
       preset: 'forest',
       backgroundType: 'image',
@@ -344,6 +362,7 @@ export default async function run(t) {
           imageUrl: 'ftp://x',
         },
       }).audio, {
+        openFeedInAudioMode: false,
         restoreQuality: 'large',
         preset: 'midnight',
         backgroundType: 'color',

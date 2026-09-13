@@ -29,6 +29,8 @@ export const DEFAULT_SETTINGS = {
     locale: 'auto',
   },
   audio: {
+    // Off: the row opens normally and its button opens in audio mode. On: those swap.
+    openFeedInAudioMode: false,
     // Fallback only. A captured 720p/1080p/4K still wins on switch-off.
     restoreQuality: 'hd720',
     // Overlay look. The six named presets match overlay.css; custom
@@ -177,6 +179,7 @@ export function clampSettings(s) {
       locale: LOCALES.has(ui.locale) ? ui.locale : 'auto',
     },
     audio: {
+      openFeedInAudioMode: boolOf(audio, 'openFeedInAudioMode', d.audio.openFeedInAudioMode),
       restoreQuality: PLAYBACK_QUALITIES.has(audio.restoreQuality)
         ? audio.restoreQuality
         : d.audio.restoreQuality,

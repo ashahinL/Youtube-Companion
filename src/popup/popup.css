@@ -572,6 +572,17 @@ body {
   min-width: 0;
 }
 
+.feed-row__open-alt {
+  flex: none;
+  align-self: center;
+}
+
+.feed-row__open-alt svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
 .feed-row__headline {
   display: flex;
   align-items: flex-start;

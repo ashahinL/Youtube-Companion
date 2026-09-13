@@ -271,6 +271,34 @@
       }
     }
   },
+  "feedOpenVideoAudio": {
+    "message": "فتح $TITLE$ في وضع الصوت",
+    "description": "Accessible name of a feed row or its button when that control opens the video in audio mode. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "iPhone 18 Pro/Duo Impressions: Mogged"
+      }
+    }
+  },
+  "feedOpenVideoNormal": {
+    "message": "فتح $TITLE$ بشكل عادي",
+    "description": "Accessible name of the per-row button that opens the video without audio mode. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "iPhone 18 Pro/Duo Impressions: Mogged"
+      }
+    }
+  },
+  "feedOpenAudioShort": {
+    "message": "فتح في وضع الصوت",
+    "description": "Tooltip on the per-row button that opens the video in audio mode."
+  },
+  "feedOpenNormalShort": {
+    "message": "فتح بشكل عادي",
+    "description": "Tooltip on the per-row button that opens the video without audio mode."
+  },
   "sheetClose": {
     "message": "إغلاق",
     "description": "Accessible name of the control that closes the channel sheet."
@@ -688,6 +716,14 @@
   "audioStatsUnitGb": {
     "message": " جيجا",
     "description": "Gigabyte unit suffix passed to formatData, including the leading space."
+  },
+  "settingsOpenFeedInAudio": {
+    "message": "فتح فيديوهات الموجز في وضع الصوت",
+    "description": "Settings checkbox that makes a feed-row click open the video with audio mode already on."
+  },
+  "settingsOpenFeedInAudioTitle": {
+    "message": "عند التشغيل، يفتح النقر على الفيديو في وضع الصوت مباشرة، ويفتحه زره بشكل عادي.",
+    "description": "Tooltip on the Open feed videos in audio mode checkbox."
   },
   "settingsAudioLook": {
     "message": "مظهر وضع الصوت",

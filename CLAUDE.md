@@ -45,8 +45,8 @@ Quick map of the spec:
 
 ## Where the work is
 
-Built in the order of DESIGN.md §11. Jobs 1-9 are done and the extension is
-loadable; job 10 is the remaining one. Update this table as each one lands.
+Built in the order of DESIGN.md §11. All ten jobs are done and the extension is
+loadable. Update this table as new work lands.
 
 | # | Job | State |
 |---|---|---|
@@ -59,7 +59,7 @@ loadable; job 10 is the remaining one. Update this table as each one lands.
 | 7 | Channel sheet (in-popup overlay of stored videos) | **done** |
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
 | 9 | i18n + Arabic + RTL over finished markup | **done** |
-| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **tab, look settings, player card, tab picker, statistics, feed-badge yield done**; open-in-audio-mode (§13.10) remains |
+| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **done** — tab, look settings, player card, tab picker, statistics, feed-badge yield, open in audio mode from the feed (§13.10) |
 
 **Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3.
 Read it before touching the audio-mode code, and keep that discussion in the

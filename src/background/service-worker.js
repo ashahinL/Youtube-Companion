@@ -7,6 +7,7 @@
 
 import {
   normalizeChannelInput,
+  normalizeVideoInput,
   resolveChannelId,
   fetchChannelFeed,
   fetchChannelHeader,
@@ -57,6 +58,10 @@ let sweepActive = false;
 // Fast path for the video that was announced. MV3 kills the worker shortly
 // after idle, so the click handler must also rebuild from storage.
 const notificationVideos = new Map();
+
+// The tab starts loading as soon as tabs.create returns, so a very
+// fast content-script boot could ask before the flag exists.
+let audioOpenInFlight = Promise.resolve();
 
 function chromeApi() {
   return globalThis.chrome;
@@ -558,6 +563,39 @@ export async function handleMessage(msg, sender) {
         if (tabId == null) return { ok: false, error: 'no tab' };
         await setAudioBadge(tabId, !!msg.on);
         return { ok: true };
+      }
+      case 'openInAudioMode': {
+        const parsed = normalizeVideoInput(msg && msg.v);
+        if (!parsed || parsed.kind !== 'video') {
+          return { ok: false, error: 'not a video' };
+        }
+        const url = `https://www.youtube.com/watch?v=${parsed.id}`;
+        const run = (async () => {
+          const tab = await chromeApi().tabs.create({ url, active: true });
+          const tabId = tab && tab.id;
+          if (tabId == null) return;
+          // One key per tab, so two quick opens never race a read-modify-write.
+          await chromeApi().storage.session.set({ [`audioOpen:${tabId}`]: true });
+        })();
+        audioOpenInFlight = audioOpenInFlight.then(() => run, () => run);
+        await run;
+        return { ok: true };
+      }
+      case 'audioMode.boot': {
+        const tabId = sender?.tab?.id;
+        if (tabId == null) return { ok: false, error: 'no tab' };
+        await setAudioBadge(tabId, false);
+        await audioOpenInFlight.then(() => {}, () => {});
+        const key = `audioOpen:${tabId}`;
+        // MV3 can kill the worker before the page loads, so an in-memory
+        // flag would be gone. storage.local would outlive a browser restart
+        // and could force audio mode on an unrelated tab later. Tab ids are
+        // not reused within a browser session, so a flag whose tab never
+        // booted is inert.
+        const got = await chromeApi().storage.session.get(key);
+        const open = !!(got && got[key]);
+        if (open) await chromeApi().storage.session.remove(key);
+        return { ok: true, openInAudioMode: open };
       }
       case 'importBackup': {
         const raw = msg.data;

@@ -1060,6 +1060,46 @@
     return gate;
   }
 
+  const PLAYER_POLL_MS = 250;
+  const PLAYER_POLL_MAX_MS = 20000;
+
+  function enableWhenPlayerReady() {
+    let player = null;
+    try { player = document.getElementById('movie_player'); } catch (err) { player = null; }
+    if (player) {
+      gate = gate.then(enable).catch(function () {});
+      return;
+    }
+    let elapsed = 0;
+    function poll() {
+      elapsed += PLAYER_POLL_MS;
+      let el = null;
+      try { el = document.getElementById('movie_player'); } catch (err) { el = null; }
+      if (el) {
+        gate = gate.then(enable).catch(function () {});
+        return;
+      }
+      if (elapsed >= PLAYER_POLL_MAX_MS) return;
+      setTimeout(poll, PLAYER_POLL_MS);
+    }
+    setTimeout(poll, PLAYER_POLL_MS);
+  }
+
+  function requestAudioModeBoot() {
+    try {
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
+      const result = ch.runtime.sendMessage({ type: 'audioMode.boot' });
+      if (result && typeof result.then === 'function') {
+        result.then(function (reply) {
+          if (reply && reply.openInAudioMode === true) enableWhenPlayerReady();
+        }, function () {});
+      }
+    } catch (err) {
+      // swallow
+    }
+  }
+
   function shouldBoot() {
     try {
       if (typeof document === 'undefined' || !document || !document.documentElement) return false;
@@ -1111,9 +1151,9 @@
         return true;
       });
     }
-    // A new content-script lifetime has no session, so drop a leftover
-    // per-tab "ON" from a reload that never ran disable().
-    reportAudioMode(false);
+    // A new content-script lifetime has no session. The worker clears a
+    // leftover per-tab "ON" and says whether this tab was opened in audio mode.
+    requestAudioModeBoot();
   }
 
   const api = {

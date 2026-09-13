@@ -1200,6 +1200,9 @@ export default async function run(t) {
             sent.push(msg);
             if (opts.sendThrows) throw new Error('Extension context invalidated');
             if (opts.sendRejects) return Promise.reject(new Error('no receiving end'));
+            if (msg && msg.type === 'audioMode.boot' && Object.prototype.hasOwnProperty.call(opts, 'bootReply')) {
+              return Promise.resolve(opts.bootReply);
+            }
             return Promise.resolve({ ok: true, shortcut: '' });
           },
         },
@@ -1255,7 +1258,19 @@ export default async function run(t) {
         if (ret !== true && !settled) resolve(undefined);
       });
     }
-    return { listeners, injected, calls, video, ask, sent };
+    return {
+      listeners,
+      injected,
+      calls,
+      video,
+      ask,
+      sent,
+      beacon: html.dataset.amBeacon,
+      setPlayer(el) {
+        if (el) nodesById.movie_player = el;
+        else delete nodesById.movie_player;
+      },
+    };
   }
 
   const noPlayerPage = bootPage({ noPlayer: true, noVideo: true });
@@ -1473,9 +1488,10 @@ export default async function run(t) {
   const page = bootPage();
   const bootMsgs = changed(page.sent);
   t.check(
-    'boot sends audioMode.changed on:false',
-    bootMsgs.length === 1 && bootMsgs[0].on === false,
-    JSON.stringify(bootMsgs),
+    'boot sends audioMode.boot and not audioMode.changed',
+    page.sent.some((m) => m && m.type === 'audioMode.boot')
+      && bootMsgs.length === 0,
+    JSON.stringify(page.sent),
   );
 
   page.sent.length = 0;
@@ -1542,5 +1558,86 @@ export default async function run(t) {
     'toggle off still replies when sendMessage rejects',
     rejectOff && rejectOff.ok === true && rejectOff.on === false,
     JSON.stringify(rejectOff),
+  );
+
+  t.section('open in audio mode from boot');
+
+  function wait(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function waitUntil(pred, timeout) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+      if (await pred()) return true;
+      await wait(15);
+    }
+    return pred();
+  }
+
+  const autoOn = bootPage({ bootReply: { ok: true, openInAudioMode: true } });
+  t.check(
+    'openInAudioMode boot sends audioMode.boot',
+    autoOn.sent[0] && autoOn.sent[0].type === 'audioMode.boot',
+    JSON.stringify(autoOn.sent[0]),
+  );
+  await waitUntil(() => changed(autoOn.sent).some((m) => m.on === true), 1500);
+  const autoState = await autoOn.ask({ type: 'audioMode.state' });
+  t.check(
+    'openInAudioMode true with a player ends on',
+    autoState && autoState.ok === true && autoState.on === true,
+    JSON.stringify(autoState),
+  );
+  t.check(
+    'openInAudioMode true sends audioMode.changed on:true',
+    changed(autoOn.sent).some((m) => m.on === true),
+    JSON.stringify(changed(autoOn.sent)),
+  );
+
+  const stayOff = bootPage({ bootReply: { ok: true, openInAudioMode: false } });
+  await wait(40);
+  const offState = await stayOff.ask({ type: 'audioMode.state' });
+  t.check(
+    'openInAudioMode false stays off',
+    offState && offState.ok === true && offState.on === false,
+    JSON.stringify(offState),
+  );
+  t.check(
+    'openInAudioMode false does not inject inject.js',
+    stayOff.injected.length === 0,
+    String(stayOff.injected.length),
+  );
+
+  const later = bootPage({ noPlayer: true, bootReply: { ok: true, openInAudioMode: true } });
+  await wait(40);
+  t.check(
+    'no player at boot does not inject yet',
+    later.injected.length === 0,
+    String(later.injected.length),
+  );
+  const laterPlayer = makeEl('div');
+  laterPlayer.id = 'movie_player';
+  laterPlayer.querySelector = function () { return null; };
+  later.setPlayer(laterPlayer);
+  await waitUntil(async () => {
+    const res = await later.ask({ type: 'audioMode.state' });
+    return !!(res && res.on === true);
+  }, 2000);
+  const laterState = await later.ask({ type: 'audioMode.state' });
+  t.check(
+    'player appearing later turns audio mode on',
+    laterState && laterState.ok === true && laterState.on === true,
+    JSON.stringify(laterState),
+  );
+
+  t.check(
+    'boot with throwing sendMessage still sets the beacon',
+    throwsPage.beacon === 'loaded',
+    String(throwsPage.beacon),
+  );
+  t.check(
+    'boot with rejecting sendMessage still sets the beacon',
+    rejectsPage.beacon === 'loaded',
+    String(rejectsPage.beacon),
   );
 }

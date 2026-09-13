@@ -23,6 +23,7 @@ import {
   listedMatch,
   visibleFeedItems,
   feedItemUrl,
+  rowOpenModes,
   feedsView,
   watchlistView,
   audioTabView,
@@ -434,18 +435,61 @@ function openVideo(item) {
   openUrl(feedItemUrl(item));
 }
 
+function openVideoInAudioMode(item) {
+  const v = item && item.v;
+  if (!v) return;
+  try {
+    const opening = send({ type: 'openInAudioMode', v });
+    Promise.resolve(opening).then((res) => {
+      if (res && res.ok === true) window.close();
+    }, () => {});
+  } catch {
+    // Leave the popup open if the worker could not open the tab.
+  }
+}
+
+function openFeedItem(item, mode) {
+  if (mode === 'audio') openVideoInAudioMode(item);
+  else openVideo(item);
+}
+
+function headphonesIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 48 48');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const band = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  band.setAttribute('fill', 'none');
+  band.setAttribute('stroke', 'currentColor');
+  band.setAttribute('stroke-width', '3');
+  band.setAttribute('stroke-linecap', 'round');
+  band.setAttribute('d', 'M8 24a16 16 0 0 1 32 0');
+  const left = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  left.setAttribute('fill', 'currentColor');
+  left.setAttribute('d', 'M8 24v8.5A4.5 4.5 0 0 0 12.5 37h2A3.5 3.5 0 0 0 18 33.5V27a3 3 0 0 0-3-3H8z');
+  const right = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  right.setAttribute('fill', 'currentColor');
+  right.setAttribute('d', 'M40 24v8.5A4.5 4.5 0 0 1 35.5 37h-2A3.5 3.5 0 0 1 30 33.5V27a3 3 0 0 1 3-3h7z');
+  svg.append(band, left, right);
+  return svg;
+}
+
 function feedRow(item, locale, channel, { showChannel = true } = {}) {
+  const modes = rowOpenModes(view.settings);
   const row = document.createElement('div');
   row.className = 'feed-row';
   row.tabIndex = 0;
   const title = item.t || '';
-  row.setAttribute('aria-label', t('feedOpenVideo', [title]));
-  row.addEventListener('click', () => openVideo(item));
+  row.setAttribute(
+    'aria-label',
+    t(modes.row === 'audio' ? 'feedOpenVideoAudio' : 'feedOpenVideo', [title]),
+  );
+  row.addEventListener('click', () => openFeedItem(item, modes.row));
   row.addEventListener('keydown', (event) => {
     if (event.target !== row) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
-    openVideo(item);
+    openFeedItem(item, modes.row);
   });
 
   // Pin the thumbnail box so a slow image cannot reflow the list.
@@ -517,6 +561,22 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   }
 
   row.appendChild(body);
+
+  const alt = document.createElement('button');
+  alt.type = 'button';
+  alt.className = 'icon-btn feed-row__open-alt';
+  alt.setAttribute(
+    'aria-label',
+    t(modes.button === 'audio' ? 'feedOpenVideoAudio' : 'feedOpenVideoNormal', [title]),
+  );
+  alt.title = t(modes.button === 'audio' ? 'feedOpenAudioShort' : 'feedOpenNormalShort');
+  if (modes.button === 'audio') alt.appendChild(headphonesIcon());
+  else alt.textContent = '▶';
+  alt.addEventListener('click', (event) => {
+    event.stopPropagation();
+    openFeedItem(item, modes.button);
+  });
+  row.appendChild(alt);
   return row;
 }
 

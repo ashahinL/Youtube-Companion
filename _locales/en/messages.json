@@ -271,6 +271,34 @@
       }
     }
   },
+  "feedOpenVideoAudio": {
+    "message": "Open $TITLE$ in audio mode",
+    "description": "Accessible name of a feed row or its button when that control opens the video in audio mode. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "iPhone 18 Pro/Duo Impressions: Mogged"
+      }
+    }
+  },
+  "feedOpenVideoNormal": {
+    "message": "Open $TITLE$ normally",
+    "description": "Accessible name of the per-row button that opens the video without audio mode. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "iPhone 18 Pro/Duo Impressions: Mogged"
+      }
+    }
+  },
+  "feedOpenAudioShort": {
+    "message": "Open in audio mode",
+    "description": "Tooltip on the per-row button that opens the video in audio mode."
+  },
+  "feedOpenNormalShort": {
+    "message": "Open normally",
+    "description": "Tooltip on the per-row button that opens the video without audio mode."
+  },
   "sheetClose": {
     "message": "Close",
     "description": "Accessible name of the control that closes the channel sheet."
@@ -688,6 +716,14 @@
   "audioStatsUnitGb": {
     "message": " GB",
     "description": "Gigabyte unit suffix passed to formatData, including the leading space."
+  },
+  "settingsOpenFeedInAudio": {
+    "message": "Open feed videos in audio mode",
+    "description": "Settings checkbox that makes a feed-row click open the video with audio mode already on."
+  },
+  "settingsOpenFeedInAudioTitle": {
+    "message": "On, clicking a video opens it with audio mode already on, and its button opens it normally.",
+    "description": "Tooltip on the Open feed videos in audio mode checkbox."
   },
   "settingsAudioLook": {
     "message": "Audio mode look",
