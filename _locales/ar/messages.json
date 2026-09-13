@@ -203,6 +203,16 @@
     "message": "هناك فحص جارٍ بالفعل",
     "description": "Inline notice on the Feeds tab when a refresh is requested while a sweep is already in progress."
   },
+  "feedSlowDown": {
+    "message": "طلب يوتيوب منّا الإبطاء. سنفحص مجددًا $TIME$.",
+    "description": "Notice on the Feeds tab and the channel sheet while checks are paused because YouTube answered 429 or sent its unusual-traffic page. $TIME$ is a relative time such as in 15 min.",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "in 15 min"
+      }
+    }
+  },
   "feedEmptyAdd": {
     "message": "أضف قناة",
     "description": "Button on the Feeds empty state that switches to the Watchlist tab when no channels have been added."

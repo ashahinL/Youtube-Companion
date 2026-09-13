@@ -12,6 +12,7 @@ import {
   fetchChannelFeed,
   fetchChannelHeader,
   classifyVideo,
+  isPushback,
 } from '../lib/yt.js';
 import { readSettings, writeSettings, onSettingsChanged } from '../lib/settings.js';
 import { parseBackup, mergeBackup } from '../lib/backup.js';
@@ -35,6 +36,7 @@ import {
   writePollState,
   markNotified,
   hasNotified,
+  backoffDelayMs,
 } from '../lib/store.js';
 
 const ALARM_ALL = 'poll-all';
@@ -295,11 +297,12 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
       if (Number.isFinite(at)) rec.at = at;
       else if (Number.isFinite(meta[id]?.at)) rec.at = meta[id].at;
       meta = putVideoMeta(meta, { [id]: rec });
-    } catch {
+    } catch (err) {
       // Leave it out of videoMeta so the next sweep retries this id.
+      if (isPushback(err)) return { meta, pushedBack: true };
     }
   }
-  return meta;
+  return { meta, pushedBack: false };
 }
 
 function itemFromEntry(entry, channelId, rec) {
@@ -388,6 +391,7 @@ async function performSweep({ scope, onlyId }) {
   const unseeded = new Set(list.filter((ch) => !ch.seeded).map((ch) => ch.id));
   const succeeded = [];
   const incoming = [];
+  let pushedBack = false;
 
   for (let i = 0; i < list.length; i++) {
     if (i > 0) await sleep(CHANNEL_FETCH_DELAY_MS);
@@ -397,6 +401,13 @@ async function performSweep({ scope, onlyId }) {
       await updateChannel(ch.id, { lastError: null, lastFetchAt: Date.now() });
       succeeded.push({ channel: ch, entries: parsed.entries || [] });
     } catch (err) {
+      // The channel is fine; YouTube is refusing this IP. Every further
+      // request deepens the block, and marking the rest as broken would
+      // be wrong, so stop here and keep what already arrived.
+      if (isPushback(err)) {
+        pushedBack = true;
+        break;
+      }
       await updateChannel(ch.id, {
         lastError: { at: Date.now(), message: errMessage(err) },
       });
@@ -415,7 +426,11 @@ async function performSweep({ scope, onlyId }) {
   }
   for (const id of pendingLiveIds(videoMeta)) toClassify.add(id);
 
-  videoMeta = await classifyIds([...toClassify], videoMeta, fetchImpl, atById);
+  if (!pushedBack) {
+    const classified = await classifyIds([...toClassify], videoMeta, fetchImpl, atById);
+    videoMeta = classified.meta;
+    pushedBack = classified.pushedBack;
+  }
   await saveVideoMeta(videoMeta);
 
   const feedNow = await readFeed();
@@ -446,7 +461,10 @@ async function performSweep({ scope, onlyId }) {
 
   for (const { channel } of succeeded) {
     const patch = { lastVideoAt: newestAt(feed, channel.id) };
-    if (unseeded.has(channel.id)) patch.seeded = true;
+    // A pushback can stop classification before a new channel's backfill is
+    // all in. Left unseeded, the rest arrives silently next time instead of
+    // as a burst of alerts for old videos.
+    if (unseeded.has(channel.id) && !pushedBack) patch.seeded = true;
     await updateChannel(channel.id, patch);
   }
 
@@ -454,10 +472,21 @@ async function performSweep({ scope, onlyId }) {
   await notifyNewItems({ added, channels, unseeded, settings });
 
   const now = Date.now();
-  if (!onlyId) {
-    if (scope === 'favorites') await writePollState({ lastFavPollAt: now });
-    else await writePollState({ lastPollAt: now });
+  if (pushedBack) {
+    const level = (Number((await readPollState()).backoffLevel) || 0) + 1;
+    const until = now + backoffDelayMs(level);
+    // Before the badge, which can throw: a lost write here would let the
+    // next alarm walk straight back into the block.
+    await writePollState({ backoffLevel: level, backoffUntil: until });
+    await refreshBadge();
+    return { ok: false, error: 'slow down', until, added: added.length };
   }
+  const patch = { backoffLevel: 0, backoffUntil: 0 };
+  if (!onlyId) {
+    if (scope === 'favorites') patch.lastFavPollAt = now;
+    else patch.lastPollAt = now;
+  }
+  await writePollState(patch);
 
   await refreshBadge();
   return { ok: true, added: added.length };
@@ -475,6 +504,9 @@ export async function runSweep({ scope = 'all', onlyId = null } = {}) {
   try {
     const state = await readPollState();
     if (state.running) return { ok: false, error: 'already running' };
+    // A manual refresh waits too: a tap during a block is still a request.
+    const until = Number(state.backoffUntil) || 0;
+    if (until > Date.now()) return { ok: false, error: 'slow down', until };
     // Persist running the moment it changes. Batching it with a later write
     // is how a kill leaves the flag stuck on.
     await writePollState({ running: true });

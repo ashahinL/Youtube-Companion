@@ -149,11 +149,22 @@ function installFetch(spec = {}) {
       if (spec.failFeeds && spec.failFeeds[id] === 'network') {
         throw new Error('offline');
       }
+      if (spec.failFeeds && spec.failFeeds[id] === '429') {
+        return textRes('Too Many Requests', { status: 429 });
+      }
+      if (spec.failFeeds && spec.failFeeds[id] === 'sorry') {
+        return {
+          ...textRes('<html>unusual traffic</html>'),
+          redirected: true,
+          url: 'https://www.google.com/sorry/index?continue=https://www.youtube.com/feeds/videos.xml',
+        };
+      }
       const xml = spec.feeds && spec.feeds[id];
       return textRes(xml || rssXml(id, 'Empty', []));
     }
     if (u.includes('/youtubei/v1/player')) {
       const videoId = bodyOf(opts).videoId;
+      if (spec.playerStatus) return jsonRes({}, { status: spec.playerStatus });
       if (spec.players && spec.players[videoId]) return jsonRes(spec.players[videoId]);
       return jsonRes(playerJson(videoId));
     }
@@ -528,6 +539,120 @@ export default async function run(t) {
       failFeed.length === 1 && failFeed[0].v === 'beastvid001' && failFeed[0].t === 'Beast video',
       JSON.stringify(failFeed),
     );
+
+    t.section('YouTube pushback stops the sweep and waits');
+
+    const LINUS = 'UCXuqSBlHAE6Xw-yeJA0Tunw';
+    const QUARTER_HOUR = 15 * 60_000;
+    const feedCallsTo = (calls) => calls
+      .filter((c) => c.url.includes('/feeds/videos.xml'))
+      .map((c) => decodeURIComponent((c.url.match(/channel_id=([^&]+)/) || [])[1] || ''));
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    await putChannel({ id: LINUS, title: 'Linus Tech Tips', seeded: true });
+    let pushFetch = installFetch({
+      failFeeds: { [BEAST]: '429' },
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'beforeblock', t: 'Before', at: AT.newest }]) },
+    });
+    const pushStart = Date.now();
+    const pushed = await runSweep({ scope: 'all' });
+    const pushEnd = Date.now();
+    t.check('a 429 makes the sweep report slow down', pushed.ok === false && pushed.error === 'slow down', JSON.stringify(pushed));
+    t.check(
+      'no channel after the 429 is fetched',
+      JSON.stringify(feedCallsTo(pushFetch.calls)) === JSON.stringify([MKBHD, BEAST]),
+      JSON.stringify(feedCallsTo(pushFetch.calls)),
+    );
+    const pushedChannels = await readChannels();
+    t.check(
+      'the refused channel is not marked broken',
+      pushedChannels.find((c) => c.id === BEAST).lastError === null,
+      JSON.stringify(pushedChannels.find((c) => c.id === BEAST).lastError),
+    );
+    t.check('the skipped channel is not marked broken', pushedChannels.find((c) => c.id === LINUS).lastError === null);
+    // A new video still needs a player request to classify it, and that is
+    // one more request into the block. It waits for the next clean sweep.
+    t.check(
+      'no video is classified after a pushback',
+      !pushFetch.calls.some((c) => c.url.includes('/youtubei/v1/player')) && (await readFeed()).length === 0,
+      JSON.stringify(await readFeed()),
+    );
+    let pushPoll = await readPollState();
+    t.check('first pushback is level 1', pushPoll.backoffLevel === 1, String(pushPoll.backoffLevel));
+    t.check(
+      'first pushback waits 15 minutes',
+      pushPoll.backoffUntil >= pushStart + QUARTER_HOUR && pushPoll.backoffUntil <= pushEnd + QUARTER_HOUR,
+      String(pushPoll.backoffUntil - pushStart),
+    );
+    t.check('the sweep reports when it will try again', pushed.until === pushPoll.backoffUntil);
+    t.check('a stopped sweep is not recorded as a check', pushPoll.lastPollAt === 0, String(pushPoll.lastPollAt));
+    t.check('running is lowered after a pushback', pushPoll.running === false);
+
+    const callsDuringBlock = pushFetch.calls.length;
+    const again = await runSweep({ scope: 'all' });
+    t.check('a sweep during the wait is refused', again.ok === false && again.error === 'slow down', JSON.stringify(again));
+    t.check('and carries the same until', again.until === pushPoll.backoffUntil);
+    const manual = await handleMessage({ type: 'sweep', scope: 'all' });
+    t.check('a manual refresh during the wait is refused', manual.error === 'slow down', JSON.stringify(manual));
+    await mock.fireAlarm('poll-all');
+    await mock.fireAlarm('poll-fav');
+    t.check('nothing is fetched during the wait', pushFetch.calls.length === callsDuringBlock, String(pushFetch.calls.length - callsDuringBlock));
+
+    await writePollState({ backoffUntil: Date.now() - 1 });
+    const second = await runSweep({ scope: 'all' });
+    pushPoll = await readPollState();
+    t.check('a second pushback in a row is level 2', second.error === 'slow down' && pushPoll.backoffLevel === 2, String(pushPoll.backoffLevel));
+    t.check(
+      'and waits 30 minutes',
+      pushPoll.backoffUntil - Date.now() > 2 * QUARTER_HOUR - 5_000 && pushPoll.backoffUntil - Date.now() <= 2 * QUARTER_HOUR,
+      String(pushPoll.backoffUntil - Date.now()),
+    );
+
+    await writePollState({ backoffUntil: Date.now() - 1 });
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'beforeblock', t: 'Before', at: AT.newest }]) },
+    });
+    const clean = await runSweep({ scope: 'all' });
+    pushPoll = await readPollState();
+    t.check('a clean sweep after the wait is ok', clean.ok === true, JSON.stringify(clean));
+    t.check('the held-back video lands on the clean sweep', (await readFeed()).some((row) => row.v === 'beforeblock'));
+    t.check('a clean sweep resets the level', pushPoll.backoffLevel === 0 && pushPoll.backoffUntil === 0, JSON.stringify(pushPoll));
+    t.check('a clean sweep is recorded as a check', pushPoll.lastPollAt > 0);
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    installFetch({ failFeeds: { [MKBHD]: 'sorry' } });
+    const sorry = await runSweep({ scope: 'all' });
+    t.check('a redirect to google.com/sorry counts as pushback', sorry.error === 'slow down', JSON.stringify(sorry));
+    t.check(
+      'and does not mark the channel broken',
+      (await readChannels())[0].lastError === null,
+      JSON.stringify((await readChannels())[0].lastError),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: false });
+    const seedEntries = [
+      { v: 'blockseed01', t: 'Old one', at: AT.older },
+      { v: 'blockseed02', t: 'Old two', at: AT.mid },
+    ];
+    pushFetch = installFetch({ feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', seedEntries) }, playerStatus: 429 });
+    const classifyPush = await runSweep({ scope: 'all' });
+    t.check('a 429 while classifying is pushback too', classifyPush.error === 'slow down', JSON.stringify(classifyPush));
+    t.check(
+      'classification stops at the first 429',
+      pushFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 1,
+      String(pushFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length),
+    );
+    t.check('a new channel stays unseeded when its backfill was cut short', (await readChannels())[0].seeded === false);
+    await writePollState({ backoffUntil: Date.now() - 1 });
+    installFetch({ feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', seedEntries) } });
+    await runSweep({ scope: 'all' });
+    t.check('the backfill finishes on the next sweep', (await readFeed()).length === 2, String((await readFeed()).length));
+    t.check('and is still silent', mock.notifications.length === 0, JSON.stringify(mock.notifications));
+    t.check('the channel is seeded afterwards', (await readChannels())[0].seeded === true);
 
     t.section('silent seed');
 

@@ -58,6 +58,29 @@ export class YtError extends Error {
   }
 }
 
+const PUSHBACK_STATUS = 429;
+
+/**
+ * YouTube asking this IP to slow down. Not measured here: Google answers a
+ * throttled client with 429, or redirects it to its /sorry/ captcha page,
+ * which fetch follows — so the landing URL counts as much as the status.
+ * Carrying on past it is how a user ends up solving captchas on youtube.com.
+ */
+export function isPushback(err) {
+  return err instanceof YtError && err.kind === 'http' && err.status === PUSHBACK_STATUS;
+}
+
+function landedOnBlockPage(res) {
+  if (res.status === PUSHBACK_STATUS) return true;
+  if (!res.url) return false;
+  try {
+    const url = new URL(res.url);
+    return /(^|\.)google\.com$/.test(url.hostname) && url.pathname.startsWith('/sorry');
+  } catch {
+    return false;
+  }
+}
+
 function messageFor(kind, endpoint, status) {
   if (kind === 'http') return `${endpoint} failed (${status})`;
   if (kind === 'network') return `${endpoint} network error`;
@@ -178,6 +201,7 @@ async function innertubePost(method, extra, fetchImpl) {
   } catch {
     throw new YtError('network', method);
   }
+  if (landedOnBlockPage(res)) throw new YtError('http', method, PUSHBACK_STATUS);
   if (!res.ok) throw new YtError('http', method, res.status);
   try {
     return await res.json();
@@ -452,6 +476,7 @@ export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } =
   } catch {
     throw new YtError('network', 'feed');
   }
+  if (landedOnBlockPage(res)) throw new YtError('http', 'feed', PUSHBACK_STATUS);
   if (!res.ok) throw new YtError('http', 'feed', res.status);
   let xml;
   try {
@@ -477,6 +502,8 @@ export async function isShort(videoId, { fetch = globalThis.fetch } = {}) {
   } catch {
     throw new YtError('network', 'shorts');
   }
+  // Before the /watch test: a block-page redirect is also "redirected".
+  if (landedOnBlockPage(res)) throw new YtError('http', 'shorts', PUSHBACK_STATUS);
   if (!res.ok) throw new YtError('http', 'shorts', res.status);
   if (res.redirected && /\/watch/.test(res.url || '')) return false;
   return true;

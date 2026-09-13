@@ -621,6 +621,16 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   return row;
 }
 
+/** '' unless checks are paused because YouTube pushed back. */
+function slowDownText() {
+  const until = Number(view.pollState?.backoffUntil) || 0;
+  const now = Date.now();
+  if (until <= now) return '';
+  // Under a minute left reads "just now" otherwise, which is a past tense.
+  const when = relativeTime(Math.max(until, now + 60_000), now, locale);
+  return t('feedSlowDown', [when]);
+}
+
 function renderFeeds(locale) {
   const form = document.getElementById('feed-add-form');
   const filterEl = document.getElementById('feed-filter');
@@ -676,10 +686,15 @@ function renderFeeds(locale) {
     lastEl.removeAttribute('title');
   }
 
+  const slowText = slowDownText();
   if (view.feedNotice) {
     noticeEl.hidden = false;
     noticeEl.textContent = view.feedNotice;
     noticeEl.classList.toggle('banner--error', view.feedNotice !== t('feedSweepRunning'));
+  } else if (slowText) {
+    noticeEl.hidden = false;
+    noticeEl.textContent = slowText;
+    noticeEl.classList.remove('banner--error');
   } else {
     noticeEl.hidden = true;
     noticeEl.textContent = '';
@@ -872,10 +887,15 @@ function renderChannelSheet() {
   refreshBtn.title = t('feedRefresh');
   sheet.setAttribute('aria-busy', locked ? 'true' : 'false');
 
+  const slowText = slowDownText();
   if (view.sheetError) {
     statusEl.hidden = false;
     statusEl.textContent = view.sheetError;
     statusEl.classList.add('banner--error');
+  } else if (slowText) {
+    statusEl.hidden = false;
+    statusEl.textContent = slowText;
+    statusEl.classList.remove('banner--error');
   } else {
     statusEl.hidden = true;
     statusEl.textContent = '';
@@ -1482,7 +1502,9 @@ async function requestSweep({ onlyId = null } = {}) {
     const msg = { type: 'sweep', scope: 'all' };
     if (onlyId) msg.onlyId = onlyId;
     const res = await send(msg);
-    if (res && res.ok === false) {
+    // A pause is not an error: refreshState brings in backoffUntil, and the
+    // feed and sheet show it as a plain notice.
+    if (res && res.ok === false && res.error !== 'slow down') {
       const text = res.error === 'already running'
         ? t('feedSweepRunning')
         : formatError(res.error);

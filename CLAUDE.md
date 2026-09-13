@@ -194,6 +194,11 @@ Most live as comments at the line they protect. These span files or tools:
   `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
   with `not allowed` until it is added there. Add it only if a compromised
   youtube.com page could not misuse it.
+- **Stop at YouTube's pushback.** A 429 or a redirect to `google.com/sorry`
+  ends the sweep and sets `pollState.backoffUntil`; nothing fetches until then,
+  manual refresh included. A new request path in `src/lib/yt.js` must throw
+  through `landedOnBlockPage`, or a block turns into captchas on the user's
+  own YouTube.
 - **Compressed bytes differ between Node builds.** Homebrew's Node links system
   zlib and packs the same tree to a different zip hash than a Node with its own
   zlib. Compare files or pixels, never deflate output, across machines.

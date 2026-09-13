@@ -9,10 +9,26 @@ const DEFAULT_POLL_STATE = {
   lastFavPollAt: 0,
   lastSeenAt: 0,
   notified: [],
+  // Set when YouTube pushes back: no check runs before backoffUntil, and each
+  // pushback in a row doubles the wait. A clean check puts both back to 0.
+  backoffUntil: 0,
+  backoffLevel: 0,
 };
 
 const VIDEO_META_CAP = 3000;
 const NOTIFIED_CAP = 500;
+
+// Google publishes nothing about how long a block lasts. Doubling from 15
+// minutes backs away quickly; the 6-hour cap still tries a few times a day
+// while the IP stays blocked.
+const BACKOFF_BASE_MS = 15 * 60_000;
+const BACKOFF_MAX_MS = 6 * 60 * 60_000;
+
+/** The wait after the `level`-th pushback in a row (1 → 15 min, 2 → 30 min…). */
+export function backoffDelayMs(level) {
+  const n = Math.max(1, Math.floor(Number(level)) || 1);
+  return Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** (n - 1));
+}
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

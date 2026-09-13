@@ -25,6 +25,7 @@ import {
   classifyVideo,
   isChannelId,
   isAvatarUrl,
+  isPushback,
 } from '../src/lib/yt.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -647,4 +648,35 @@ export default async function run(t) {
     );
     t.check('isShort redirected to /watch is false', (await isShort('gTKS8SAwUzE', { fetch })) === false);
   }
+
+  /* ---- pushback ------------------------------------------------------ */
+  t.section('pushback');
+
+  async function thrown(fn) {
+    try {
+      await fn();
+      return null;
+    } catch (err) {
+      return err;
+    }
+  }
+  const SORRY = 'https://www.google.com/sorry/index?continue=https://www.youtube.com/';
+  const blocked = recordFetch(() => headRes({ status: 429, url: '' }));
+  const sorry = recordFetch(() => headRes({ status: 200, redirected: true, url: SORRY }));
+
+  const feed429 = await thrown(() => fetchChannelFeed(mkbhdId, { fetch: blocked }));
+  t.check('a 429 feed is pushback', isPushback(feed429), String(feed429?.message));
+  t.check('a 429 feed keeps its status', feed429?.status === 429);
+  t.check('a sorry-page feed is pushback', isPushback(await thrown(() => fetchChannelFeed(mkbhdId, { fetch: sorry }))));
+  t.check('a 429 player is pushback', isPushback(await thrown(() => classifyVideo('Od6M0AXpcxQ', { fetch: blocked }))));
+  t.check('a sorry-page resolve is pushback', isPushback(await thrown(() => resolveChannelId('@mkbhd', { fetch: sorry }))));
+  const shortSorry = await thrown(() => isShort('gTKS8SAwUzE', { fetch: sorry }));
+  t.check('a sorry redirect on /shorts/ is pushback, not "normal video"', isPushback(shortSorry), String(shortSorry));
+
+  const five00 = await thrown(() => fetchChannelFeed(mkbhdId, { fetch: recordFetch(() => headRes({ status: 500 })) }));
+  t.check('a 500 is not pushback', five00 instanceof YtError && !isPushback(five00));
+  const lookalike = recordFetch(() => headRes({ status: 200, redirected: true, url: 'https://notgoogle.com/sorry/' }));
+  const lookalikeErr = await thrown(() => isShort('gTKS8SAwUzE', { fetch: lookalike }));
+  t.check('a /sorry path on another host is not pushback', !isPushback(lookalikeErr), String(lookalikeErr));
+  t.check('a plain Error is not pushback', !isPushback(new Error('429')));
 }
