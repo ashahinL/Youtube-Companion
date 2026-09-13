@@ -5,6 +5,10 @@
  * pointer-events: none so pause and fullscreen still reach the player;
  * only the exit button is clickable.
  *
+ * Every preset stop keeps the overlay text (#f1f1f4) above 4.5:1. Sunset
+ * is the tightest at 4.56:1, which is why its amber is darker than the
+ * PREMIERE tag's; a new preset has to clear the same floor.
+ *
  * YouTube sets html { font-size: 10px } (measured). rem here would be
  * 62.5% of a 16px intent — the icon's 3.25rem max measured 32.5px, not
  * 52px. Lengths that used to be rem are px; vmin is viewport-based and

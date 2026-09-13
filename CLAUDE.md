@@ -22,64 +22,57 @@ only reads public `youtube.com` endpoints. Audio mode injects an isolated
 content script on youtube.com to pin the player to 144p; `#movie_player`
 methods are reached through a MAIN-world bridge.
 
-## Read DESIGN.md first
+## Where things stand
 
-`DESIGN.md` is the agreed spec and the source of truth. It sits in the working
-tree but is **not tracked** — it is a working document, not part of what ships,
-so it will not be in a fresh clone. It was written with the owner, question by
-question, and its decision table in §1 is **settled — do not relitigate it**.
-Its §2 wire facts were measured live with `curl` on 2026-09-11, with real byte
-counts; they are not guesses.
+**1.0.0 has shipped**: GitHub release `v1.0.0` with the store zip attached.
+Edge Add-ons was submitted on 2026-09-13 and is in review; the Chrome Web
+Store is not submitted yet. `store/LISTING.md` holds the store IDs, every
+answer given, and the Chrome steps. Release notes are `CHANGELOG.md`.
 
-Quick map of the spec:
+`docs/youtube.md` is what YouTube actually serves, measured with byte counts —
+read it before touching `src/lib/yt.js` or the audio-mode player calls.
 
-| § | What it holds |
-|---|---|
-| 1 | The settled decisions (UI shape, retention, notifications, language, shorts, …) |
-| 2 | The five YouTube endpoints, measured — sizes, fields, and the traps |
-| 3 | Storage keys and the exact record shapes |
-| 4 | File layout and the manifest |
-| 5 | The background worker: alarms, the sweep, the silent seed, alerts, badge |
-| 6 | The popup's three tabs |
-| 7 | The per-channel sheet |
-| 8 | i18n and RTL |
-| 9 | Backup format |
-| 10 | The test suites |
-| 11 | **Build order** — the phases |
-| 12 | Tripwires |
-| 13 | The Audio tab, and the provenance audit of its code |
-| 14 | The first release — name, icon, stores, donations |
+The audio-mode engine passed a code-provenance audit before publishing; the
+owner keeps that record outside the repo. Ask the owner before bringing code
+from any other extension into `src/`, and keep that discussion out of tracked
+files.
 
-## Where the work is
+## Settled product decisions — do not relitigate
 
-Built in the order of DESIGN.md §11. All ten jobs are done and the extension is
-loadable; the first release (DESIGN.md §14) is out on GitHub and in store
-review. Update this table as
-new work lands.
+Agreed with the owner, question by question. Change one only when the owner
+asks.
 
-| # | Job | State |
-|---|---|---|
-| 1 | Skeleton: manifest, package.json, locales, test harness, 3-tab popup shell | **done** |
-| 2 | `lib/yt.js` + fixtures — every endpoint and parser | **done** |
-| 3 | `lib/settings.js`, `lib/store.js` | **done** |
-| 4 | Worker: alarms, sweep, silent seed, notifications, badge | **done** |
-| 5 | Watchlist tab: add by URL/handle, filter the list, favourite, remove | **done** |
-| 6 | Feeds tab: render, tags, filter, refresh, click-through | **done** |
-| 7 | Channel sheet (in-popup overlay of stored videos) | **done** |
-| 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
-| 9 | i18n + Arabic + RTL over finished markup | **done** |
-| 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **done** — tab, look settings, player card, tab picker, statistics, open in audio mode from the feed (§13.10); the badge keeps the feed count while audio mode is on |
-| 11 | First release (DESIGN.md §14) | **built** — LF line endings, `npm run pack`, rename, redrawn icon, purple accent, support sheet, `npm run shots`, store copy in `store/LISTING.md`, `PRIVACY.md`, version 1.0.0, GitHub release `v1.0.0`. **Edge Add-ons submitted 2026-09-13, in review; Chrome Web Store not submitted yet** — `store/LISTING.md` holds the IDs, every answer given, and the Chrome steps |
-
-**Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3,
-with the audit that cleared it for publishing. Read it before touching the
-audio-mode code or carrying anything over from upstream, and keep that
-discussion in the spec rather than in tracked files.
-
-Already on disk before job 1: `DESIGN.md`, `icons/` (since redrawn by `scripts/draw-icon.js`),
-`test/fixtures/` (seven real captured YouTube responses), and
-`test/helpers/report.js` / `test/run-all.js` / `test/check-syntax.js` copied
-verbatim from `../poppo-companion` as a starting point.
+- **Popup**, 400×600, four tabs in this order: Audio, Feeds, Watchlist,
+  Settings. It opens on Audio.
+- **One list.** The Watchlist is the subscription list; Feeds is its merged
+  timeline, newest first, with **no read state** and no hiding. The newest
+  **500** videos are kept (a setting).
+- **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
+  watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
+  tab. **No name search, no bulk paste, no file import.** Typing in either box
+  only filters.
+- **Clicking a video** opens a new focused tab on youtube.com and closes the
+  popup. A channel name opens the in-popup channel sheet, which shows stored
+  videos and never fetches on open.
+- **Alerts**: one notification per channel per check ("3 new videos"), never
+  one per video. Favourites always alert while alerts are on; other channels
+  only if "Notify for non-favourite channels" is on. A video alerts once.
+- **Shorts** hidden by default behind a setting, tagged `SHORT` when shown.
+  **Live and premieres** are shown and tagged (`LIVE` red, `PREMIERE <time>`).
+- **Toolbar badge**: videos newer than the last popup open, counted with the
+  same filters the Feeds tab applies. It is always the feed count, audio mode
+  or not.
+- **English and Arabic**, full RTL, with a language override in Settings.
+- **Audio mode**: its switch lives only inside the Audio tab. No recorder. The
+  overlay look is a group in Settings. With two or more YouTube tabs open, a
+  picker chooses which one the player drives. The keyboard command acts on the
+  active tab only.
+- **Backup** exports settings and channels (merge or replace on import), not
+  the feed.
+- **Name, icon, accent**: see the top of this file. **Support**: a heart in the
+  popup header and a Support group at the bottom of Settings open one sheet
+  (PayPal, InstaPay with address, Copy and QR); the README and store text
+  mention it. No `.github/FUNDING.yml`.
 
 ## How the work gets done
 
@@ -87,8 +80,8 @@ Implementation is **delegated to the Grok Build CLI** via the `grok-delegate`
 skill, one job per dispatch, and reviewed and committed here. The pattern:
 
 1. Write a brief that assumes **zero** shared context — Grok sees only the text
-   and the working tree. Point it at DESIGN.md, name the exact scope, and list
-   what to leave alone.
+   and the working tree. Point it at this file and the files in scope, name the
+   exact scope, and list what to leave alone.
 2. Dispatch with `relay.mjs --brief … --cd <repo> --timeout 1h`, backgrounded.
 3. **Re-run the gates here.** Never accept "gates passed" from the report.
 4. Read the diff against the brief — scope creep in both directions.
@@ -119,20 +112,20 @@ touch the network.
   be surprised.
 - **No process or planning language in code or comments.** No "phase 1", "for
   now", "MVP", "TODO later", "step 3", no ticket ids. The code reads as a
-  finished thing, not as a stage of a plan. Phases live in DESIGN.md and in the
-  table above, nowhere else.
+  finished thing, not as a stage of a plan.
 - ES modules, 2-space indent, single quotes, semicolons, a short block comment
   at the top of each file saying what it is for.
 - No dependencies, ever. Node's own APIs only in tests.
 - **Commit only when asked.** `main` is the working branch.
 - Write down what you changed **and what you learned** in the same change.
-  Measured facts about YouTube's wire format go into DESIGN.md §2 with the
-  numbers attached; tripwires go into §12 — but only if forgetting one would
+  Measured facts about YouTube go into `docs/youtube.md` with the numbers and
+  the date attached. A tripwire goes in a comment at the line it protects, or
+  in the list below when it spans files — but only if forgetting it would
   break something.
 
-## Tripwires — the short version
+## Tripwires
 
-The full list is DESIGN.md §12. The ones that have teeth:
+Most live as comments at the line they protect. These span files or tools:
 
 - **`DOMParser` does not exist in an MV3 service worker.** The channel-feed XML
   parser must be hand-written. This is a constraint, not a preference.
@@ -175,3 +168,22 @@ The full list is DESIGN.md §12. The ones that have teeth:
   bound (`[\s\S]{0,240}`), and a Windows `core.autocrlf` checkout adds a byte
   per line. `.gitattributes` pins LF; a checkout made before it needs its
   files rewritten with LF once.
+- **Reloading a YouTube page does not load new content-script code**; only
+  reloading the extension does, and the version on the extensions page follows
+  the manifest, so it can look current while a stale script runs. The isolated
+  world's `console` is not the page's either. `content.js` sets a
+  `data-am-beacon` attribute on `<html>` to prove which revision is live.
+- **A test that asserts a call exists is not a test.** A structural grep once
+  passed while the handler holding the call was unreachable. Anything that must
+  actually fire on youtube.com is checked in a browser by hand.
+- **Persist a durable flag the moment it changes**, not at the next convenient
+  write. MV3 can kill the worker in between; clearing a flag in memory and
+  letting a later batch carry it gave poppo an endless re-seed loop.
+- **An extension cannot assign its own keyboard shortcut.** `suggested_key`
+  applies only at install, and when the combination is taken Chrome registers
+  the command with no shortcut, silently (Dark Reader had `Alt+Shift+A`).
+  Anything that shows the shortcut reads `chrome.commands.getAll()` and must
+  make sense when it is empty.
+- **Store screenshots are only as good as the frame the stub caught.** Open
+  every image `npm run shots` writes before it ships; an empty frame went out
+  in 1.0.0 and is far smaller on disk than its siblings.

@@ -5,5 +5,5 @@ node_modules/
 .claude/worktrees/
 dist/
 
-# The design spec is local-only, not published.
-DESIGN.md
+# The owner's private notes; never published.
+.local/

@@ -44,7 +44,7 @@ export const DEFAULT_SETTINGS = {
 
 const LOCALES = new Set(['auto', 'en', 'ar']);
 
-// Same strings as the player API / DESIGN.md §13.6.
+// Same strings as the player API; see docs/youtube.md.
 const PLAYBACK_QUALITIES = new Set([
   'tiny',
   'small',

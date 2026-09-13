@@ -1032,6 +1032,8 @@
     return gate;
   }
 
+  // Polling, not a subtree MutationObserver: YouTube mutates the page
+  // constantly, and the wait ends as soon as #movie_player exists.
   const PLAYER_POLL_MS = 250;
   const PLAYER_POLL_MAX_MS = 20000;
 

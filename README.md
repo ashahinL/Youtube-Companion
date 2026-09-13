@@ -128,6 +128,7 @@ src/
   lib/          YouTube parsing, storage, settings, backup, i18n
   popup/        the popup: Audio, Feeds, Watchlist, Settings
 _locales/       English and Arabic strings
+docs/           screenshots, and what YouTube serves (measured)
 scripts/        packaging, screenshots, and the icon drawn from geometry
 store/          store listing copy and images
 test/           test suites and fixtures
