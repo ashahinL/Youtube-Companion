@@ -534,12 +534,12 @@
     "description": "Accessible name of the master audio-mode toggle."
   },
   "audioModeToggleTitle": {
-    "message": "Turn audio mode on or off on the front tab.",
+    "message": "Turn audio mode on or off on the selected YouTube tab.",
     "description": "Tooltip on the master audio-mode toggle."
   },
   "audioPageNotice": {
     "message": "Open a YouTube video to use audio mode.",
-    "description": "Notice on the Audio tab when the front tab is not a YouTube page the content script can reach."
+    "description": "Notice on the Audio tab when no controllable YouTube tab is open."
   },
   "audioRestoreQuality": {
     "message": "Restore quality",
@@ -606,6 +606,88 @@
   "audioShortcutTitle": {
     "message": "Click to set the keyboard shortcut.",
     "description": "Tooltip on the Audio tab shortcut hint before JavaScript replaces it with the bound or empty copy."
+  },
+  "audioPickerLabel": {
+    "message": "Open YouTube tabs",
+    "description": "Accessible name of the row of open YouTube tabs the Audio tab can drive."
+  },
+  "audioPickerTab": {
+    "message": "Play $TITLE$",
+    "description": "Accessible name of one open-tab picker entry. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "A lecture"
+      }
+    }
+  },
+  "audioPlayerBack": {
+    "message": "Back 10 seconds",
+    "description": "Accessible name of the player-card skip-back button."
+  },
+  "audioPlayerPlay": {
+    "message": "Play",
+    "description": "Accessible name of the player-card play button while the video is paused."
+  },
+  "audioPlayerPause": {
+    "message": "Pause",
+    "description": "Accessible name of the player-card pause button while the video is playing."
+  },
+  "audioPlayerForward": {
+    "message": "Forward 10 seconds",
+    "description": "Accessible name of the player-card skip-forward button."
+  },
+  "audioPlayerSpeed": {
+    "message": "Speed",
+    "description": "Accessible name of the player-card playback-speed select."
+  },
+  "audioPlayerVolume": {
+    "message": "Volume",
+    "description": "Accessible name of the player-card volume select."
+  },
+  "audioVolumeMute": {
+    "message": "Mute",
+    "description": "Volume option that sets the player to 0."
+  },
+  "audioPlayerNoTitle": {
+    "message": "No video",
+    "description": "Player-card title when the target tab has no video title."
+  },
+  "audioStatsFilter": {
+    "message": "Statistics range",
+    "description": "Accessible name of the This Month / All Time filter group."
+  },
+  "audioStatsThisMonth": {
+    "message": "This Month",
+    "description": "Audio tab statistics filter for the current calendar month."
+  },
+  "audioStatsAllTime": {
+    "message": "All Time",
+    "description": "Audio tab statistics filter for never-pruned running totals."
+  },
+  "audioStatsUsed": {
+    "message": "Data used",
+    "description": "Label of the card showing estimated data used at 144p."
+  },
+  "audioStatsSaved": {
+    "message": "Saved vs 720p",
+    "description": "Label of the card showing estimated data saved against 720p."
+  },
+  "audioStatsListened": {
+    "message": "Time listened",
+    "description": "Label of the card showing media seconds counted while audio mode was on."
+  },
+  "audioStatsActive": {
+    "message": "Time active",
+    "description": "Label of the card showing wall seconds the audio-mode session was up."
+  },
+  "audioStatsUnitMb": {
+    "message": " MB",
+    "description": "Megabyte unit suffix passed to formatData, including the leading space."
+  },
+  "audioStatsUnitGb": {
+    "message": " GB",
+    "description": "Gigabyte unit suffix passed to formatData, including the leading space."
   },
   "settingsAudioLook": {
     "message": "Audio mode look",

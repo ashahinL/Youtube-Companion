@@ -1,10 +1,12 @@
 /**
  * Popup view decisions: feed/watchlist filters, row matching, Add-enabled,
- * and the exact-URL force-show. Hand-made rows; no fixtures, no network.
+ * the exact-URL force-show, Audio-tab target choice, and stats folding.
+ * Hand-made rows; no fixtures, no network.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
+import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -20,6 +22,8 @@ import {
   feedItemUrl,
   feedsView,
   watchlistView,
+  audioTabView,
+  audioStatsView,
 } from '../src/lib/view.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -533,4 +537,125 @@ export default async function run(t) {
   t.check('isChannelRef accepts a bare handle', isChannelRef('mkbhd'));
   t.check('isChannelRef rejects an empty box', !isChannelRef(''));
   t.check('isChannelRef rejects a name with spaces', !isChannelRef('marques brownlee'));
+
+  t.section('audio tab target');
+
+  const coreSrc = fs.readFileSync(path.join(ROOT, 'src/content/core.js'), 'utf8');
+  const coreBox = { URL };
+  vm.createContext(coreBox);
+  vm.runInContext(coreSrc, coreBox, { filename: 'src/content/core.js' });
+  const core = coreBox.AudioModeCore;
+
+  function watchTab(over) {
+    return Object.assign({
+      id: 1,
+      url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa',
+      title: 'A lecture - YouTube',
+      audible: false,
+      mutedInfo: { muted: false },
+      lastAccessed: 100,
+      windowId: 1,
+      index: 0,
+    }, over);
+  }
+
+  const noTabs = audioTabView({ tabs: [], core });
+  t.check('no tabs: notice, no picker, no target', noTabs.showNotice && !noTabs.showPicker && noTabs.target === null);
+
+  const one = audioTabView({
+    tabs: [watchTab({ id: 4 })],
+    core,
+  });
+  t.check('one watch tab: no picker, has a target', !one.showPicker && !one.showNotice && one.targetId === 4, JSON.stringify(one));
+
+  const two = audioTabView({
+    tabs: [watchTab({ id: 1, lastAccessed: 1 }), watchTab({ id: 2, lastAccessed: 2 })],
+    activeTabId: 1,
+    core,
+  });
+  t.check(
+    'two watch tabs: picker shown and the active tab is the target',
+    two.showPicker && two.tabs.length === 2 && two.targetId === 1 && !two.showNotice,
+    JSON.stringify({ showPicker: two.showPicker, targetId: two.targetId, n: two.tabs.length }),
+  );
+
+  const lastWins = audioTabView({
+    tabs: [watchTab({ id: 1 }), watchTab({ id: 2 })],
+    activeTabId: 99,
+    lastSelectedId: 2,
+    core,
+  });
+  t.check(
+    'lastSelectedId wins when the active tab is not a watch URL',
+    lastWins.targetId === 2 && lastWins.showPicker,
+    String(lastWins.targetId),
+  );
+
+  const unreachable = audioTabView({
+    tabs: [watchTab({ id: 1 }), watchTab({ id: 2 })],
+    unreachableIds: [1, 2],
+    core,
+  });
+  t.check(
+    'unreachable tabs fall through to the notice',
+    unreachable.showNotice && !unreachable.showPicker && unreachable.target === null,
+  );
+
+  const oneReachable = audioTabView({
+    tabs: [watchTab({ id: 1 }), watchTab({ id: 2 })],
+    unreachableIds: [1],
+    core,
+  });
+  t.check(
+    'one reachable of two: no picker, remaining tab is the target',
+    !oneReachable.showPicker && oneReachable.targetId === 2 && !oneReachable.showNotice,
+    JSON.stringify({ showPicker: oneReachable.showPicker, targetId: oneReachable.targetId }),
+  );
+
+  const mini = audioTabView({
+    tabs: [{ id: 7, url: 'https://www.youtube.com/' }],
+    playerTabIds: [7],
+    core,
+  });
+  t.check(
+    'a listed miniplayer tab is controllable',
+    mini.targetId === 7 && !mini.showNotice && !mini.showPicker,
+    String(mini.targetId),
+  );
+
+  t.section('audio stats view');
+
+  const now = new Date(2026, 8, 13).getTime();
+  const month = audioStatsView({
+    listened: { '2026-09-01': 60, '2026-08-31': 999 },
+    active: { '2026-09-01': 80, '2026-08-31': 999 },
+    totals: { listened: 5000, active: 6000 },
+  }, 'month', now, core);
+  t.check('This Month sums the day maps, not totals', month.listened === 60 && month.active === 80, JSON.stringify(month));
+
+  const all = audioStatsView({
+    listened: { '2026-09-01': 60 },
+    active: { '2026-09-01': 80 },
+    totals: { listened: 5000, active: 6000 },
+  }, 'all', now, core);
+  t.check('All Time reads totals, not the day maps', all.listened === 5000 && all.active === 6000, JSON.stringify(all));
+
+  const legacy = audioStatsView({
+    listened: { '2026-09-01': 60, '2026-08-01': 40 },
+    active: { '2026-09-01': 10 },
+  }, 'all', now, core);
+  t.check(
+    'All Time without totals falls back to the day maps',
+    legacy.listened === 100 && legacy.active === 10,
+    JSON.stringify(legacy),
+  );
+
+  const hour = audioStatsView({
+    totals: { listened: 3600, active: 4000 },
+  }, 'all', now, core);
+  t.check(
+    'data saved is against 720p',
+    Math.round(hour.usedMb) === 72 && Math.round(hour.savedMb) === 528,
+    JSON.stringify(hour),
+  );
 }

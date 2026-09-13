@@ -534,12 +534,12 @@
     "description": "Accessible name of the master audio-mode toggle."
   },
   "audioModeToggleTitle": {
-    "message": "تشغيل أو إيقاف وضع الصوت في التبويب الأمامي.",
+    "message": "تشغيل أو إيقاف وضع الصوت في تبويب يوتيوب المحدد.",
     "description": "Tooltip on the master audio-mode toggle."
   },
   "audioPageNotice": {
     "message": "افتح فيديو على يوتيوب لاستخدام وضع الصوت.",
-    "description": "Notice on the Audio tab when the front tab is not a YouTube page the content script can reach."
+    "description": "Notice on the Audio tab when no controllable YouTube tab is open."
   },
   "audioRestoreQuality": {
     "message": "جودة الاستعادة",
@@ -606,6 +606,88 @@
   "audioShortcutTitle": {
     "message": "انقر لتعيين اختصار لوحة المفاتيح.",
     "description": "Tooltip on the Audio tab shortcut hint before JavaScript replaces it with the bound or empty copy."
+  },
+  "audioPickerLabel": {
+    "message": "تبويبات يوتيوب المفتوحة",
+    "description": "Accessible name of the row of open YouTube tabs the Audio tab can drive."
+  },
+  "audioPickerTab": {
+    "message": "تشغيل $TITLE$",
+    "description": "Accessible name of one open-tab picker entry. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "A lecture"
+      }
+    }
+  },
+  "audioPlayerBack": {
+    "message": "رجوع 10 ثوان",
+    "description": "Accessible name of the player-card skip-back button."
+  },
+  "audioPlayerPlay": {
+    "message": "تشغيل",
+    "description": "Accessible name of the player-card play button while the video is paused."
+  },
+  "audioPlayerPause": {
+    "message": "إيقاف مؤقت",
+    "description": "Accessible name of the player-card pause button while the video is playing."
+  },
+  "audioPlayerForward": {
+    "message": "تقديم 10 ثوان",
+    "description": "Accessible name of the player-card skip-forward button."
+  },
+  "audioPlayerSpeed": {
+    "message": "سرعة التشغيل",
+    "description": "Accessible name of the player-card playback-speed select."
+  },
+  "audioPlayerVolume": {
+    "message": "مستوى الصوت",
+    "description": "Accessible name of the player-card volume select."
+  },
+  "audioVolumeMute": {
+    "message": "صامت",
+    "description": "Volume option that sets the player to 0."
+  },
+  "audioPlayerNoTitle": {
+    "message": "لا يوجد فيديو",
+    "description": "Player-card title when the target tab has no video title."
+  },
+  "audioStatsFilter": {
+    "message": "نطاق الإحصاءات",
+    "description": "Accessible name of the This Month / All Time filter group."
+  },
+  "audioStatsThisMonth": {
+    "message": "هذا الشهر",
+    "description": "Audio tab statistics filter for the current calendar month."
+  },
+  "audioStatsAllTime": {
+    "message": "كل الوقت",
+    "description": "Audio tab statistics filter for never-pruned running totals."
+  },
+  "audioStatsUsed": {
+    "message": "البيانات المستخدمة",
+    "description": "Label of the card showing estimated data used at 144p."
+  },
+  "audioStatsSaved": {
+    "message": "التوفير مقابل 720p",
+    "description": "Label of the card showing estimated data saved against 720p."
+  },
+  "audioStatsListened": {
+    "message": "وقت الاستماع",
+    "description": "Label of the card showing media seconds counted while audio mode was on."
+  },
+  "audioStatsActive": {
+    "message": "وقت النشاط",
+    "description": "Label of the card showing wall seconds the audio-mode session was up."
+  },
+  "audioStatsUnitMb": {
+    "message": " ميجا",
+    "description": "Megabyte unit suffix passed to formatData, including the leading space."
+  },
+  "audioStatsUnitGb": {
+    "message": " جيجا",
+    "description": "Gigabyte unit suffix passed to formatData, including the leading space."
   },
   "settingsAudioLook": {
     "message": "مظهر وضع الصوت",

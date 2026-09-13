@@ -25,7 +25,13 @@ import {
   feedItemUrl,
   feedsView,
   watchlistView,
+  audioTabView,
+  audioStatsView,
 } from '../lib/view.js';
+
+const Core = globalThis.AudioModeCore;
+const LAST_TAB_KEY = 'audioLastSelectedTabId';
+const AUDIO_POLL_MS = 1000;
 
 let messages = {};
 let locale = 'en';
@@ -53,7 +59,17 @@ const view = {
   audioReachable: false,
   audioOn: false,
   audioShortcut: '',
+  audioTargetId: null,
+  audioTabs: [],
+  audioPlayer: null,
+  audioStats: { listened: {}, active: {}, totals: { listened: 0, active: 0 } },
+  audioStatsScope: 'month',
 };
+
+let audioPollTimer = null;
+let audioDiscoverTimer = null;
+let audioSeeking = false;
+let audioPickerKey = '';
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const panels = [...document.querySelectorAll('[role="tabpanel"]')];
@@ -69,6 +85,7 @@ function activate(tab) {
   for (const panel of panels) {
     panel.hidden = panel.id !== name;
   }
+  syncAudioPolling();
 }
 
 for (const tab of tabs) {
@@ -776,6 +793,209 @@ function renderChannelSheet() {
   }
 }
 
+function audioPanelVisible() {
+  const panel = document.getElementById('audio');
+  return !!panel && !panel.hidden;
+}
+
+function syncAudioPolling() {
+  const want = audioPanelVisible() && view.audioReachable;
+  if (want) {
+    if (!audioPollTimer) {
+      audioPollTimer = setInterval(() => { void refreshPlayerCard(); }, AUDIO_POLL_MS);
+    }
+  } else if (audioPollTimer) {
+    clearInterval(audioPollTimer);
+    audioPollTimer = null;
+  }
+}
+
+function closestSelectValue(select, value) {
+  const options = [...select.options].map((o) => Number(o.value));
+  let best = options[0];
+  let bestDist = Infinity;
+  for (const n of options) {
+    if (!Number.isFinite(n)) continue;
+    const d = Math.abs(n - value);
+    if (d < bestDist) {
+      bestDist = d;
+      best = n;
+    }
+  }
+  return best;
+}
+
+function updateTitleScroll(el, text) {
+  if (!el) return;
+  if (el.textContent !== text) el.textContent = text;
+  const wrap = el.parentElement;
+  if (!wrap) return;
+  const overflow = el.scrollWidth - wrap.clientWidth;
+  if (overflow > 4) {
+    const rtl = getComputedStyle(document.documentElement).direction === 'rtl';
+    const shift = `${rtl ? overflow + 10 : -(overflow + 10)}px`;
+    if (el.style.getPropertyValue('--audio-title-shift') !== shift) {
+      el.style.setProperty('--audio-title-shift', shift);
+      el.style.setProperty('--audio-title-duration', `${Math.max(5, overflow * 0.08)}s`);
+    }
+    el.classList.add('is-scrolling');
+  } else {
+    el.classList.remove('is-scrolling');
+    el.style.removeProperty('--audio-title-shift');
+  }
+}
+
+function renderAudioPicker(reachable) {
+  const el = document.getElementById('audio-picker');
+  if (!el) return;
+  const tabs = view.audioTabs || [];
+  const show = tabs.length >= 2;
+  el.hidden = !show;
+  if (!show) {
+    el.replaceChildren();
+    audioPickerKey = '';
+    return;
+  }
+  const key = `${tabs.map((tab) => `${tab.id}\t${tab.title || ''}`).join('\n')}#${view.audioTargetId}#${reachable}`;
+  if (key === audioPickerKey && el.childElementCount === tabs.length) {
+    for (const btn of el.querySelectorAll('.audio-picker__tab')) {
+      btn.disabled = !reachable;
+    }
+    return;
+  }
+  const focusedId = document.activeElement instanceof HTMLElement
+    ? document.activeElement.dataset.tabId
+    : '';
+  audioPickerKey = key;
+  el.replaceChildren();
+  for (const tab of tabs) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'audio-picker__tab';
+    btn.dataset.tabId = String(tab.id);
+    const title = Core.tabTitleToVideoTitle(tab.title) || t('audioPlayerNoTitle');
+    btn.appendChild(textEl('span', 'audio-picker__title', title));
+    btn.setAttribute('aria-label', t('audioPickerTab', [title]));
+    if (tab.id === view.audioTargetId) btn.setAttribute('aria-current', 'true');
+    btn.disabled = !reachable;
+    btn.addEventListener('click', () => {
+      void selectAudioTab(tab.id);
+    });
+    el.appendChild(btn);
+  }
+  if (focusedId) {
+    el.querySelector(`[data-tab-id="${focusedId}"]`)?.focus?.();
+  }
+}
+
+function renderAudioPlayer(reachable) {
+  const player = view.audioPlayer;
+  const tab = (view.audioTabs || []).find((row) => row.id === view.audioTargetId);
+  const titleFromPlayer = player && player.title ? player.title : '';
+  const titleFromTab = tab ? Core.tabTitleToVideoTitle(tab.title) : '';
+  const title = titleFromPlayer || titleFromTab || t('audioPlayerNoTitle');
+  const channel = (player && player.channel) || '';
+  const videoId = (player && player.videoId)
+    || (tab ? Core.videoIdFromUrl(tab.url) : '')
+    || '';
+
+  updateTitleScroll(document.getElementById('audio-title'), title);
+
+  const channelEl = document.getElementById('audio-channel');
+  if (channelEl) channelEl.textContent = channel;
+
+  const thumb = document.getElementById('audio-thumb');
+  if (thumb) {
+    if (videoId) {
+      const src = thumbUrl(videoId, 'mq');
+      if (thumb.getAttribute('src') !== src) thumb.src = src;
+      thumb.alt = title;
+      thumb.hidden = false;
+    } else {
+      thumb.removeAttribute('src');
+      thumb.alt = '';
+      thumb.hidden = true;
+    }
+  }
+
+  const elapsed = document.getElementById('audio-elapsed');
+  const total = document.getElementById('audio-duration');
+  const seek = document.getElementById('audio-seek');
+  const currentTime = player ? player.currentTime : 0;
+  const duration = player ? player.duration : 0;
+  const hasDuration = duration > 0 && Number.isFinite(duration);
+  if (elapsed) {
+    const shown = audioSeeking && seek ? Number(seek.value) : currentTime;
+    elapsed.textContent = Core.formatTime(shown);
+  }
+  if (total) total.textContent = Core.formatTime(duration);
+  if (seek) {
+    seek.disabled = !reachable || !hasDuration;
+    if (!audioSeeking && document.activeElement !== seek) {
+      seek.max = hasDuration ? String(duration) : '0';
+      seek.value = hasDuration ? String(currentTime) : '0';
+    }
+  }
+
+  const paused = !player || player.paused !== false;
+  const play = document.getElementById('audio-play');
+  if (play) {
+    play.disabled = !reachable;
+    const label = paused ? t('audioPlayerPlay') : t('audioPlayerPause');
+    play.textContent = paused ? '▶' : '❚❚';
+    play.setAttribute('aria-label', label);
+    play.title = label;
+  }
+  const back = document.getElementById('audio-back');
+  const forward = document.getElementById('audio-forward');
+  if (back) back.disabled = !reachable;
+  if (forward) forward.disabled = !reachable;
+
+  const speed = document.getElementById('audio-speed');
+  if (speed) {
+    speed.disabled = !reachable;
+    if (player && document.activeElement !== speed) {
+      const snapped = closestSelectValue(speed, Number(player.playbackRate) || 1);
+      const next = String(snapped);
+      if (speed.value !== next) speed.value = next;
+    }
+  }
+  const volume = document.getElementById('audio-volume');
+  if (volume) {
+    volume.disabled = !reachable;
+    if (player && document.activeElement !== volume) {
+      const vol = player.muted ? 0 : Number(player.volume) || 0;
+      const snapped = closestSelectValue(volume, vol);
+      const next = String(snapped);
+      if (volume.value !== next) volume.value = next;
+    }
+  }
+}
+
+function renderAudioStats(reachable) {
+  const monthBtn = document.getElementById('audio-stats-month');
+  const allBtn = document.getElementById('audio-stats-all');
+  const scope = view.audioStatsScope === 'all' ? 'all' : 'month';
+  if (monthBtn) {
+    monthBtn.disabled = !reachable;
+    monthBtn.setAttribute('aria-pressed', scope === 'month' ? 'true' : 'false');
+  }
+  if (allBtn) {
+    allBtn.disabled = !reachable;
+    allBtn.setAttribute('aria-pressed', scope === 'all' ? 'true' : 'false');
+  }
+  const folded = audioStatsView(view.audioStats, scope, Date.now(), Core);
+  const units = { mb: t('audioStatsUnitMb'), gb: t('audioStatsUnitGb') };
+  const used = document.getElementById('audio-stat-used');
+  const saved = document.getElementById('audio-stat-saved');
+  const listened = document.getElementById('audio-stat-listened');
+  const active = document.getElementById('audio-stat-active');
+  if (used) used.textContent = Core.formatData(folded.usedMb, units);
+  if (saved) saved.textContent = Core.formatData(folded.savedMb, units);
+  if (listened) listened.textContent = Core.formatTime(folded.listened);
+  if (active) active.textContent = Core.formatTime(folded.active);
+}
+
 function renderAudio() {
   const reachable = view.audioReachable;
   const notice = document.getElementById('audio-page-notice');
@@ -794,6 +1014,10 @@ function renderAudio() {
     if (restore.value !== q) restore.value = q;
   }
 
+  renderAudioPicker(reachable);
+  renderAudioPlayer(reachable);
+  renderAudioStats(reachable);
+
   const hint = document.getElementById('audio-shortcut');
   if (hint) {
     hint.disabled = view.audioKnown && !reachable;
@@ -804,6 +1028,8 @@ function renderAudio() {
     hint.textContent = text;
     hint.title = text;
   }
+
+  syncAudioPolling();
 }
 
 function renderSettings(locale) {
@@ -1157,27 +1383,146 @@ async function frontTabId() {
   }
 }
 
-async function sendToFrontTab(message) {
-  const id = await frontTabId();
-  if (id == null) throw new Error('no tab');
-  return chrome.tabs.sendMessage(id, message);
+async function sendToTab(tabId, message) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, message);
+  } catch {
+    return null;
+  }
+}
+
+async function loadLastSelectedId() {
+  try {
+    const got = await chrome.storage.session.get(LAST_TAB_KEY);
+    const id = got && got[LAST_TAB_KEY];
+    return typeof id === 'number' && Number.isFinite(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveLastSelectedId(id) {
+  if (typeof id !== 'number' || !Number.isFinite(id)) return;
+  try {
+    await chrome.storage.session.set({ [LAST_TAB_KEY]: id });
+  } catch {
+    // session storage is best-effort
+  }
+}
+
+async function queryYoutubeTabs() {
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://www.youtube.com/*' });
+    return Array.isArray(tabs) ? tabs : [];
+  } catch {
+    return [];
+  }
 }
 
 async function refreshAudioState() {
-  try {
-    const res = await sendToFrontTab({ type: 'audioMode.state' });
-    view.audioKnown = true;
-    if (res && res.ok) {
-      view.audioReachable = true;
-      view.audioOn = !!res.on;
-    } else {
-      view.audioReachable = false;
-      view.audioOn = false;
+  const ytTabs = await queryYoutubeTabs();
+  const activeId = await frontTabId();
+  const lastId = await loadLastSelectedId();
+  const unreachable = [];
+  const playerTabIds = [];
+  const playerById = new Map();
+
+  await Promise.all(ytTabs.map(async (tab) => {
+    if (tab == null || tab.id == null) return;
+    const res = await sendToTab(tab.id, { type: 'audioMode.player' });
+    if (res == null) {
+      unreachable.push(tab.id);
+      return;
     }
-  } catch {
-    view.audioKnown = true;
-    view.audioReachable = false;
+    playerById.set(tab.id, res);
+    if (res.ok && !Core.isWatchUrl(tab.url)) playerTabIds.push(tab.id);
+  }));
+
+  const decision = audioTabView({
+    tabs: ytTabs,
+    activeTabId: activeId,
+    lastSelectedId: lastId,
+    playerTabIds,
+    unreachableIds: unreachable,
+    core: Core,
+  });
+
+  let target = decision.target;
+  if (view.audioTargetId != null) {
+    const kept = decision.tabs.find((tab) => tab.id === view.audioTargetId);
+    if (kept) target = kept;
+  }
+
+  view.audioKnown = true;
+  view.audioTabs = decision.tabs;
+  view.audioTargetId = target ? target.id : null;
+  view.audioReachable = !!target;
+  if (target) {
+    const player = playerById.get(target.id);
+    view.audioOn = !!(player && player.on);
+    view.audioPlayer = player && player.ok ? player : null;
+  } else {
     view.audioOn = false;
+    view.audioPlayer = null;
+  }
+  syncAudioPolling();
+}
+
+async function refreshPlayerCard() {
+  if (!view.audioTargetId) return;
+  const res = await sendToTab(view.audioTargetId, { type: 'audioMode.player' });
+  if (res == null) {
+    view.audioTargetId = null;
+    await refreshAudioState();
+  } else if (res.ok) {
+    view.audioPlayer = res;
+    view.audioOn = !!res.on;
+    view.audioReachable = true;
+  } else {
+    view.audioPlayer = null;
+    view.audioOn = !!res.on;
+  }
+  renderAudio();
+}
+
+async function selectAudioTab(id) {
+  const tab = (view.audioTabs || []).find((row) => row.id === id);
+  if (!tab) return;
+  view.audioTargetId = id;
+  await saveLastSelectedId(id);
+  const res = await sendToTab(id, { type: 'audioMode.player' });
+  if (res == null) {
+    view.audioTargetId = null;
+    await refreshAudioState();
+  } else {
+    view.audioPlayer = res.ok ? res : null;
+    view.audioOn = !!res.on;
+    view.audioReachable = true;
+  }
+  renderAudio();
+}
+
+async function controlTarget(action, extra = {}) {
+  const id = view.audioTargetId;
+  if (id == null) return;
+  const res = await sendToTab(id, { type: 'audioMode.control', action, ...extra });
+  if (res == null) {
+    view.audioTargetId = null;
+    await refreshAudioState();
+    renderAudio();
+    return;
+  }
+  await refreshPlayerCard();
+}
+
+async function refreshAudioStats() {
+  try {
+    const got = await chrome.storage.local.get('audioStats');
+    view.audioStats = got && got.audioStats && typeof got.audioStats === 'object'
+      ? got.audioStats
+      : { listened: {}, active: {}, totals: { listened: 0, active: 0 } };
+  } catch {
+    view.audioStats = { listened: {}, active: {}, totals: { listened: 0, active: 0 } };
   }
 }
 
@@ -1192,22 +1537,30 @@ async function refreshAudioShortcut() {
 }
 
 async function toggleAudioMode() {
-  try {
-    const res = await sendToFrontTab({ type: 'audioMode.toggle' });
-    view.audioKnown = true;
-    if (res && res.ok) {
-      view.audioReachable = true;
-      view.audioOn = !!res.on;
-    } else {
-      view.audioReachable = false;
-      view.audioOn = false;
-    }
-  } catch {
-    view.audioKnown = true;
-    view.audioReachable = false;
+  const id = view.audioTargetId;
+  if (id == null) {
     view.audioOn = false;
+    renderAudio();
+    return;
   }
-  render();
+  const res = await sendToTab(id, { type: 'audioMode.toggle' });
+  view.audioKnown = true;
+  if (res == null) {
+    view.audioTargetId = null;
+    await refreshAudioState();
+  } else if (res.ok) {
+    view.audioReachable = true;
+    view.audioOn = !!res.on;
+  }
+  renderAudio();
+}
+
+function scheduleAudioDiscover() {
+  if (audioDiscoverTimer) clearTimeout(audioDiscoverTimer);
+  audioDiscoverTimer = setTimeout(() => {
+    audioDiscoverTimer = null;
+    void refreshAudioState().then(() => renderAudio());
+  }, 80);
 }
 
 function bindAudio() {
@@ -1220,6 +1573,14 @@ function bindAudio() {
   panel?.addEventListener('change', (event) => {
     const el = event.target;
     if (!(el instanceof HTMLElement)) return;
+    if (el.id === 'audio-speed') {
+      void controlTarget('speed', { rate: Number(el.value) });
+      return;
+    }
+    if (el.id === 'audio-volume') {
+      void controlTarget('volume', { volume: Number(el.value) });
+      return;
+    }
     const path = el.dataset.setting;
     if (!path) return;
     void patchSettings(buildPatch(path, el.value));
@@ -1228,6 +1589,75 @@ function bindAudio() {
   document.getElementById('audio-shortcut')?.addEventListener('click', () => {
     openUrl('chrome://extensions/shortcuts');
   });
+
+  document.getElementById('audio-play')?.addEventListener('click', () => {
+    const paused = !view.audioPlayer || view.audioPlayer.paused !== false;
+    void controlTarget(paused ? 'play' : 'pause');
+  });
+  document.getElementById('audio-back')?.addEventListener('click', () => {
+    const now = Number(view.audioPlayer?.currentTime) || 0;
+    void controlTarget('seek', { time: Math.max(0, now - 10) });
+  });
+  document.getElementById('audio-forward')?.addEventListener('click', () => {
+    const now = Number(view.audioPlayer?.currentTime) || 0;
+    const dur = Number(view.audioPlayer?.duration) || 0;
+    const next = now + 10;
+    void controlTarget('seek', { time: dur > 0 ? Math.min(dur, next) : Math.max(0, next) });
+  });
+
+  const seek = document.getElementById('audio-seek');
+  seek?.addEventListener('pointerdown', () => { audioSeeking = true; });
+  seek?.addEventListener('pointerup', () => { audioSeeking = false; });
+  seek?.addEventListener('pointercancel', () => { audioSeeking = false; });
+  seek?.addEventListener('input', () => {
+    audioSeeking = true;
+    const elapsed = document.getElementById('audio-elapsed');
+    if (elapsed) elapsed.textContent = Core.formatTime(Number(seek.value));
+  });
+  seek?.addEventListener('change', () => {
+    audioSeeking = false;
+    void controlTarget('seek', { time: Number(seek.value) });
+  });
+
+  document.getElementById('audio-stats-month')?.addEventListener('click', () => {
+    view.audioStatsScope = 'month';
+    renderAudio();
+  });
+  document.getElementById('audio-stats-all')?.addEventListener('click', () => {
+    view.audioStatsScope = 'all';
+    renderAudio();
+  });
+
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes || !changes.audioStats) return;
+      const next = changes.audioStats.newValue;
+      view.audioStats = next && typeof next === 'object'
+        ? next
+        : { listened: {}, active: {}, totals: { listened: 0, active: 0 } };
+      renderAudio();
+    });
+  } catch {
+    // ignore
+  }
+
+  try {
+    chrome.tabs.onRemoved.addListener(scheduleAudioDiscover);
+    chrome.tabs.onCreated.addListener(scheduleAudioDiscover);
+    chrome.tabs.onUpdated.addListener((_id, change) => {
+      if (!change) return;
+      if (
+        change.url !== undefined
+        || change.title !== undefined
+        || change.audible !== undefined
+        || change.status === 'complete'
+      ) {
+        scheduleAudioDiscover();
+      }
+    });
+  } catch {
+    // ignore
+  }
 }
 
 function bindLookSettings() {
@@ -1391,7 +1821,7 @@ void (async () => {
     const snap = await send({ type: 'popupOpened' });
     if (!applySnapshot(snap)) view.error = formatError(snap?.error);
     await applyI18n(view.settings?.ui?.locale);
-    await Promise.all([refreshAudioState(), refreshAudioShortcut()]);
+    await Promise.all([refreshAudioState(), refreshAudioShortcut(), refreshAudioStats()]);
   } catch (err) {
     view.error = formatError(err?.message || err);
   } finally {

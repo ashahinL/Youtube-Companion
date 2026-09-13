@@ -22,6 +22,11 @@
     getAvailableQualityLevels: 0,
     setPlaybackQuality: 1,
     setPlaybackQualityRange: 2,
+    playVideo: 0,
+    pauseVideo: 0,
+    seekTo: 1,
+    setPlaybackRate: 1,
+    setVolume: 1,
   };
 
   const QUALITIES = {
@@ -37,8 +42,32 @@
     auto: true,
   };
 
+  // Same rates the Audio tab speed select offers. Object keys would
+  // stringify 0.25; keep the list numeric so 0.25 === 0.25 holds.
+  const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
   function isQuality(value) {
     return typeof value === 'string' && QUALITIES[value] === true;
+  }
+
+  function isSeekTime(value) {
+    return typeof value === 'number' && isFinite(value) && value >= 0;
+  }
+
+  function isPlaybackRate(value) {
+    if (typeof value !== 'number' || !isFinite(value)) return false;
+    for (let i = 0; i < PLAYBACK_RATES.length; i++) {
+      if (PLAYBACK_RATES[i] === value) return true;
+    }
+    return false;
+  }
+
+  function isVolumeLevel(value) {
+    return typeof value === 'number'
+      && isFinite(value)
+      && value >= 0
+      && value <= 100
+      && Math.floor(value) === value;
   }
 
   function isAllowedCall(method, args) {
@@ -48,8 +77,11 @@
     if (!Array.isArray(args)) return false;
     const n = ARITY[method];
     if (args.length !== n) return false;
-    if (n === 1) return isQuality(args[0]);
-    if (n === 2) return isQuality(args[0]) && isQuality(args[1]);
+    if (method === 'setPlaybackQuality') return isQuality(args[0]);
+    if (method === 'setPlaybackQualityRange') return isQuality(args[0]) && isQuality(args[1]);
+    if (method === 'seekTo') return isSeekTime(args[0]);
+    if (method === 'setPlaybackRate') return isPlaybackRate(args[0]);
+    if (method === 'setVolume') return isVolumeLevel(args[0]);
     return true;
   }
 
@@ -156,7 +188,11 @@
     BRIDGE_TYPE,
     PAGE_ORIGIN,
     ARITY,
+    PLAYBACK_RATES,
     isQuality,
+    isSeekTime,
+    isPlaybackRate,
+    isVolumeLevel,
     isAllowedCall,
     readRequest,
     onMessage,

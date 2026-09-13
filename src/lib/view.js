@@ -1,7 +1,8 @@
 /**
- * Popup view decisions for the Feeds and Watchlist tabs: which rows
- * show, whether Add is live, and which empty state applies. Pure — no
- * DOM, no chrome, no clock.
+ * Popup view decisions for the Feeds, Watchlist and Audio tabs: which
+ * rows show, whether Add is live, which empty state applies, which
+ * YouTube tab the player drives, and how audioStats fold into the
+ * four cards. Pure — no DOM, no chrome, no clock.
  */
 
 import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
@@ -135,6 +136,59 @@ export function feedsView({ feed, channels, settings, query }) {
     showEmptyWait: hasChannels && !hasShown && !q && !favOnly,
     showEmptyFav: (hasChannels || hasAnyFeed) && !hasShown && !q && favOnly,
     showEmptyFilter: searching && !hasShown,
+  };
+}
+
+function hasId(ids, id) {
+  if (!ids || id == null) return false;
+  if (Array.isArray(ids)) return ids.includes(id);
+  return !!ids[id];
+}
+
+export function audioTabView({
+  tabs,
+  activeTabId,
+  lastSelectedId,
+  playerTabIds,
+  unreachableIds,
+  core,
+}) {
+  const listed = [];
+  for (const tab of tabs || []) {
+    if (!tab || hasId(unreachableIds, tab.id)) continue;
+    if (core.isControllableTab(tab, playerTabIds)) listed.push(tab);
+  }
+  const target = core.pickTargetTab(listed, {
+    activeTabId,
+    lastSelectedId,
+    playerTabIds,
+  });
+  return {
+    tabs: listed,
+    target: target || null,
+    targetId: target ? target.id : null,
+    showPicker: listed.length >= 2,
+    showNotice: !target,
+  };
+}
+
+export function audioStatsView(stats, scope, now, core) {
+  const filter = scope === 'all' ? 'all' : 'month';
+  let listened = 0;
+  let active = 0;
+  if (filter === 'all' && stats && stats.totals && typeof stats.totals === 'object') {
+    listened = Math.max(0, Number(stats.totals.listened) || 0);
+    active = Math.max(0, Number(stats.totals.active) || 0);
+  } else {
+    listened = core.sumLogs(stats && stats.listened, filter, now);
+    active = core.sumLogs(stats && stats.active, filter, now);
+  }
+  const savings = core.computeSavings(listened);
+  return {
+    listened,
+    active,
+    usedMb: savings.usedMb,
+    savedMb: savings.savedMb,
   };
 }
 

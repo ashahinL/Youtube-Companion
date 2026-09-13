@@ -313,7 +313,8 @@ export default async function run(t) {
     'restore quality is bound to settings.audio.restoreQuality',
     /data-setting="audio.restoreQuality"/.test(a),
   );
-  const qualityValues = [...a.matchAll(/<option\b[^>]*\bvalue="([^"]+)"/g)].map((m) => m[1]);
+  const restoreSelect = a.match(/<select\b[^>]*\bid="audio-restore-quality"[\s\S]*?<\/select>/);
+  const qualityValues = [...(restoreSelect ? restoreSelect[0] : '').matchAll(/<option\b[^>]*\bvalue="([^"]+)"/g)].map((m) => m[1]);
   t.check(
     'restore quality offers the ten PLAYBACK_QUALITIES',
     qualityValues.slice().sort().join() === 'auto,hd1080,hd1440,hd2160,hd720,highres,large,medium,small,tiny',
@@ -321,6 +322,34 @@ export default async function run(t) {
   );
   t.check('hd720 is selected in markup', /<option\b[^>]*\bvalue="hd720"[^>]*\bselected\b/.test(a));
   t.check('has a shortcut hint', /id="audio-shortcut"/.test(a));
+  t.check(
+    'popup loads core.js as a classic script before the module',
+    /<script src="\.\.\/content\/core\.js"><\/script>\s*<script type="module" src="popup\.js">/.test(html),
+  );
+  t.check('has the open-tab picker', /id="audio-picker"/.test(a));
+  t.check(
+    'picker starts hidden',
+    /<div[^>]*\bid="audio-picker"[^>]*\bhidden\b/.test(a),
+  );
+  t.check('has the player card', /id="audio-player"/.test(a));
+  t.check('player has a seek bar', /id="audio-seek"/.test(a));
+  t.check(
+    'player has back, play and forward',
+    /id="audio-back"/.test(a) && /id="audio-play"/.test(a) && /id="audio-forward"/.test(a),
+  );
+  t.check(
+    'seek bar and skip buttons stay LTR in RTL',
+    /audio-player__timeline"[^>]*\bdir="ltr"/.test(a)
+      && /audio-player__transport"[^>]*\bdir="ltr"/.test(a),
+  );
+  t.check(
+    'has statistics cards',
+    /id="audio-stat-used"/.test(a)
+      && /id="audio-stat-saved"/.test(a)
+      && /id="audio-stat-listened"/.test(a)
+      && /id="audio-stat-active"/.test(a),
+  );
+  t.check('disabled settings-select is dimmed', /\.settings-select:disabled/.test(css));
   t.check(
     'empty shortcut uses audioShortcutNone',
     /audioShortcutNone/.test(js),
@@ -338,20 +367,21 @@ export default async function run(t) {
     /chrome:\/\/extensions\/shortcuts/.test(js),
   );
   t.check(
-    'popup queries audioMode.state without toggling',
-    /audioMode\.state/.test(js),
+    'popup reads the player with audioMode.player',
+    /audioMode\.player/.test(js),
   );
   t.check(
     'popup toggles with audioMode.toggle',
     /audioMode\.toggle/.test(js),
   );
   t.check(
-    'tabs.sendMessage is caught so a missing content script cannot reject unhandled',
-    /sendToFrontTab/.test(js) && /catch\s*\{/.test(js),
+    'popup writes the player with audioMode.control',
+    /audioMode\.control/.test(js),
   );
-  t.check('does not stub the open-tab picker', !/id="watch-tab-list"/.test(a));
-  t.check('does not stub the player card', !/id="musicPlayer"/.test(a) && !/am-play-pause/.test(a));
-  t.check('does not stub statistics', !/id="data-used-value"/.test(a) && !/stats-section/.test(a));
+  t.check(
+    'tabs.sendMessage is caught so a missing content script cannot reject unhandled',
+    /function sendToTab/.test(js) && /catch\s*\{/.test(js),
+  );
   t.check(
     'Watchlist still opens via activate(tab-watchlist)',
     /getElementById\('tab-watchlist'\)/.test(js) && /activate\(tab\)/.test(js),
@@ -591,7 +621,12 @@ export default async function run(t) {
 
   const sent = [...js.matchAll(/\btype:\s*['"]([\w.]+)['"]/g)].map((m) => m[1]);
   const implemented = new Set([...worker.matchAll(/case\s+['"]([\w.]+)['"]/g)].map((m) => m[1]));
-  const contentTypes = new Set(['audioMode.state', 'audioMode.toggle']);
+  const contentTypes = new Set([
+    'audioMode.state',
+    'audioMode.toggle',
+    'audioMode.player',
+    'audioMode.control',
+  ]);
   t.check('popup sends at least one message', sent.length > 0, String(sent.length));
   for (const type of sent) {
     if (contentTypes.has(type)) {

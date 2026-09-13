@@ -357,10 +357,26 @@
     if (addL) listened[day] = (Number(listened[day]) || 0) + addL;
     if (addA) active[day] = (Number(active[day]) || 0) + addA;
 
+    const storedTotals = stored && stored.totals && typeof stored.totals === 'object'
+      ? stored.totals
+      : null;
+    // Seed from the unpruned maps so a record written before totals
+    // existed does not lose days that this merge is about to drop.
+    const totals = storedTotals
+      ? {
+        listened: Math.max(0, Number(storedTotals.listened) || 0) + addL,
+        active: Math.max(0, Number(storedTotals.active) || 0) + addA,
+      }
+      : {
+        listened: Core.sumLogs(listened, 'all'),
+        active: Core.sumLogs(active, 'all'),
+      };
+
     const at = when.getTime();
     return {
       listened: Core.pruneOldEntries(listened, AUDIO_STATS_RETENTION_DAYS, at),
       active: Core.pruneOldEntries(active, AUDIO_STATS_RETENTION_DAYS, at),
+      totals: totals,
     };
   }
 
@@ -471,6 +487,156 @@
     } catch (err) {
       return null;
     }
+  }
+
+  function findMoviePlayer() {
+    try {
+      return document.getElementById('movie_player') || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  const PLAYER_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+  function isPlayerRate(value) {
+    if (typeof value !== 'number' || !isFinite(value)) return false;
+    for (let i = 0; i < PLAYER_RATES.length; i++) {
+      if (PLAYER_RATES[i] === value) return true;
+    }
+    return false;
+  }
+
+  function isSeekTime(value) {
+    return typeof value === 'number' && isFinite(value) && value >= 0;
+  }
+
+  function isVolumeLevel(value) {
+    return typeof value === 'number'
+      && isFinite(value)
+      && value >= 0
+      && value <= 100
+      && Math.floor(value) === value;
+  }
+
+  function finiteOr(value, fallback) {
+    const n = Number(value);
+    return isFinite(n) ? n : fallback;
+  }
+
+  function readChannelName() {
+    try {
+      const doc = root.document;
+      if (!doc || typeof doc.querySelector !== 'function') return '';
+      const sels = [
+        '#upload-info #channel-name a',
+        'ytd-video-owner-renderer ytd-channel-name a',
+        'ytd-channel-name a',
+        'ytd-miniplayer #channel-name',
+      ];
+      for (let i = 0; i < sels.length; i++) {
+        const el = doc.querySelector(sels[i]);
+        const text = el && el.textContent ? String(el.textContent).trim() : '';
+        if (text) return text;
+      }
+    } catch (err) {
+      return '';
+    }
+    return '';
+  }
+
+  function readVideoId() {
+    try {
+      const href = root.location && root.location.href;
+      const fromUrl = Core.videoIdFromUrl(href);
+      if (fromUrl) return fromUrl;
+      const doc = root.document;
+      if (!doc || typeof doc.querySelector !== 'function') return '';
+      const link = doc.querySelector('#movie_player a.ytp-title-link')
+        || doc.querySelector('ytd-miniplayer a[href*="/watch?v="]');
+      if (!link) return '';
+      const href2 = link.href || (typeof link.getAttribute === 'function' ? link.getAttribute('href') : '');
+      if (!href2) return '';
+      const abs = Core.videoIdFromUrl(href2);
+      if (abs) return abs;
+      const u = new URL(href2, PAGE_ORIGIN);
+      const id = u.searchParams.get('v');
+      return id ? id : '';
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function readPlayer() {
+    const video = findVideo();
+    if (!video) return { ok: false, on: !!session };
+    const volume01 = finiteOr(video.volume, 0);
+    let title = '';
+    try {
+      title = Core.tabTitleToVideoTitle(root.document && root.document.title);
+    } catch (err) {
+      title = '';
+    }
+    return {
+      ok: true,
+      on: !!session,
+      paused: !!video.paused,
+      currentTime: Math.max(0, finiteOr(video.currentTime, 0)),
+      duration: Math.max(0, finiteOr(video.duration, 0)),
+      playbackRate: finiteOr(video.playbackRate, 1),
+      volume: Math.max(0, Math.min(100, Math.round(volume01 * 100))),
+      muted: !!video.muted,
+      title: title,
+      channel: readChannelName(),
+      videoId: readVideoId() || '',
+    };
+  }
+
+  function parseControl(msg) {
+    if (!msg || typeof msg !== 'object') return null;
+    const action = msg.action;
+    if (action === 'play' || action === 'pause') return { action: action };
+    if (action === 'seek') {
+      if (!isSeekTime(msg.time)) return null;
+      return { action: 'seek', time: msg.time };
+    }
+    if (action === 'speed') {
+      if (!isPlayerRate(msg.rate)) return null;
+      return { action: 'speed', rate: msg.rate };
+    }
+    if (action === 'volume') {
+      if (!isVolumeLevel(msg.volume)) return null;
+      return { action: 'volume', volume: msg.volume };
+    }
+    return null;
+  }
+
+  async function controlPlayer(msg) {
+    const parsed = parseControl(msg);
+    if (!parsed) return { ok: false };
+    if (!findMoviePlayer()) return { ok: false };
+    await ensureBridge();
+    if (parsed.action === 'play') {
+      await callPlayer('playVideo');
+      return { ok: true };
+    }
+    if (parsed.action === 'pause') {
+      await callPlayer('pauseVideo');
+      return { ok: true };
+    }
+    if (parsed.action === 'seek') {
+      await callPlayer('seekTo', [parsed.time]);
+      return { ok: true };
+    }
+    if (parsed.action === 'speed') {
+      await callPlayer('setPlaybackRate', [parsed.rate]);
+      return { ok: true };
+    }
+    if (parsed.action === 'volume') {
+      await callPlayer('setVolume', [parsed.volume]);
+      return { ok: true };
+    }
+    return { ok: false };
   }
 
   function videoState() {
@@ -863,6 +1029,17 @@
           sendResponse({ ok: true, on: !!session });
           return;
         }
+        if (msg.type === 'audioMode.player') {
+          sendResponse(readPlayer());
+          return;
+        }
+        if (msg.type === 'audioMode.control') {
+          controlPlayer(msg).then(
+            function (res) { sendResponse(res || { ok: false }); },
+            function () { sendResponse({ ok: false }); },
+          );
+          return true;
+        }
         if (msg.type !== 'audioMode.toggle') return;
         toggle().then(
           function () { sendResponse({ ok: true, on: !!session }); },
@@ -895,6 +1072,9 @@
     overlayCopy,
     restorableQuality,
     restoreFallbackFromSettings,
+    readPlayer,
+    parseControl,
+    controlPlayer,
     enable,
     disable,
   };

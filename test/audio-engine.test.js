@@ -234,6 +234,21 @@ export default async function run(t) {
     setPlaybackQualityRange(a, b) {
       calls.push(['setPlaybackQualityRange', a, b]);
     },
+    playVideo() {
+      calls.push(['playVideo']);
+    },
+    pauseVideo() {
+      calls.push(['pauseVideo']);
+    },
+    seekTo(time) {
+      calls.push(['seekTo', time]);
+    },
+    setPlaybackRate(rate) {
+      calls.push(['setPlaybackRate', rate]);
+    },
+    setVolume(n) {
+      calls.push(['setVolume', n]);
+    },
     addEventListener() {},
   };
   const { fire, posts, sandbox, win, bridge } = loadBridge(player);
@@ -288,7 +303,7 @@ export default async function run(t) {
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'setVolume', args: [50] },
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'mute', args: [] },
   }));
   t.check('non-allowlisted player method is rejected', calls.length === 0, JSON.stringify(calls));
 
@@ -370,6 +385,56 @@ export default async function run(t) {
   t.check('isAllowedCall rejects a third arg', bridge.isAllowedCall('setPlaybackQualityRange', ['tiny', 'tiny', 'tiny']) === false);
   t.check('isAllowedCall rejects auto as a get arg', bridge.isAllowedCall('getPlaybackQuality', ['auto']) === false);
   t.check('readRequest returns null for a foreign origin', bridge.readRequest(req({ source: sandbox, origin: 'https://evil.com' }), sandbox) === null);
+
+  t.section('player writes on the bridge');
+
+  t.check('playVideo with no args is allowed', bridge.isAllowedCall('playVideo', []) === true);
+  t.check('playVideo with an arg is refused', bridge.isAllowedCall('playVideo', [1]) === false);
+  t.check('pauseVideo with no args is allowed', bridge.isAllowedCall('pauseVideo', []) === true);
+  t.check('pauseVideo with an arg is refused', bridge.isAllowedCall('pauseVideo', [0]) === false);
+
+  t.check('seekTo 0 is allowed', bridge.isAllowedCall('seekTo', [0]) === true);
+  t.check('seekTo 12.5 is allowed', bridge.isAllowedCall('seekTo', [12.5]) === true);
+  t.check('seekTo negative is refused', bridge.isAllowedCall('seekTo', [-1]) === false);
+  t.check('seekTo Infinity is refused', bridge.isAllowedCall('seekTo', [Infinity]) === false);
+  t.check('seekTo NaN is refused', bridge.isAllowedCall('seekTo', [NaN]) === false);
+  t.check('seekTo a string is refused', bridge.isAllowedCall('seekTo', ['5']) === false);
+  t.check('seekTo extra arg is refused', bridge.isAllowedCall('seekTo', [5, true]) === false);
+  t.check('seekTo missing args is refused', bridge.isAllowedCall('seekTo', []) === false);
+
+  for (const rate of [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
+    t.check(`setPlaybackRate ${rate} is allowed`, bridge.isAllowedCall('setPlaybackRate', [rate]) === true);
+  }
+  t.check('setPlaybackRate 1.1 is refused', bridge.isAllowedCall('setPlaybackRate', [1.1]) === false);
+  t.check('setPlaybackRate 0 is refused', bridge.isAllowedCall('setPlaybackRate', [0]) === false);
+  t.check('setPlaybackRate 3 is refused', bridge.isAllowedCall('setPlaybackRate', [3]) === false);
+  t.check('setPlaybackRate a string is refused', bridge.isAllowedCall('setPlaybackRate', ['1']) === false);
+  t.check('setPlaybackRate extra arg is refused', bridge.isAllowedCall('setPlaybackRate', [1, 1]) === false);
+  t.check('setPlaybackRate missing args is refused', bridge.isAllowedCall('setPlaybackRate', []) === false);
+
+  t.check('setVolume 0 is allowed', bridge.isAllowedCall('setVolume', [0]) === true);
+  t.check('setVolume 50 is allowed', bridge.isAllowedCall('setVolume', [50]) === true);
+  t.check('setVolume 100 is allowed', bridge.isAllowedCall('setVolume', [100]) === true);
+  t.check('setVolume 50.5 is refused', bridge.isAllowedCall('setVolume', [50.5]) === false);
+  t.check('setVolume -1 is refused', bridge.isAllowedCall('setVolume', [-1]) === false);
+  t.check('setVolume 101 is refused', bridge.isAllowedCall('setVolume', [101]) === false);
+  t.check('setVolume a string is refused', bridge.isAllowedCall('setVolume', ['50']) === false);
+  t.check('setVolume extra arg is refused', bridge.isAllowedCall('setVolume', [50, true]) === false);
+  t.check('setVolume missing args is refused', bridge.isAllowedCall('setVolume', []) === false);
+
+  reset();
+  fire(req({
+    source: win,
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 8, method: 'playVideo', args: [] },
+  }));
+  t.check('valid playVideo is forwarded', calls.length === 1 && calls[0][0] === 'playVideo', JSON.stringify(calls));
+
+  reset();
+  fire(req({
+    source: win,
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 9, method: 'setVolume', args: [50] },
+  }));
+  t.check('valid setVolume is forwarded', calls.length === 1 && calls[0][0] === 'setVolume' && calls[0][1] === 50, JSON.stringify(calls));
 
   t.section('quality decision');
 
@@ -663,11 +728,22 @@ export default async function run(t) {
   const merged = engine.mergeAudioStats(null, { listened: 10, active: 12 }, day);
   t.check('merge writes listened under the local day key', merged.listened[key] === 10, JSON.stringify(merged));
   t.check('merge writes active under the local day key', merged.active[key] === 12, JSON.stringify(merged));
+  t.check(
+    'merge seeds totals from the day maps when they are missing',
+    merged.totals?.listened === 10 && merged.totals?.active === 12,
+    JSON.stringify(merged.totals),
+  );
 
   const again = engine.mergeAudioStats(merged, { listened: 5, active: 3 }, day);
   t.check('merge accumulates listened', again.listened[key] === 15, JSON.stringify(again.listened));
   t.check('merge accumulates active', again.active[key] === 15, JSON.stringify(again.active));
+  t.check(
+    'merge accumulates totals',
+    again.totals?.listened === 15 && again.totals?.active === 15,
+    JSON.stringify(again.totals),
+  );
   t.check('merge does not mutate the previous object', merged.listened[key] === 10, String(merged.listened[key]));
+  t.check('merge does not mutate previous totals', merged.totals.listened === 10, String(merged.totals.listened));
 
   const oldDay = new Date(2026, 5, 1, 12, 0, 0);
   const withOld = engine.mergeAudioStats(
@@ -680,6 +756,28 @@ export default async function run(t) {
     withOld.listened['2026-01-01'] === undefined && withOld.active['2026-01-01'] === undefined,
     JSON.stringify(withOld),
   );
+  t.check(
+    'totals survive pruning when seeded from a record with no totals',
+    withOld.totals?.listened === 100 && withOld.totals?.active === 100,
+    JSON.stringify(withOld.totals),
+  );
+
+  const withKeptTotals = engine.mergeAudioStats(
+    {
+      listened: { '2026-01-01': 99 },
+      active: { '2026-01-01': 99 },
+      totals: { listened: 500, active: 700 },
+    },
+    { listened: 1, active: 1 },
+    oldDay,
+  );
+  t.check(
+    'existing totals keep going after the day maps prune',
+    withKeptTotals.listened['2026-01-01'] === undefined
+      && withKeptTotals.totals?.listened === 501
+      && withKeptTotals.totals?.active === 701,
+    JSON.stringify(withKeptTotals),
+  );
 
   const emptyDelta = engine.mergeAudioStats(merged, { listened: 0, active: 0 }, day);
   t.check('zero delta does not invent a new day key on an empty add', emptyDelta.listened[key] === 10);
@@ -691,6 +789,11 @@ export default async function run(t) {
     stored.audioStats?.listened?.[key] === 20 && stored.audioStats?.active?.[key] === 30,
     JSON.stringify(stored.audioStats),
   );
+  t.check(
+    'persist writes never-pruned totals',
+    stored.audioStats?.totals?.listened === 20 && stored.audioStats?.totals?.active === 30,
+    JSON.stringify(stored.audioStats?.totals),
+  );
   t.check('persist does not write settings', stored.settings === undefined, JSON.stringify(stored.settings));
 
   await engine.persistAudioStats({ listened: 4, active: 6 }, day);
@@ -699,6 +802,11 @@ export default async function run(t) {
     'persist accumulates on a second write',
     stored2.audioStats?.listened?.[key] === 24 && stored2.audioStats?.active?.[key] === 36,
     JSON.stringify(stored2.audioStats),
+  );
+  t.check(
+    'persist accumulates totals on a second write',
+    stored2.audioStats?.totals?.listened === 24 && stored2.audioStats?.totals?.active === 36,
+    JSON.stringify(stored2.audioStats?.totals),
   );
 
   const skipped = await engine.persistAudioStats({ listened: 0, active: 0 }, day);
@@ -975,4 +1083,216 @@ export default async function run(t) {
     (r) => { toggleReplies.push(r); },
   );
   t.check('toggle is still async', toggleRet === true, String(toggleRet));
+
+  t.section('audioMode.player and audioMode.control');
+
+  function bootPage(opts) {
+    opts = opts || {};
+    const listeners = [];
+    const injected = [];
+    const calls = [];
+    const video = opts.noVideo
+      ? null
+      : {
+        currentTime: opts.currentTime != null ? opts.currentTime : 10,
+        duration: opts.duration != null ? opts.duration : 100,
+        paused: opts.paused !== false,
+        ended: false,
+        playbackRate: opts.playbackRate != null ? opts.playbackRate : 1,
+        volume: opts.volume != null ? opts.volume : 0.5,
+        muted: !!opts.muted,
+      };
+    const moviePlayer = opts.noPlayer ? null : makeEl('div');
+    if (moviePlayer) {
+      moviePlayer.id = 'movie_player';
+      moviePlayer.querySelector = function (sel) {
+        if (video && (sel === 'video.html5-main-video' || sel === 'video')) return video;
+        return null;
+      };
+    }
+    const nodesById = {};
+    if (moviePlayer) nodesById.movie_player = moviePlayer;
+    const html = { dataset: {}, appendChild(el) { injected.push(el); return el; } };
+    const head = {
+      appendChild(el) {
+        injected.push(el);
+        el.parentNode = head;
+        if (typeof el.onload === 'function') el.onload();
+        return el;
+      },
+      removeChild(el) {
+        el.parentNode = null;
+        return el;
+      },
+    };
+    const channelEl = opts.channel ? { textContent: opts.channel } : null;
+    const box = { win: null, listeners: [] };
+    const sandbox = {
+      __ytcHarness: true,
+      URL,
+      AbortController,
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval,
+      location: { href: opts.href || 'https://www.youtube.com/watch?v=aaaaaaaaaaa' },
+      navigator: { language: 'en' },
+      chrome: {
+        runtime: {
+          id: 'test-id',
+          getURL(p) { return 'chrome-extension://test/' + p; },
+          onMessage: { addListener(fn) { listeners.push(fn); } },
+          sendMessage() { return Promise.resolve({ ok: true, shortcut: '' }); },
+        },
+        storage: {
+          local: { async get() { return {}; }, async set() {} },
+          onChanged: { addListener() {}, removeListener() {} },
+        },
+      },
+      document: {
+        documentElement: html,
+        head,
+        title: opts.title || 'A lecture - YouTube',
+        getElementById(id) { return nodesById[id] || null; },
+        querySelector(sel) {
+          if (opts.channelThrows) throw new Error('boom');
+          if (channelEl && /channel-name/.test(sel)) return channelEl;
+          return null;
+        },
+        createElement(tag) {
+          if (tag === 'script') {
+            return { tagName: 'script', src: '', parentNode: null, onload: null, onerror: null };
+          }
+          return makeEl(tag);
+        },
+        addEventListener() {},
+      },
+      addEventListener(type, fn) {
+        if (type === 'message') box.listeners.push(fn);
+      },
+      postMessage(data) {
+        if (!data || data.dir !== 'request') return;
+        calls.push([data.method].concat(Array.isArray(data.args) ? data.args : []));
+        const event = {
+          source: box.win,
+          origin: PAGE,
+          data: { type: data.type, dir: 'response', id: data.id, ok: true, result: true },
+        };
+        for (let i = 0; i < box.listeners.length; i++) box.listeners[i](event);
+      },
+    };
+    sandbox.window = undefined;
+    vm.createContext(sandbox);
+    box.win = vm.runInContext('globalThis', sandbox);
+    vm.runInContext(coreSrc, sandbox, { filename: 'src/content/core.js' });
+    vm.runInContext(contentSrc, sandbox, { filename: 'src/content/content.js' });
+    function ask(msg) {
+      return new Promise((resolve) => {
+        let settled = false;
+        const ret = listeners[0](msg, {}, (r) => {
+          settled = true;
+          resolve(r);
+        });
+        if (ret !== true && !settled) resolve(undefined);
+      });
+    }
+    return { listeners, injected, calls, video, ask };
+  }
+
+  const noPlayerPage = bootPage({ noPlayer: true, noVideo: true });
+  const missingRead = await noPlayerPage.ask({ type: 'audioMode.player' });
+  t.check(
+    'player read with no player is ok: false',
+    missingRead && missingRead.ok === false && missingRead.on === false,
+    JSON.stringify(missingRead),
+  );
+  t.check('player read does not inject the bridge', noPlayerPage.injected.length === 0, String(noPlayerPage.injected.length));
+
+  const missingWrite = await noPlayerPage.ask({ type: 'audioMode.control', action: 'play' });
+  t.check(
+    'player write with no player is ok: false',
+    missingWrite && missingWrite.ok === false,
+    JSON.stringify(missingWrite),
+  );
+  t.check('a refused write does not inject the bridge', noPlayerPage.injected.length === 0, String(noPlayerPage.injected.length));
+
+  const live = bootPage({
+    title: '(3) A lecture - YouTube',
+    channel: 'Ada',
+    currentTime: 15,
+    duration: 120,
+    paused: true,
+    playbackRate: 1.5,
+    volume: 0.4,
+    muted: false,
+  });
+  const liveRead = await live.ask({ type: 'audioMode.player' });
+  t.check('player read with a video is ok', liveRead && liveRead.ok === true, JSON.stringify(liveRead));
+  t.check('player read reports paused', liveRead.paused === true);
+  t.check('player read reports currentTime', liveRead.currentTime === 15, String(liveRead.currentTime));
+  t.check('player read reports duration', liveRead.duration === 120, String(liveRead.duration));
+  t.check('player read reports playbackRate', liveRead.playbackRate === 1.5, String(liveRead.playbackRate));
+  t.check('player read reports volume 0-100', liveRead.volume === 40, String(liveRead.volume));
+  t.check('player read reports muted', liveRead.muted === false);
+  t.check('player read strips the tab title', liveRead.title === 'A lecture', liveRead.title);
+  t.check('player read reports the channel', liveRead.channel === 'Ada', liveRead.channel);
+  t.check('player read reports the video id', liveRead.videoId === 'aaaaaaaaaaa', liveRead.videoId);
+  t.check('player read still does not inject', live.injected.length === 0, String(live.injected.length));
+
+  const thrown = bootPage({ channelThrows: true });
+  const thrownRead = await thrown.ask({ type: 'audioMode.player' });
+  t.check(
+    'channel lookup failure is an empty string, not a throw',
+    thrownRead && thrownRead.ok === true && thrownRead.channel === '',
+    JSON.stringify(thrownRead),
+  );
+
+  const play = await live.ask({ type: 'audioMode.control', action: 'play' });
+  t.check('play is ok', play && play.ok === true, JSON.stringify(play));
+  t.check(
+    'play goes through the bridge as playVideo',
+    live.calls.some((c) => c[0] === 'playVideo'),
+    JSON.stringify(live.calls),
+  );
+  t.check('the first write injects the bridge', live.injected.length > 0, String(live.injected.length));
+
+  const pause = await live.ask({ type: 'audioMode.control', action: 'pause' });
+  t.check('pause is ok', pause && pause.ok === true);
+  t.check('pause goes through the bridge as pauseVideo', live.calls.some((c) => c[0] === 'pauseVideo'), JSON.stringify(live.calls));
+
+  const seek = await live.ask({ type: 'audioMode.control', action: 'seek', time: 20 });
+  t.check('seek is ok', seek && seek.ok === true);
+  t.check(
+    'seek goes through the bridge as seekTo',
+    live.calls.some((c) => c[0] === 'seekTo' && c[1] === 20),
+    JSON.stringify(live.calls),
+  );
+
+  const speed = await live.ask({ type: 'audioMode.control', action: 'speed', rate: 1.25 });
+  t.check('speed is ok', speed && speed.ok === true);
+  t.check(
+    'speed goes through the bridge as setPlaybackRate',
+    live.calls.some((c) => c[0] === 'setPlaybackRate' && c[1] === 1.25),
+    JSON.stringify(live.calls),
+  );
+
+  const volume = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 75 });
+  t.check('volume is ok', volume && volume.ok === true);
+  t.check(
+    'volume goes through the bridge as setVolume',
+    live.calls.some((c) => c[0] === 'setVolume' && c[1] === 75),
+    JSON.stringify(live.calls),
+  );
+
+  const badAction = await live.ask({ type: 'audioMode.control', action: 'explode' });
+  t.check('a malformed action is refused', badAction && badAction.ok === false, JSON.stringify(badAction));
+
+  const badSeek = await live.ask({ type: 'audioMode.control', action: 'seek', time: -1 });
+  t.check('a negative seek is refused', badSeek && badSeek.ok === false, JSON.stringify(badSeek));
+
+  const badSpeed = await live.ask({ type: 'audioMode.control', action: 'speed', rate: 3 });
+  t.check('an unknown speed is refused', badSpeed && badSpeed.ok === false, JSON.stringify(badSpeed));
+
+  const badVolume = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 50.5 });
+  t.check('a non-integer volume is refused', badVolume && badVolume.ok === false, JSON.stringify(badVolume));
 }
