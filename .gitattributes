@@ -1,0 +1,8 @@
+# LF everywhere, whatever the checkout's core.autocrlf. Several tests match
+# source text by regex with a length bound, and CRLF pushes them over it.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.zip binary

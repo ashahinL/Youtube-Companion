@@ -112,7 +112,7 @@ function walk(dir) {
   return out;
 }
 
-for (const file of [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'test'))]) {
+for (const file of [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'test')), ...walk(path.join(ROOT, 'scripts'))]) {
   const rel = path.relative(ROOT, file);
   try {
     execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });

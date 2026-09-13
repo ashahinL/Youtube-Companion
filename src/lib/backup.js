@@ -9,12 +9,14 @@
 
 import { DEFAULT_SETTINGS, clampSettings } from './settings.js';
 
+// The file format's id predates the extension's current name. Changing it
+// would make every backup already on someone's disk unreadable.
 const APP = 'youtube-companion';
 const VERSION = 1;
 
 const ERR = {
   json: 'That file is not valid JSON.',
-  app: 'That file is not a YouTube Companion backup.',
+  app: 'That file is not a Companion for YouTube backup.',
   version: 'This backup version is not supported.',
   channels: 'That backup has no channel list.',
   id: 'A channel in that file has no id.',

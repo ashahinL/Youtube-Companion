@@ -2,12 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title data-i18n="extName">YouTube Companion</title>
+    <title data-i18n="extName">Companion for YouTube</title>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <header class="appbar">
-      <h1 class="appbar__name" data-i18n="extName">YouTube Companion</h1>
+      <h1 class="appbar__name" data-i18n="extName">Companion for YouTube</h1>
+      <button
+        id="appbar-support"
+        class="icon-btn appbar__support"
+        type="button"
+        data-i18n-label="supportOpen"
+        data-i18n-title="supportOpen"
+        aria-label="Support this project"
+        title="Support this project"
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false" fill="currentColor">
+          <path d="M8 14s-6.2-3.8-6.2-8.1C1.8 3.6 3.5 2 5.5 2c1.2 0 2.3.6 2.5 1.6C8.2 2.6 9.3 2 10.5 2c2 0 3.7 1.6 3.7 3.9C14.2 10.2 8 14 8 14z"/>
+        </svg>
+      </button>
     </header>
     <nav class="tabs" role="tablist">
       <button
@@ -664,6 +677,16 @@
         </div>
       </fieldset>
 
+      <fieldset class="group" id="settings-support">
+        <legend class="group__legend" data-i18n="settingsSupport">Support</legend>
+        <p class="footnote" data-i18n="settingsSupportText">
+          Free, with no ads. Chip in if it helps you.
+        </p>
+        <button id="settings-support-open" class="btn" type="button" data-i18n="supportOpen">
+          Support this project
+        </button>
+      </fieldset>
+
       <footer class="settings-footer">
         <p id="settings-stat-channels"></p>
         <p id="settings-stat-feed"></p>
@@ -720,6 +743,37 @@
         <p id="channel-sheet-status" class="footnote sheet__status" role="status"></p>
         <div id="channel-sheet-videos" class="list sheet__videos"></div>
         <p id="channel-sheet-empty" class="empty" data-i18n="channelEmpty" hidden>No videos</p>
+      </div>
+    </div>
+
+    <div
+      id="support-sheet"
+      class="sheet"
+      hidden
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="support-sheet-title"
+    >
+      <div class="sheet__panel" role="document">
+        <div class="sheet__head">
+          <span class="sheet__title">
+            <span id="support-sheet-title" class="sheet__name" data-i18n="supportTitle">Support Companion for YouTube</span>
+          </span>
+          <button
+            id="support-sheet-close"
+            class="icon-btn"
+            type="button"
+            data-i18n-label="sheetClose"
+            data-i18n-title="sheetClose"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
+        <p class="footnote" data-i18n="supportIntro">
+          It's free, with no ads and no tracking. If it saves you time or data, you can chip in.
+        </p>
+        <div id="support-methods"></div>
       </div>
     </div>
 

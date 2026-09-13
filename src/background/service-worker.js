@@ -39,7 +39,8 @@ import {
 
 const ALARM_ALL = 'poll-all';
 const ALARM_FAV = 'poll-fav';
-const BADGE_COLOR = '#cc0000';
+// The icon's deep purple; Chrome's white badge text sits on it at 6.7:1.
+const BADGE_COLOR = '#5b3fd6';
 const EXT_ICON = 'icons/icon128.png';
 const AUDIO_TOGGLE_COMMAND = 'toggle-audio-mode';
 

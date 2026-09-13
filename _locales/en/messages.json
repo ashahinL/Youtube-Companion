@@ -1,14 +1,14 @@
 {
   "extName": {
-    "message": "YouTube Companion",
-    "description": "Extension name in chrome://extensions, the store listing, and the popup title."
+    "message": "Companion for YouTube",
+    "description": "Extension name in chrome://extensions, the store listing, and the popup title. YouTube describes what it is for and is never the name itself."
   },
   "extDescription": {
-    "message": "Account-free YouTube subscriptions with a merged feed and alerts on new uploads.",
-    "description": "Extension description shown in chrome://extensions and the store listing."
+    "message": "Follow YouTube channels without an account: one merged feed, alerts on new uploads, and a low-data audio mode.",
+    "description": "Extension description shown in chrome://extensions and the store listing. The stores cap it at 132 characters."
   },
   "extActionTitle": {
-    "message": "YouTube Companion",
+    "message": "Companion for YouTube",
     "description": "Toolbar button tooltip (action.default_title)."
   },
   "tabFeeds": {
@@ -796,5 +796,67 @@
   "settingsAudioImageHint": {
     "message": "Paste a direct link to an image.",
     "description": "Hint under the overlay image URL field."
+  },
+  "supportOpen": {
+    "message": "Support this project",
+    "description": "Accessible name of the header heart and the Settings button that open the support sheet."
+  },
+  "supportTitle": {
+    "message": "Support Companion for YouTube",
+    "description": "Title of the support sheet."
+  },
+  "supportIntro": {
+    "message": "It's free, with no ads and no tracking. If it saves you time or data, you can chip in.",
+    "description": "Short explanation on the support sheet that the extension is free."
+  },
+  "supportOpenLink": {
+    "message": "Open",
+    "description": "Button that opens a support method's link in a new tab."
+  },
+  "supportCopy": {
+    "message": "Copy",
+    "description": "Button that copies a support method's address."
+  },
+  "supportCopied": {
+    "message": "Copied",
+    "description": "Button label shown briefly after the address was copied."
+  },
+  "supportCopyFailed": {
+    "message": "Could not copy. Select the address and copy it yourself.",
+    "description": "Shown in the method row when the address could not be copied."
+  },
+  "supportShowQr": {
+    "message": "Show QR code",
+    "description": "Button that reveals a support method's QR code."
+  },
+  "supportHideQr": {
+    "message": "Hide QR code",
+    "description": "Button that hides a support method's QR code."
+  },
+  "supportQrAlt": {
+    "message": "QR code for $ADDRESS$",
+    "description": "Alt text for a method's QR image. $ADDRESS$ is the payment address.",
+    "placeholders": {
+      "address": {
+        "content": "$1",
+        "example": "ashahin22@instapay"
+      }
+    }
+  },
+  "supportPaypalHint": {
+    "message": "Card or PayPal balance, from anywhere.",
+    "description": "Hint under the PayPal support method."
+  },
+  "supportInstapayHint": {
+    "message": "From any Egyptian bank or wallet app with InstaPay.",
+    "description": "Hint under the InstaPay support method."
+  },
+  "settingsSupport": {
+    "message": "Support",
+    "description": "Settings group heading for supporting the project."
+  },
+  "settingsSupportText": {
+    "message": "Free, with no ads. Chip in if it helps you.",
+    "description": "Short note under the Settings support heading."
   }
 }

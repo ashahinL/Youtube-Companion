@@ -621,6 +621,45 @@ export default async function run(t) {
       && /getAttribute\(\s*'aria-selected'\s*\)/.test(js),
   );
 
+  t.section('support sheet');
+
+  const appbarSupport = html.match(/<button\b[^>]*\bid="appbar-support"[^>]*>/);
+  t.check('the app bar holds #appbar-support', !!appbarSupport, 'missing');
+  t.check(
+    '#appbar-support has an i18n label',
+    !!appbarSupport && /data-i18n-label="supportOpen"/.test(appbarSupport[0]),
+    appbarSupport ? appbarSupport[0] : 'missing',
+  );
+
+  const backupAt = html.indexOf('id="settings-backup"');
+  const settingsSupportAt = html.indexOf('id="settings-support"');
+  const footerAt = html.indexOf('class="settings-footer"');
+  t.check('has #settings-support', settingsSupportAt >= 0);
+  t.check(
+    '#settings-support sits after #settings-backup and before the footer',
+    backupAt >= 0 && settingsSupportAt > backupAt && footerAt > settingsSupportAt,
+    `${backupAt} ${settingsSupportAt} ${footerAt}`,
+  );
+
+  t.check('has support sheet overlay', /id="support-sheet"/.test(html));
+  t.check(
+    'support sheet is a dialog overlay',
+    /id="support-sheet"[\s\S]*?role="dialog"/.test(html),
+  );
+  t.check('support sheet has a close control', /id="support-sheet-close"/.test(html));
+  t.check('support sheet has a methods container', /id="support-methods"/.test(html));
+  t.check(
+    'popup.js imports from ../lib/support.js',
+    /from\s+['"]\.\.\/lib\/support\.js['"]/.test(js),
+  );
+  t.check(
+    'copy uses navigator.clipboard.writeText',
+    /navigator\.clipboard\.writeText/.test(js),
+  );
+  t.check('support sheet never uses execCommand', !/\bexecCommand\s*\(/.test(js));
+  t.check('support sheet never uses alert(', !/\balert\s*\(/.test(js));
+  t.check('support sheet never uses confirm(', !/\bconfirm\s*\(/.test(js));
+
   t.section('message types');
 
   const sent = [...js.matchAll(/\btype:\s*['"]([\w.]+)['"]/g)].map((m) => m[1]);

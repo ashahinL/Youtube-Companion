@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Companion for YouTube</title>
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      body {
+        display: flex;
+        background: linear-gradient(135deg, #4338ca, #9333ea);
+        font-family: system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      html[dir="rtl"] body {
+        font-family: Tahoma, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+      }
+      .copy {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-inline: 88px 32px;
+        min-width: 0;
+      }
+      /* Balanced lines: a headline that wraps otherwise leaves one word
+       * alone on the second line. */
+      .copy h1,
+      .copy p {
+        text-wrap: balance;
+      }
+      .copy img {
+        width: 96px;
+        height: 96px;
+      }
+      .copy h1 {
+        margin: 20px 0 12px;
+        color: #fff;
+        font-size: 56px;
+        font-weight: 700;
+        line-height: 1.1;
+      }
+      .copy p {
+        margin: 0;
+        color: #fff;
+        font-size: 24px;
+        font-weight: 400;
+        line-height: 1.35;
+        opacity: 0.85;
+      }
+      .preview {
+        flex: none;
+        width: 600px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .preview img {
+        width: 480px;
+        height: 720px;
+        border-radius: 16px;
+        object-fit: cover;
+        object-position: top;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      }
+      /* Headless Chromium lays out on a viewport wider than 440px, so the
+       * tile is sized explicitly rather than centred in the viewport. */
+      html:has(body.promo) {
+        width: 440px;
+        height: 280px;
+      }
+      body.promo {
+        width: 440px;
+        height: 280px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+      /* icon128 carries Chrome's 16px transparent margin, so it is drawn
+       * larger here to give the tile itself about 90px. */
+      body.promo img {
+        width: 120px;
+        height: 120px;
+      }
+      body.promo h1 {
+        margin: 0;
+        color: #fff;
+        font-size: 28px;
+        font-weight: 700;
+        line-height: 1.2;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search);
+        if (q.get('promo') === '1') {
+          document.body.className = 'promo';
+          var icon = document.createElement('img');
+          icon.src = '/icons/icon128.png';
+          icon.alt = '';
+          icon.width = 120;
+          icon.height = 120;
+          var name = document.createElement('h1');
+          name.textContent = 'Companion for YouTube';
+          document.body.append(icon, name);
+          return;
+        }
+
+        var dir = q.get('dir') === 'rtl' ? 'rtl' : 'ltr';
+        document.documentElement.lang = dir === 'rtl' ? 'ar' : 'en';
+        document.documentElement.dir = dir;
+
+        var img = q.get('img') || '';
+        if (!/^[A-Za-z0-9._-]+$/.test(img)) img = '';
+
+        var copy = document.createElement('div');
+        copy.className = 'copy';
+        var appIcon = document.createElement('img');
+        appIcon.src = '/icons/icon128.png';
+        appIcon.alt = '';
+        appIcon.width = 96;
+        appIcon.height = 96;
+        var title = document.createElement('h1');
+        title.textContent = q.get('title') || '';
+        var sub = document.createElement('p');
+        sub.textContent = q.get('sub') || '';
+        copy.append(appIcon, title, sub);
+
+        var preview = document.createElement('div');
+        preview.className = 'preview';
+        if (img) {
+          var shot = document.createElement('img');
+          shot.src = '/docs/screenshots/' + img;
+          shot.alt = '';
+          preview.appendChild(shot);
+        }
+
+        document.body.append(copy, preview);
+      })();
+    </script>
+  </body>
+</html>

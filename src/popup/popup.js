@@ -1,10 +1,11 @@
 /**
- * Popup: four tabs plus the channel sheet overlay. Audio is first and
- * is the tab the popup opens on. Feeds is the merged timeline; its box
- * filters videos, and Add adds a channel the same way the Watchlist box
- * does. The Watchlist tab adds by URL or handle, filters the list as
- * you type, favourites and removes channels. Empty Add reads the
- * focused tab. The worker owns all network; this page only renders.
+ * Popup: four tabs plus the channel sheet and support sheet overlays.
+ * Audio is first and is the tab the popup opens on. Feeds is the merged
+ * timeline; its box filters videos, and Add adds a channel the same way
+ * the Watchlist box does. The Watchlist tab adds by URL or handle,
+ * filters the list as you type, favourites and removes channels. Empty
+ * Add reads the focused tab. The worker owns all network; this page
+ * only renders.
  */
 
 import { thumbUrl } from '../lib/yt.js';
@@ -32,6 +33,7 @@ import {
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
 } from '../lib/view.js';
+import { SUPPORT_METHODS, supportRows } from '../lib/support.js';
 
 const Core = globalThis.AudioModeCore;
 const LAST_TAB_KEY = 'audioLastSelectedTabId';
@@ -57,6 +59,7 @@ const view = {
   pendingImportText: '',
   sheetId: null,
   sheetError: '',
+  supportOpen: false,
   feedError: '',
   feedOk: '',
   audioKnown: false,
@@ -76,6 +79,8 @@ let audioSeeking = false;
 let audioSpeedPending = false;
 let audioVolumePending = false;
 let audioPickerKey = '';
+let supportOpenerId = null;
+const supportCopiedTimers = new WeakMap();
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const panels = [...document.querySelectorAll('[role="tabpanel"]')];
@@ -123,6 +128,7 @@ async function applyI18n(setting) {
   if (appliedLocale === next) return;
   applyDirection(document, next);
   applyTo(document, messages);
+  fillSupportMethods();
   appliedLocale = next;
 }
 
@@ -229,10 +235,38 @@ function openUrl(url) {
 
 function openChannelSheet(id) {
   if (!id) return;
+  view.supportOpen = false;
   view.sheetId = id;
   view.sheetError = '';
   render();
   document.getElementById('channel-sheet-close')?.focus?.();
+}
+
+function openSupportSheet(opener) {
+  view.sheetId = null;
+  view.sheetError = '';
+  view.supportOpen = true;
+  supportOpenerId = opener && opener.id ? opener.id : null;
+  render();
+  document.getElementById('support-sheet-close')?.focus?.();
+}
+
+function closeSupportSheet() {
+  if (!view.supportOpen) return;
+  view.supportOpen = false;
+  render();
+  focusSupportOpener();
+}
+
+function focusSupportOpener() {
+  if (supportOpenerId) {
+    const el = document.getElementById(supportOpenerId);
+    if (el && !el.closest('[hidden]')) {
+      el.focus();
+      return;
+    }
+  }
+  tabs.find((el) => el.getAttribute('aria-selected') === 'true')?.focus?.();
 }
 
 function closeChannelSheet() {
@@ -259,8 +293,15 @@ function focusSheetOpener(channelId) {
   tabs.find((el) => el.getAttribute('aria-selected') === 'true')?.focus?.();
 }
 
+function openSheetEl() {
+  // Only one sheet is shown at a time; Tab must cycle that panel, not both.
+  if (view.supportOpen) return document.getElementById('support-sheet');
+  if (view.sheetId) return document.getElementById('channel-sheet');
+  return null;
+}
+
 function sheetFocusables() {
-  const panel = document.querySelector('#channel-sheet .sheet__panel');
+  const panel = openSheetEl()?.querySelector('.sheet__panel');
   if (!panel) return [];
   // render() rebuilds the video list, so a cached node list would point
   // at elements that are no longer in the document.
@@ -270,7 +311,7 @@ function sheetFocusables() {
 }
 
 function trapSheetTab(event) {
-  if (event.key !== 'Tab' || !view.sheetId) return;
+  if (event.key !== 'Tab' || !openSheetEl()) return;
   const items = sheetFocusables();
   if (!items.length) {
     event.preventDefault();
@@ -777,6 +818,7 @@ function render() {
   renderAudio();
   renderSettings(locale);
   renderChannelSheet();
+  renderSupportSheet();
 }
 
 function renderChannelSheet() {
@@ -856,6 +898,150 @@ function renderChannelSheet() {
     // The focused video row was rebuilt, or ↻ was hidden under focus.
     document.getElementById('channel-sheet-close')?.focus?.();
   }
+}
+
+function collapseSupportQr() {
+  const root = document.getElementById('support-methods');
+  if (!root) return;
+  for (const btn of root.querySelectorAll('.support-method__qr-toggle')) {
+    btn.setAttribute('aria-expanded', 'false');
+    btn.textContent = t('supportShowQr');
+  }
+  for (const card of root.querySelectorAll('.support-method__qr-card')) {
+    card.hidden = true;
+  }
+}
+
+function selectNodeText(el) {
+  const sel = window.getSelection?.();
+  if (!sel || !el) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function copySupportAddress(address, btn, codeEl, statusEl) {
+  statusEl.hidden = true;
+  statusEl.textContent = '';
+  const write = navigator.clipboard && typeof navigator.clipboard.writeText === 'function'
+    ? navigator.clipboard.writeText(address)
+    : Promise.reject(new Error('clipboard'));
+  Promise.resolve(write).then(() => {
+    btn.textContent = t('supportCopied');
+    const prev = supportCopiedTimers.get(btn);
+    if (prev) window.clearTimeout(prev);
+    const timer = window.setTimeout(() => {
+      if (btn.isConnected) btn.textContent = t('supportCopy');
+    }, 1500);
+    supportCopiedTimers.set(btn, timer);
+  }, () => {
+    statusEl.hidden = false;
+    statusEl.textContent = t('supportCopyFailed');
+    selectNodeText(codeEl);
+  });
+}
+
+function supportMethodRow(method) {
+  const row = document.createElement('div');
+  row.className = 'support-method';
+
+  const text = document.createElement('div');
+  text.appendChild(textEl('div', 'support-method__name', method.name));
+  if (method.hintKey) {
+    text.appendChild(textEl('p', 'support-method__hint', t(method.hintKey)));
+  }
+  row.appendChild(text);
+
+  const actions = document.createElement('div');
+  actions.className = 'support-method__actions';
+
+  let codeEl = null;
+  let statusEl = null;
+  if (method.address) {
+    codeEl = document.createElement('code');
+    codeEl.className = 'support-method__address';
+    codeEl.dir = 'ltr';
+    codeEl.textContent = method.address;
+    actions.appendChild(codeEl);
+
+    const copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.className = 'btn';
+    copyBtn.textContent = t('supportCopy');
+    copyBtn.addEventListener('click', () => {
+      copySupportAddress(method.address, copyBtn, codeEl, statusEl);
+    });
+    actions.appendChild(copyBtn);
+
+    statusEl = document.createElement('p');
+    statusEl.className = 'support-method__status';
+    statusEl.setAttribute('role', 'status');
+    statusEl.hidden = true;
+  }
+
+  if (method.url) {
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'btn btn--primary';
+    openBtn.textContent = t('supportOpenLink');
+    openBtn.addEventListener('click', () => openUrl(method.url));
+    actions.appendChild(openBtn);
+  }
+
+  let qrCard = null;
+  if (method.qr) {
+    const qrId = `support-qr-${method.id}`;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'btn support-method__qr-toggle';
+    toggle.textContent = t('supportShowQr');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', qrId);
+    toggle.addEventListener('click', () => {
+      const show = qrCard.hidden;
+      qrCard.hidden = !show;
+      toggle.setAttribute('aria-expanded', show ? 'true' : 'false');
+      toggle.textContent = t(show ? 'supportHideQr' : 'supportShowQr');
+    });
+    actions.appendChild(toggle);
+
+    qrCard = document.createElement('div');
+    qrCard.id = qrId;
+    qrCard.className = 'support-method__qr-card';
+    qrCard.hidden = true;
+    const img = document.createElement('img');
+    img.className = 'support-method__qr';
+    img.src = method.qr;
+    img.alt = t('supportQrAlt', [method.address || '']);
+    img.width = 180;
+    img.height = 180;
+    qrCard.appendChild(img);
+  }
+
+  row.appendChild(actions);
+  if (statusEl) row.appendChild(statusEl);
+  if (qrCard) row.appendChild(qrCard);
+  return row;
+}
+
+function fillSupportMethods() {
+  const root = document.getElementById('support-methods');
+  if (!root) return;
+  root.replaceChildren();
+  for (const method of supportRows(SUPPORT_METHODS)) {
+    root.appendChild(supportMethodRow(method));
+  }
+}
+
+function renderSupportSheet() {
+  const sheet = document.getElementById('support-sheet');
+  if (!sheet) return;
+  const root = document.getElementById('support-methods');
+  if (root && !root.childElementCount) fillSupportMethods();
+  const open = !!view.supportOpen;
+  sheet.hidden = !open;
+  if (!open) collapseSupportQr();
 }
 
 function audioPanelVisible() {
@@ -1872,9 +2058,29 @@ function bindChannelSheet() {
       event.preventDefault();
       return;
     }
+    if (view.supportOpen) {
+      event.preventDefault();
+      closeSupportSheet();
+      return;
+    }
     if (!view.sheetId) return;
     event.preventDefault();
     closeChannelSheet();
+  });
+}
+
+function bindSupportSheet() {
+  document.getElementById('support-sheet-close')?.addEventListener('click', () => {
+    closeSupportSheet();
+  });
+  document.getElementById('support-sheet')?.addEventListener('click', (event) => {
+    if (event.target === event.currentTarget) closeSupportSheet();
+  });
+  document.getElementById('appbar-support')?.addEventListener('click', (event) => {
+    openSupportSheet(event.currentTarget);
+  });
+  document.getElementById('settings-support-open')?.addEventListener('click', (event) => {
+    openSupportSheet(event.currentTarget);
   });
 }
 
@@ -1886,6 +2092,7 @@ bindAudio();
 bindLookSettings();
 bindSettings();
 bindChannelSheet();
+bindSupportSheet();
 
 void (async () => {
   await applyI18n('auto');

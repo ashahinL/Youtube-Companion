@@ -24,6 +24,9 @@ const SUITES = [
   ['service worker',     './worker.test.js'],
   ['audio-mode core',    './core.test.js'],
   ['audio-mode engine',  './audio-engine.test.js'],
+  ['store package',      './pack.test.js'],
+  ['icon',               './icon.test.js'],
+  ['support',            './support.test.js'],
 ];
 
 const results = [];

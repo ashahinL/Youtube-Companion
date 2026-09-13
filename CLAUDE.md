@@ -4,9 +4,14 @@ Guidance for Claude Code working in this repository.
 
 ## What this is
 
-**YouTube Companion** — a Chrome/Edge **MV3** extension. Account-free YouTube
+**Companion for YouTube** — a Chrome/Edge **MV3** extension. Account-free YouTube
 subscriptions: a merged time-sorted feed of channels you add by URL, a
 per-channel sheet inside the popup, and desktop alerts on new uploads.
+
+The name is **Companion for YouTube** (Arabic **رفيق ليوتيوب**), never
+"YouTube Companion": store review treats YouTube as the name as impersonation.
+For the same reason the icon and the accent are purple, not YouTube red. The
+repo and the backup file's `app` id keep the old spelling.
 
 Sibling of `../poppo-companion` and `../bigo-companion`. Same house shape:
 **no build step, no dependencies, plain ES modules.** What is in `src/` is what
@@ -42,11 +47,14 @@ Quick map of the spec:
 | 10 | The test suites |
 | 11 | **Build order** — the phases |
 | 12 | Tripwires |
+| 13 | The Audio tab, and the provenance audit of its code |
+| 14 | The first release — name, icon, stores, donations |
 
 ## Where the work is
 
 Built in the order of DESIGN.md §11. All ten jobs are done and the extension is
-loadable. Update this table as new work lands.
+loadable; the first release (DESIGN.md §14) is under way. Update this table as
+new work lands.
 
 | # | Job | State |
 |---|---|---|
@@ -60,12 +68,14 @@ loadable. Update this table as new work lands.
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
 | 9 | i18n + Arabic + RTL over finished markup | **done** |
 | 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **done** — tab, look settings, player card, tab picker, statistics, open in audio mode from the feed (§13.10); the badge keeps the feed count while audio mode is on |
+| 11 | First release (DESIGN.md §14) | **built** — LF line endings, `npm run pack`, rename, redrawn icon, purple accent, support sheet, `npm run shots`, store copy in `store/LISTING.md`, `PRIVACY.md`, version 1.0.0. Store submission is the owner's |
 
-**Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3.
-Read it before touching the audio-mode code, and keep that discussion in the
-spec rather than in tracked files.
+**Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3,
+with the audit that cleared it for publishing. Read it before touching the
+audio-mode code or carrying anything over from upstream, and keep that
+discussion in the spec rather than in tracked files.
 
-Already on disk before job 1: `DESIGN.md`, `icons/` (finished),
+Already on disk before job 1: `DESIGN.md`, `icons/` (since redrawn by `scripts/draw-icon.js`),
 `test/fixtures/` (seven real captured YouTube responses), and
 `test/helpers/report.js` / `test/run-all.js` / `test/check-syntax.js` copied
 verbatim from `../poppo-companion` as a starting point.
@@ -92,6 +102,9 @@ npm test             # every suite, terse summary — use this by default
 npm run test:verbose # every assertion, for debugging a failure
 npm run test:json    # machine-readable
 npm run check        # manifest valid, every file parses, popup asset refs resolve
+npm run pack         # dist/companion-for-youtube-<version>.zip, the store upload
+npm run shots        # docs/screenshots + store/images from the real popup (needs Chrome/Edge, loads thumbnails)
+node scripts/draw-icon.js  # re-render icons/ after changing the geometry
 ```
 
 `npm run check` **and** `npm test` both green before anything counts as done.
@@ -153,3 +166,11 @@ The full list is DESIGN.md §12. The ones that have teeth:
   and YouTube 403s that Origin.** Fetch cannot override it. A DNR rule
   rewrites Origin to `https://www.youtube.com` on this extension's own
   requests. All YouTube fetches pass `credentials: 'omit'`.
+- **Headless Chromium will not lay out narrower than its minimum window
+  width**, whatever `--window-size` says. A 400px popup rendered directly
+  gets `position: fixed` sheets that run off its edge. `npm run shots`
+  renders the popup inside a 400×600 iframe for that reason.
+- **CRLF breaks tests.** Several popup checks regex the source with a length
+  bound (`[\s\S]{0,240}`), and a Windows `core.autocrlf` checkout adds a byte
+  per line. `.gitattributes` pins LF; a checkout made before it needs its
+  files rewritten with LF once.

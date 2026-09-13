@@ -1,14 +1,16 @@
 {
   "name": "youtube-companion",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Tooling manifest for the YouTube Companion extension. Chrome ignores this file; it exists so `npm test` works.",
+  "description": "Tooling manifest for the Companion for YouTube extension. Chrome ignores this file; it exists so `npm test` works.",
   "scripts": {
     "test": "node test/run-all.js --summary",
     "test:verbose": "node test/run-all.js",
     "test:json": "node test/run-all.js --json",
     "check": "node test/check-syntax.js",
-    "test:live": "node test/live.js"
+    "test:live": "node test/live.js",
+    "pack": "node scripts/pack.js",
+    "shots": "node scripts/shots.js"
   }
 }

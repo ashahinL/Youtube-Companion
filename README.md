@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="icons/icon128.png" width="96" height="96" alt="YouTube Companion icon" />
+  <img src="icons/icon128.png" width="96" height="96" alt="Companion for YouTube icon" />
 </p>
 
-<h1 align="center">YouTube Companion</h1>
+<h1 align="center">Companion for YouTube</h1>
 
 <p align="center">
   Follow YouTube channels without a Google account.<br />
@@ -72,7 +72,7 @@
 
 ## Install
 
-It is not on the Chrome Web Store. Load it from source:
+Until it is on the Chrome Web Store and Edge Add-ons, load it from source:
 
 1. Download this repo (**Code → Download ZIP**) and unzip it, or clone it.
 2. Open `chrome://extensions` (or `edge://extensions`).
@@ -91,6 +91,8 @@ There is no build step. The folder is the extension.
 - Your channels, feed, settings and stats stay in your browser's extension
   storage. Nothing is sent anywhere else. There are no analytics.
 
+The full policy is in [PRIVACY.md](PRIVACY.md).
+
 ### Permissions
 
 | Permission | Why |
@@ -99,7 +101,7 @@ There is no build step. The folder is the extension.
 | `alarms` | Check your channels on a schedule. |
 | `notifications` | Tell you about new uploads. |
 | `activeTab` | Add the channel of the tab you are on, when you press Add. |
-| `declarativeNetRequestWithHostAccess` | YouTube rejects requests that come from an extension address. One rule sets the request origin to `youtube.com`, for this extension's own requests only. |
+| `declarativeNetRequestWithHostAccess` | YouTube rejects requests that come from an extension address. One rule sets the origin and referrer of this extension's own `youtube.com` requests, and touches no other request. |
 | `https://www.youtube.com/*` | Read public channel data, and run audio mode on YouTube pages. |
 
 ## Development
@@ -109,10 +111,15 @@ Plain JavaScript modules. No dependencies, nothing to install.
 ```bash
 npm test        # run every test suite
 npm run check   # manifest is valid, every file parses, popup links resolve
+npm run pack    # build the store zip into dist/
+npm run shots   # re-render docs/screenshots and store/images
+node scripts/draw-icon.js   # redraw icons/ after changing its geometry
 ```
 
-Both must pass before a change counts as done. Tests run on saved YouTube
-responses in `test/fixtures/` and never touch the network.
+`npm test` and `npm run check` must both pass before a change counts as
+done. Tests run on saved YouTube responses in `test/fixtures/` and never
+touch the network. `npm run shots` needs Chrome or Edge installed (or
+`CHROME_PATH`) and loads thumbnails from YouTube.
 
 ```
 src/
@@ -121,9 +128,25 @@ src/
   lib/          YouTube parsing, storage, settings, backup, i18n
   popup/        the popup: Audio, Feeds, Watchlist, Settings
 _locales/       English and Arabic strings
+scripts/        packaging, screenshots, and the icon drawn from geometry
+store/          store listing copy and images
 test/           test suites and fixtures
 ```
+
+Release notes are in [CHANGELOG.md](CHANGELOG.md).
+
+## Support
+
+Companion for YouTube is free, with no ads and no tracking. If it saves you
+time or data, you can chip in — the heart in the popup's top bar shows the
+same options.
+
+- **PayPal:** [paypal.me/ashahin22](https://paypal.me/ashahin22)
+- **InstaPay** (Egypt): `ashahin22@instapay`
 
 ## Licence
 
 [MIT](LICENSE). Do what you like with it; keep the copyright notice.
+
+Companion for YouTube is not affiliated with, endorsed by or sponsored by
+YouTube or Google. YouTube is a trademark of Google LLC.

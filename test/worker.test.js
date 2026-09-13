@@ -3,6 +3,7 @@
  * and the message API. Fake chrome and fake fetch — no network.
  */
 
+import fs from 'node:fs';
 import { installChromeMock } from './helpers/chrome-mock.js';
 import { writeSettings } from '../src/lib/settings.js';
 import {
@@ -174,6 +175,12 @@ function installFetch(spec = {}) {
     }
     if (u.includes('/youtubei/v1/browse')) {
       return jsonRes(spec.browse || headerJson(MKBHD, 'Marques Brownlee', '@mkbhd', 'https://yt3.ggpht.com/mkbhd'));
+    }
+    // The worker reads its own message files for alerts in the chosen
+    // language. Without them every alert quietly falls back to English.
+    const locale = u.match(/^chrome-extension:\/\/[^/]+\/(_locales\/(?:en|ar)\/messages\.json)$/);
+    if (locale) {
+      return jsonRes(JSON.parse(fs.readFileSync(new URL(`../${locale[1]}`, import.meta.url), 'utf8')));
     }
     throw new Error(`unexpected fetch ${u}`);
   };
@@ -1210,12 +1217,14 @@ export default async function run(t) {
     t.check('onMessage listener returns true', listenerRet === true, String(listenerRet));
     t.check('listener delivers getState', viaListener.channels?.[0]?.id === MKBHD);
 
-    t.check('badge colour was set once', mock.badgeColor === '#cc0000', String(mock.badgeColor));
+    t.check('badge colour was set once', mock.badgeColor === '#5b3fd6', String(mock.badgeColor));
 
     t.section('the alert follows the chosen language, not the browser');
 
-    await writeSettings({ ui: { locale: 'ar' } });
+    // After the wipe: it removes `settings`, which would put the language
+    // back on 'auto' and leave the result to the machine's own locale.
     await wipe();
+    await writeSettings({ ui: { locale: 'ar' } });
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
     installFetch({
       feeds: {

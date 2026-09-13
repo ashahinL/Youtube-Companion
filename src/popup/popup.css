@@ -5,7 +5,10 @@
   --border: rgba(255, 255, 255, 0.09);
   --text: #f1f1f4;
   --text-dim: rgba(241, 241, 244, 0.55);
-  --accent: #ff0000;
+  /* The icon's purple, not YouTube red: a red interface beside the name
+   * reads as YouTube's own. Each theme's value clears 4.5:1 for white text
+   * on it and stays readable as text on that theme's background. */
+  --accent: #7c5cf0;
   --on-accent: #ffffff;
   --ok: #22c55e;
   --radius: 9px;
@@ -13,6 +16,8 @@
    * dark-on-light in both themes rather than following them. */
   --thumb-badge-bg: rgb(0 0 0 / 0.8);
   --thumb-badge-text: #ffffff;
+  /* A QR on a dark ground does not scan, so the card stays white in both themes. */
+  --qr-card: #ffffff;
   --tag-live: #e11d2e;
   --on-tag-live: #ffffff;
   --tag-premiere: #e6a317;
@@ -45,6 +50,7 @@
     --border: rgba(0, 0, 0, 0.1);
     --text: #16161a;
     --text-dim: rgba(22, 22, 26, 0.58);
+    --accent: #6d4ae8;
     --on-accent: #ffffff;
     --ok: #15803d;
     --tag-live: #d10f20;
@@ -81,11 +87,16 @@ html {
 }
 
 .appbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding-block: 11px 7px;
   padding-inline: 12px;
 }
 
 .appbar__name {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 15px;
   font-weight: 600;
@@ -422,6 +433,26 @@ body {
 .icon-btn:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+.icon-btn.appbar__support {
+  flex: none;
+  margin-inline-start: auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.icon-btn.appbar__support:hover:not(:disabled),
+.icon-btn.appbar__support:focus-visible {
+  background: transparent;
+  color: var(--accent);
+}
+
+.icon-btn.appbar__support svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 /* The ⋯ row menu: a toggle with an absolutely-positioned list below it. */
@@ -931,6 +962,79 @@ body {
 .sheet .empty {
   margin-block: 16px;
   margin-inline: 0;
+}
+
+#support-sheet .footnote {
+  margin: 0;
+  margin-block-end: 12px;
+}
+
+#support-methods {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.support-method {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-block: 12px;
+}
+
+.support-method + .support-method {
+  border-block-start: 1px solid var(--border);
+}
+
+.support-method__name {
+  font-weight: 600;
+}
+
+.support-method__hint {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.support-method__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.support-method__address {
+  padding-block: 2px;
+  padding-inline: 6px;
+  border-radius: 4px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.support-method__status {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.support-method__qr-card {
+  align-self: flex-start;
+  padding: 12px;
+  border-radius: var(--radius);
+  background: var(--qr-card);
+}
+
+.support-method__qr {
+  display: block;
+  width: 180px;
+  height: 180px;
+}
+
+#settings-support .footnote {
+  margin: 0;
+  margin-block-end: 8px;
 }
 
 .audio-head {
