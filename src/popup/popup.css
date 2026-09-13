@@ -1260,6 +1260,31 @@ body {
   }
 }
 
+/* A title that slides forever is the kind of motion this setting exists to
+ * stop. It wraps to two lines instead, so the whole name is still readable
+ * in most cases, and the fade at the edges goes with the slide. */
+@media (prefers-reduced-motion: reduce) {
+  .audio-player__title-wrap {
+    mask-image: none;
+  }
+
+  .audio-player__title,
+  .audio-player__title.is-scrolling {
+    display: -webkit-box;
+    width: auto;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    animation: none;
+  }
+
+  .spinner {
+    animation-duration: 1.6s;
+  }
+}
+
 .audio-player__channel {
   margin: 0;
   overflow: hidden;
