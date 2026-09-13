@@ -19,10 +19,12 @@ methods are reached through a MAIN-world bridge.
 
 ## Read DESIGN.md first
 
-[DESIGN.md](DESIGN.md) is the agreed spec and the source of truth. It was
-written with the owner, question by question, and its decision table in §1 is
-**settled — do not relitigate it**. Its §2 wire facts were measured live with
-`curl` on 2026-09-11, with real byte counts; they are not guesses.
+`DESIGN.md` is the agreed spec and the source of truth. It sits in the working
+tree but is **not tracked** — it is a working document, not part of what ships,
+so it will not be in a fresh clone. It was written with the owner, question by
+question, and its decision table in §1 is **settled — do not relitigate it**.
+Its §2 wire facts were measured live with `curl` on 2026-09-11, with real byte
+counts; they are not guesses.
 
 Quick map of the spec:
 
@@ -63,7 +65,7 @@ loadable; job 10 is the remaining one. Update this table as each one lands.
 Read it before touching the audio-mode code, and keep that discussion in the
 spec rather than in tracked files.
 
-Already on disk before job 1: [DESIGN.md](DESIGN.md), `icons/` (finished),
+Already on disk before job 1: `DESIGN.md`, `icons/` (finished),
 `test/fixtures/` (seven real captured YouTube responses), and
 `test/helpers/report.js` / `test/run-all.js` / `test/check-syntax.js` copied
 verbatim from `../poppo-companion` as a starting point.
@@ -116,7 +118,7 @@ touch the network.
 
 ## Tripwires — the short version
 
-The full list is [DESIGN.md §12](DESIGN.md). The ones that have teeth:
+The full list is DESIGN.md §12. The ones that have teeth:
 
 - **`DOMParser` does not exist in an MV3 service worker.** The channel-feed XML
   parser must be hand-written. This is a constraint, not a preference.

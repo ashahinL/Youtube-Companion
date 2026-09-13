@@ -2,3 +2,6 @@
 node_modules/
 *.log
 .claude/settings.local.json
+
+# The design spec is local-only, not published.
+DESIGN.md
