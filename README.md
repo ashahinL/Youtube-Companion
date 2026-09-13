@@ -91,7 +91,8 @@ There is no build step. The folder is the extension.
 - Your channels, feed, settings and stats stay in your browser's extension
   storage. Nothing is sent anywhere else. There are no analytics.
 
-The full policy is in [PRIVACY.md](PRIVACY.md).
+The full policy is in [PRIVACY.md](PRIVACY.md). To report a security
+problem, see [SECURITY.md](SECURITY.md).
 
 ### Permissions
 
@@ -135,6 +136,13 @@ test/           test suites and fixtures
 ```
 
 Release notes are in [CHANGELOG.md](CHANGELOG.md).
+
+## Bugs and ideas
+
+[Open an issue](https://github.com/ashahinL/Youtube-Companion/issues). This
+repository does not take pull requests; say what you need in the issue
+instead. Security problems go through [SECURITY.md](SECURITY.md), not a
+public issue.
 
 ## Support
 

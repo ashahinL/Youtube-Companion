@@ -1,0 +1,25 @@
+# Runs the two gates on every push, so a red suite is seen the moment it
+# lands instead of at the next release. The repository takes no pull
+# requests, so a push is the only way code arrives.
+name: test
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Pinned to commit SHAs, not tags: a moved tag cannot change what runs.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm run check
+      - run: npm test

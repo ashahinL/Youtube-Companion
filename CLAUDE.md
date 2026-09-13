@@ -105,6 +105,8 @@ node scripts/draw-icon.js  # re-render icons/ after changing the geometry
 ```
 
 `npm run check` **and** `npm test` both green before anything counts as done.
+They need Node 22.2 or newer (`zlib.crc32`), and run on every push in
+`.github/workflows/test.yml`.
 
 Suites run against **committed fixtures in `test/fixtures/`** and must never
 touch the network.
