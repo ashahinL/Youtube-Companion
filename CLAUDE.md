@@ -25,9 +25,12 @@ methods are reached through a MAIN-world bridge.
 ## Where things stand
 
 **1.0.0 has shipped**: GitHub release `v1.0.0` with the store zip attached.
-Edge Add-ons was submitted on 2026-09-13 and is in review; the Chrome Web
-Store is not submitted yet. `store/LISTING.md` holds the store IDs, every
-answer given, and the Chrome steps. Release notes are `CHANGELOG.md`.
+Both stores got the same zip on 2026-09-13 and are in review. `store/LISTING.md`
+holds the store IDs and every answer given. Chrome blocks every extension from
+its Web Store pages, so the Chrome dashboard is clicked through by hand from
+that file; no browser automation reaches it.
+When a listing goes live, its link goes in the README's install section.
+Release notes are `CHANGELOG.md`.
 
 `docs/youtube.md` is what YouTube actually serves, measured with byte counts —
 read it before touching `src/lib/yt.js` or the audio-mode player calls.

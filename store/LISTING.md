@@ -10,7 +10,7 @@ the short description come from `_locales/*/messages.json` (`extName`,
 | Store | State | Record |
 |---|---|---|
 | Edge Add-ons | **Submitted 2026-09-13, in review** (Microsoft quotes up to 7 business days) | Store ID `0RDCKC7S7L34` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
-| Chrome Web Store | **Not submitted** — the one-time US$5 developer registration is unpaid | Follow [Chrome Web Store — step by step](#chrome-web-store--step-by-step) |
+| Chrome Web Store | **Submitted 2026-09-13, in review** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing will be `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
 
 When a listing goes live, put its link in the README's install section.
 
@@ -226,18 +226,21 @@ Registration is free. Verification went *Email → Authorized* the same day
 without an email arriving. Partner Center's notification contact email is
 set under Settings → *My preferences*.
 
-## Chrome Web Store — step by step
+## Chrome Web Store — as submitted
 
-Not walked through yet; the dashboard may word things differently. Every
-answer is above, so each field maps to a section of this file.
+Walked through by hand on 2026-09-13. **No browser automation can do this**:
+Chrome refuses to let any extension script its own store pages ("The
+extensions gallery cannot be scripted"), and that includes the dashboard.
+Every answer is above, so each field maps to a section of this file.
 
 1. **Developer account** — at the
    [Chrome Web Store developer dashboard](https://chrome.google.com/webstore/devconsole),
    sign in with the Google account that should own the listing and pay the
    one-time US$5 registration by card. The account settings ask for a
-   publisher name (Edge uses **Ammar Shahin**), a contact email that must be
-   verified before anything can publish, and — for the EU — whether you are a
-   trader. That last one is the owner's call.
+   publisher name, a contact email that must be verified before anything can
+   publish, and whether you are a trader under EU law. Answered
+   **non-trader**: the extension is free with no ads, and a trader's address
+   and phone number are shown publicly on the listing.
 2. **New item** → upload the zip from [The package](#the-package).
 3. **Store listing**
    - Description: [English](#description--english). Add Arabic as a
@@ -247,6 +250,10 @@ answer is above, so each field maps to a section of this file.
      Chrome's 16 px transparent margin).
    - Screenshots: the five 1280×800 files, one at a time, in order.
    - Small promo tile: `promo-440x280.png`. No marquee.
+   - **Localized assets** off: both languages share the same images.
+   - Arabic: switch the language picker at the top of the page to Arabic
+     (it is listed because the package has `_locales/ar`), paste the Arabic
+     description, save.
    - Homepage URL and Support URL: [Store fields](#store-fields). Mature
      content: No.
 4. **Privacy** — [Privacy answers](#privacy-answers--both-stores): single
@@ -258,6 +265,3 @@ answer is above, so each field maps to a section of this file.
    [notes for reviewers](#notes-for-reviewers).
 7. **Submit for review.** Chrome can publish as soon as review passes or wait
    for a manual publish; either is fine for 1.0.0.
-
-Afterwards, record the Chrome item ID and the date in
-[Where each store stands](#where-each-store-stands).
