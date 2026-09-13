@@ -13,6 +13,7 @@
   <img src="https://img.shields.io/badge/Chrome%20%2F%20Edge-Manifest%20V3-1f6feb" alt="Chrome / Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/account-not%20needed-2ea043" alt="No account needed" />
   <img src="https://img.shields.io/badge/dependencies-none-2ea043" alt="No dependencies" />
+  <img src="https://img.shields.io/badge/licence-MIT-1f6feb" alt="MIT licence" />
   <img src="https://img.shields.io/badge/languages-English%20%7C%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9-8250df" alt="English and Arabic" />
 </p>
 
@@ -123,5 +124,6 @@ _locales/       English and Arabic strings
 test/           test suites and fixtures
 ```
 
-[DESIGN.md](DESIGN.md) is the full spec: how each YouTube endpoint behaves,
-the storage format, and the things that are easy to get wrong.
+## Licence
+
+[MIT](LICENSE). Do what you like with it; keep the copyright notice.
