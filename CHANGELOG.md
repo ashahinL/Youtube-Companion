@@ -1,10 +1,10 @@
 # Changelog
 
-Every finished version is tagged (`v1.1.0`). Not every tag goes to the stores:
-the ones that did have a
-[GitHub release](https://github.com/ashahinL/Youtube-Companion/releases).
+Each version here is one that went to the stores. What is finished but not
+shipped yet waits under Unreleased. How a version ships:
+[RELEASING.md](RELEASING.md).
 
-## 1.1.0 — 2026-09-14
+## Unreleased
 
 **New**
 - Undo after removing a channel. The channel comes back with its star, its

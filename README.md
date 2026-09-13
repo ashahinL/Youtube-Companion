@@ -135,7 +135,8 @@ store/          store listing copy and images
 test/           test suites and fixtures
 ```
 
-Release notes are in [CHANGELOG.md](CHANGELOG.md).
+Release notes are in [CHANGELOG.md](CHANGELOG.md). How a version ships is in
+[RELEASING.md](RELEASING.md).
 
 ## Bugs and ideas
 

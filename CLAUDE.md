@@ -32,10 +32,14 @@ that file; no browser automation reaches it.
 When a listing goes live, its link goes in the README's install section.
 Release notes are `CHANGELOG.md`.
 
-**1.1.0 is tagged, not released.** Every finished version gets its version
-bump, a dated CHANGELOG entry and an annotated tag `vX.Y.Z`, pushed. A GitHub
-release and a store upload happen only when the owner says so, so the newest
-tag is often ahead of what the stores have.
+**The next update is 1.1.0.** Its work is finished on `main` and waits
+under `## Unreleased` in the CHANGELOG until both stores are done reviewing
+1.0.0 and the owner says ship. The version files already read 1.1.0.
+
+**How versions work: `RELEASING.md`.** A version number is what users get
+from the stores. The version, its tag, its GitHub release and its store upload
+happen on the same day, only when the owner says so. Planned groups of work
+are not versions, and no tag is made between ships.
 
 `docs/youtube.md` is what YouTube actually serves, measured with byte counts —
 read it before touching `src/lib/yt.js` or the audio-mode player calls.
@@ -126,7 +130,9 @@ touch the network.
 - ES modules, 2-space indent, single quotes, semicolons, a short block comment
   at the top of each file saying what it is for.
 - No dependencies, ever. Node's own APIs only in tests.
-- **Commit only when asked.** `main` is the working branch.
+- **Commit only when asked.** `main` is the working branch, and it is always
+  ready to ship: a feature that takes many commits lives on its own branch
+  until it is finished.
 - Write down what you changed **and what you learned** in the same change.
   Measured facts about YouTube go into `docs/youtube.md` with the numbers and
   the date attached. A tripwire goes in a comment at the line it protects, or
