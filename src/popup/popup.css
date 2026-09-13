@@ -302,6 +302,25 @@ body {
   color: var(--ok);
 }
 
+.undo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-end: 10px;
+  font-size: 12px;
+}
+
+.undo-row__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.undo-row__btn {
+  padding-block: 4px;
+  padding-inline: 10px;
+}
+
 /* ↻ and its spinner share one 28×28 cell so the row does not shift
    when the button hides and the spinner takes its place. */
 .reload-slot {

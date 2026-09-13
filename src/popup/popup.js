@@ -59,6 +59,8 @@ const view = {
   pendingImportText: '',
   sheetId: null,
   sheetError: '',
+  // { id, title } of the last removed channel while Undo is on offer.
+  undo: null,
   supportOpen: false,
   feedError: '',
   feedOk: '',
@@ -814,6 +816,13 @@ function render() {
     okEl.textContent = '';
   }
 
+  const undoRow = document.getElementById('watchlist-undo');
+  const undoText = document.getElementById('watchlist-undo-text');
+  const undoBtn = document.getElementById('watchlist-undo-btn');
+  undoRow.hidden = !view.undo;
+  undoText.textContent = view.undo ? t('watchlistRemoved', [isolate(view.undo.title)]) : '';
+  undoBtn.disabled = view.busy;
+
   const searching = !!q;
   countEl.hidden = !searching;
   countEl.textContent = searching
@@ -1422,6 +1431,7 @@ async function addChannel(input, dest = 'watchlist') {
   const boxId = dest === 'feeds' ? 'feed-filter' : 'watchlist-input';
   await withBusy(async () => {
     view[okField] = '';
+    view.undo = null;
     const res = await send({ type: 'addChannel', input });
     if (!res || res.ok === false) {
       view[errorField] = formatError(res?.error);
@@ -1445,15 +1455,45 @@ async function toggleFavorite(id, on) {
   });
 }
 
+// Names are often in the other script from the sentence around them; without
+// isolation a Latin name scrambles the full stop in Arabic text.
+function isolate(text) {
+  return `\u2068${text}\u2069`;
+}
+
 async function removeChannel(id) {
+  const ch = view.channels.find((c) => c.id === id);
+  const title = ch ? ch.title || ch.handle || ch.id : id;
   await withBusy(async () => {
     const res = await send({ type: 'removeChannel', id });
     if (res && res.ok === false) {
       view.error = formatError(res.error);
       return;
     }
+    // No timer: an Undo that vanishes while someone reaches for it is worse
+    // than one that stays until the next add, remove or close.
+    view.ok = '';
+    view.undo = { id, title };
     await refreshState();
   });
+  // Focus was on the menu item, which left with its row.
+  if (view.undo?.id === id) document.getElementById('watchlist-undo-btn')?.focus();
+}
+
+async function undoRemove() {
+  const undo = view.undo;
+  if (!undo) return;
+  await withBusy(async () => {
+    const res = await send({ type: 'undoRemove', id: undo.id });
+    view.undo = null;
+    if (!res || res.ok === false) {
+      view.error = formatError(res?.error);
+      return;
+    }
+    await refreshState();
+    view.ok = t('watchlistRestored', [isolate(undo.title)]);
+  });
+  focusSheetOpener(undo.id);
 }
 
 async function currentTabUrl() {
@@ -2065,6 +2105,9 @@ function bindWatchlist() {
   });
   clear.addEventListener('click', () => {
     clearWatchlistQuery();
+  });
+  document.getElementById('watchlist-undo-btn').addEventListener('click', () => {
+    void undoRemove();
   });
 }
 

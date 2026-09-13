@@ -1316,6 +1316,9 @@ export default async function run(t) {
     await writePollState({ lastSeenAt: 0 });
     await refreshBadge();
     t.check('badge is non-empty before remove', mock.badgeText !== '', JSON.stringify(mock.badgeText));
+    const channelsBeforeRemove = await readChannels();
+    const feedBeforeRemove = await readFeed();
+    const beastRowsBefore = feedBeforeRemove.filter((row) => row.c === BEAST);
     const removed = await handleMessage({ type: 'removeChannel', id: BEAST });
     t.check('removeChannel reports ok', removed.ok === true);
     t.check('removeChannel dropped the channel', !(await readChannels()).some((c) => c.id === BEAST));
@@ -1323,6 +1326,38 @@ export default async function run(t) {
       'removeChannel dropped that channel\'s feed items',
       !(await readFeed()).some((row) => row.c === BEAST),
     );
+
+    t.section('undo remove');
+
+    t.check('the removed channel had videos to bring back', beastRowsBefore.length > 0, String(beastRowsBefore.length));
+    t.check('the snapshot lives in session storage', mock.session.lastRemovedChannel?.channel?.id === BEAST);
+    t.check('and not in local storage', !('lastRemovedChannel' in mock.storage));
+    const wrongUndo = await handleMessage({ type: 'undoRemove', id: MKBHD });
+    t.check('undo for a different channel is refused', wrongUndo.ok === false, JSON.stringify(wrongUndo));
+    t.check('and keeps the snapshot', mock.session.lastRemovedChannel?.channel?.id === BEAST);
+    const notifiedBeforeUndo = mock.notifications.length;
+    const undone = await handleMessage({ type: 'undoRemove', id: BEAST });
+    t.check('undoRemove reports ok', undone.ok === true, JSON.stringify(undone));
+    t.check(
+      'the channel list is exactly as before, in the same order',
+      JSON.stringify(await readChannels()) === JSON.stringify(channelsBeforeRemove),
+      JSON.stringify((await readChannels()).map((c) => c.id)),
+    );
+    t.check(
+      'the feed is exactly as before',
+      JSON.stringify(await readFeed()) === JSON.stringify(feedBeforeRemove),
+    );
+    t.check('bringing videos back alerts nothing', mock.notifications.length === notifiedBeforeUndo);
+    t.check('the snapshot is used up', !('lastRemovedChannel' in mock.session));
+    const twice = await handleMessage({ type: 'undoRemove', id: BEAST });
+    t.check('a second undo has nothing to do', twice.ok === false && twice.error === 'nothing to undo', JSON.stringify(twice));
+
+    await handleMessage({ type: 'removeChannel', id: BEAST });
+    await addChannel({ id: BEAST, title: 'MrBeast again' });
+    const afterReAdd = await handleMessage({ type: 'undoRemove', id: BEAST });
+    t.check('undo after re-adding the channel does not duplicate it', afterReAdd.ok === false
+      && (await readChannels()).filter((c) => c.id === BEAST).length === 1, JSON.stringify(afterReAdd));
+    await handleMessage({ type: 'removeChannel', id: BEAST });
 
     const unknown = await handleMessage({ type: 'nonesuch' });
     t.check(
@@ -1375,7 +1410,7 @@ export default async function run(t) {
     t.check('the channel list is untouched', JSON.stringify(await readChannels()) === channelsBefore);
 
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
-      'setFavorite', 'updateSettings', 'openInAudioMode', 'importBackup']) {
+      'setFavorite', 'updateSettings', 'openInAudioMode', 'importBackup', 'undoRemove']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }

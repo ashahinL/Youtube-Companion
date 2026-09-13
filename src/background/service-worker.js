@@ -26,6 +26,7 @@ import {
   setFavorite,
   readFeed,
   saveFeed,
+  mergeFeedItems,
   applyFeedMerge,
   newSinceCount,
   readVideoMeta,
@@ -543,6 +544,49 @@ export async function addChannelByInput(input) {
   return { ok: true, channel };
 }
 
+/*
+ * One level of undo for Remove. storage.session because the popup that shows
+ * Undo can close and reopen, and because it is gone after a browser restart
+ * and unreadable to content scripts.
+ */
+const LAST_REMOVED_KEY = 'lastRemovedChannel';
+
+async function rememberRemoved(id) {
+  const [channels, feed] = await Promise.all([readChannels(), readFeed()]);
+  const index = channels.findIndex((ch) => ch.id === id);
+  if (index < 0) return;
+  await chromeApi().storage.session.set({
+    [LAST_REMOVED_KEY]: {
+      channel: channels[index],
+      index,
+      rows: feed.filter((row) => row && row.c === id),
+    },
+  });
+}
+
+/**
+ * Puts the channel back as it was: same record (seeded, favourite, stamps),
+ * same place in the list, and its videos. The videos were alerted or
+ * silently seeded before, and merging them back announces nothing.
+ */
+export async function undoRemove(id) {
+  const session = chromeApi().storage.session;
+  const got = await session.get(LAST_REMOVED_KEY);
+  const snap = got && got[LAST_REMOVED_KEY];
+  if (!snap?.channel || snap.channel.id !== id) return { ok: false, error: 'nothing to undo' };
+  await session.remove(LAST_REMOVED_KEY);
+  const channels = await readChannels();
+  if (channels.some((ch) => ch.id === id)) return { ok: false, error: 'already added' };
+  const next = channels.slice();
+  next.splice(Math.min(Number(snap.index) || 0, next.length), 0, snap.channel);
+  await writeChannels(next);
+  const settings = await readSettings();
+  const rows = Array.isArray(snap.rows) ? snap.rows : [];
+  await saveFeed(mergeFeedItems(await readFeed(), rows, settings.feed.maxItems).feed);
+  await refreshBadge();
+  return { ok: true };
+}
+
 /**
  * Chrome fills `sender` in the browser process, so a page cannot claim an
  * extension URL. The popup's sender.url is chrome-extension://<id>/…; a
@@ -577,10 +621,13 @@ export async function handleMessage(msg, sender) {
       case 'addChannel':
         return await addChannelByInput(msg.input);
       case 'removeChannel': {
+        await rememberRemoved(msg.id);
         await removeChannel(msg.id);
         await refreshBadge();
         return { ok: true };
       }
+      case 'undoRemove':
+        return await undoRemove(msg.id);
       case 'setFavorite': {
         await setFavorite(msg.id, msg.on);
         await syncAlarms();

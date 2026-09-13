@@ -127,7 +127,31 @@
   },
   "watchlistRemove": {
     "message": "Remove",
-    "description": "Menu item that removes the channel from the Watchlist immediately, with no confirmation."
+    "description": "Menu item that removes the channel from the Watchlist immediately, with no confirmation. An Undo button appears afterwards."
+  },
+  "watchlistRemoved": {
+    "message": "Removed $NAME$.",
+    "description": "Status on the Watchlist after a channel is removed, next to the Undo button. $NAME$ is the channel name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
+  },
+  "watchlistUndo": {
+    "message": "Undo",
+    "description": "Button next to the removed-channel status that puts the channel and its videos back."
+  },
+  "watchlistRestored": {
+    "message": "$NAME$ is back.",
+    "description": "Green status on the Watchlist after Undo restores a removed channel. $NAME$ is the channel name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
   },
   "watchlistFavoriteAdd": {
     "message": "Add to favourites",
