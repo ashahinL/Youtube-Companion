@@ -189,6 +189,11 @@ Most live as comments at the line they protect. These span files or tools:
   the command with no shortcut, silently (Dark Reader had `Alt+Shift+A`).
   Anything that shows the shortcut reads `chrome.commands.getAll()` and must
   make sense when it is empty.
+- **A new runtime message is popup-only until listed.** The worker refuses any
+  message from a content script unless its type is in
+  `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
+  with `not allowed` until it is added there. Add it only if a compromised
+  youtube.com page could not misuse it.
 - **Compressed bytes differ between Node builds.** Homebrew's Node links system
   zlib and packs the same tree to a different zip hash than a Node with its own
   zlib. Compare files or pixels, never deflate output, across machines.

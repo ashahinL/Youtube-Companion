@@ -1210,12 +1210,67 @@ export default async function run(t) {
 
     const listener = mock.runtimeListeners.onMessage[0];
     t.check('onMessage listener is registered', typeof listener === 'function');
-    let listenerRet;
-    const viaListener = await new Promise((resolve) => {
-      listenerRet = listener({ type: 'getState' }, {}, resolve);
-    });
-    t.check('onMessage listener returns true', listenerRet === true, String(listenerRet));
-    t.check('listener delivers getState', viaListener.channels?.[0]?.id === MKBHD);
+    const POPUP_SENDER = {
+      id: 'youtube-companion-test',
+      url: 'chrome-extension://youtube-companion/src/popup/popup.html',
+      origin: 'chrome-extension://youtube-companion',
+    };
+    const PAGE_SENDER = {
+      id: 'youtube-companion-test',
+      url: 'https://www.youtube.com/watch?v=Od6M0AXpcxQ',
+      origin: 'https://www.youtube.com',
+      tab: { id: 42 },
+    };
+    function viaListenerAs(message, sender) {
+      let ret;
+      const reply = new Promise((resolve) => {
+        ret = listener(message, sender, resolve);
+      });
+      return reply.then((res) => ({ ret, res }));
+    }
+
+    const fromPopup = await viaListenerAs({ type: 'getState' }, POPUP_SENDER);
+    t.check('onMessage listener returns true', fromPopup.ret === true, String(fromPopup.ret));
+    t.check('listener delivers getState', fromPopup.res.channels?.[0]?.id === MKBHD);
+
+    t.section('who may send which message');
+
+    const channelsBefore = JSON.stringify(await readChannels());
+    const pageImport = await viaListenerAs({
+      type: 'importBackup',
+      mode: 'replace',
+      data: JSON.stringify({ app: 'youtube-companion', version: 1, settings: {}, channels: [] }),
+    }, PAGE_SENDER);
+    t.check(
+      'a YouTube page cannot replace the channel list',
+      pageImport.res.ok === false && pageImport.res.error === 'not allowed',
+      JSON.stringify(pageImport.res),
+    );
+    t.check('and the listener answers synchronously', pageImport.ret === false, String(pageImport.ret));
+    t.check('the channel list is untouched', JSON.stringify(await readChannels()) === channelsBefore);
+
+    for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
+      'setFavorite', 'updateSettings', 'openInAudioMode', 'importBackup']) {
+      const res = await viaListenerAs({ type }, PAGE_SENDER);
+      t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
+    }
+
+    const pageShortcut = await viaListenerAs({ type: 'audioMode.shortcut' }, PAGE_SENDER);
+    t.check('a YouTube page may read the audio shortcut', pageShortcut.res.ok === true, JSON.stringify(pageShortcut.res));
+    const pageBoot = await viaListenerAs({ type: 'audioMode.boot' }, PAGE_SENDER);
+    t.check('a YouTube page may ask whether to boot in audio mode', pageBoot.res.ok === true, JSON.stringify(pageBoot.res));
+
+    const otherExtension = await viaListenerAs({ type: 'getState' }, { ...POPUP_SENDER, id: 'someone-else' });
+    t.check('another extension id is refused', otherExtension.res.error === 'not allowed');
+    const lookAlike = await viaListenerAs(
+      { type: 'getState' },
+      { ...POPUP_SENDER, url: 'chrome-extension://youtube-companion-evil/src/popup/popup.html' },
+    );
+    t.check('a look-alike extension URL is refused', lookAlike.res.error === 'not allowed');
+    const noUrl = await viaListenerAs({ type: 'getState' }, { id: 'youtube-companion-test' });
+    t.check('a sender with no URL is refused', noUrl.res.error === 'not allowed');
+    const noSender = await viaListenerAs({ type: 'audioMode.shortcut' }, undefined);
+    t.check('no sender at all is refused', noSender.res.error === 'not allowed');
 
     t.check('badge colour was set once', mock.badgeColor === '#5b3fd6', String(mock.badgeColor));
 

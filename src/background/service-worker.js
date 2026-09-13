@@ -51,6 +51,11 @@ const YT_ORIGIN_RULE_ID = 1;
 // Politeness pause between channel fetches — not a rate limit YouTube published.
 const CHANNEL_FETCH_DELAY_MS = 250;
 
+// The content script shares a renderer with youtube.com, so it is the sender
+// a compromised page would speak as. It needs these two and nothing else;
+// anything that reads or changes stored data must come from an extension page.
+const CONTENT_SCRIPT_MESSAGES = new Set(['audioMode.boot', 'audioMode.shortcut']);
+
 // In-memory latch so two overlapping calls in the same worker cannot both
 // pass the storage read. The durable twin is pollState.running.
 let sweepActive = false;
@@ -506,6 +511,20 @@ export async function addChannelByInput(input) {
   return { ok: true, channel };
 }
 
+/**
+ * Chrome fills `sender` in the browser process, so a page cannot claim an
+ * extension URL. The popup's sender.url is chrome-extension://<id>/…; a
+ * content script's is the youtube.com page it runs in.
+ */
+export function senderMayCall(type, sender) {
+  const runtime = chromeApi().runtime;
+  if (!sender || !runtime?.id || sender.id !== runtime.id) return false;
+  if (CONTENT_SCRIPT_MESSAGES.has(type)) return true;
+  const extensionRoot = runtime.getURL('');
+  return typeof sender.url === 'string' && sender.url.startsWith(extensionRoot);
+}
+
+/** Trusts its caller; the onMessage listener checks the sender first. */
 export async function handleMessage(msg, sender) {
   try {
     await ensureYtOriginRule().catch(() => {});
@@ -658,6 +677,10 @@ chromeApi().notifications.onClicked.addListener((id) => {
   onNotificationClicked(id).catch(() => {});
 });
 chromeApi().runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!senderMayCall(message?.type, sender)) {
+    sendResponse({ ok: false, error: 'not allowed' });
+    return false;
+  }
   // Keep the worker alive until sendResponse runs — MV3 drops the reply
   // otherwise.
   handleMessage(message, sender).then(sendResponse, (err) => {
