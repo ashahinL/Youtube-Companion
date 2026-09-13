@@ -226,8 +226,11 @@
     }
     if (name === 'sheet') {
       click('#tab-watchlist');
-      var opener = document.querySelector('#watchlist-list .channel-row__main');
-      if (opener) opener.click();
+      // The watchlist renders after the tab switch, not during the click, so
+      // clicking straight away sometimes found no row and shot an empty list.
+      whenPresent('#watchlist-list .channel-row__main', function (opener) {
+        if (opener) opener.click();
+      });
       return;
     }
     if (name === 'support') {
@@ -236,6 +239,18 @@
         || document.querySelector('#support-methods .support-method__qr-toggle');
       if (qr) qr.click();
     }
+  }
+
+  function whenPresent(sel, done) {
+    var start = Date.now();
+    (function tick() {
+      var el = document.querySelector(sel);
+      if (el || Date.now() - start >= 3000) {
+        done(el);
+        return;
+      }
+      setTimeout(tick, 50);
+    })();
   }
 
   function whenFeedReady(done) {
