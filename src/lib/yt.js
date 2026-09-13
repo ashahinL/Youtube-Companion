@@ -35,6 +35,10 @@ const YT_HOSTS = new Set([
   'www.youtu.be',
 ]);
 
+// Where channel avatars are served from (docs/youtube.md). PRIVACY.md names
+// these hosts; an avatar anywhere else would be a request the policy denies.
+const AVATAR_HOSTS = new Set(['yt3.ggpht.com', 'yt3.googleusercontent.com']);
+
 /**
  * @typedef {'network' | 'http' | 'parse'} YtErrorKind
  */
@@ -183,6 +187,21 @@ async function innertubePost(method, extra, fetchImpl) {
 }
 
 /* ---- pure helpers --------------------------------------------------- */
+
+export function isChannelId(value) {
+  return typeof value === 'string' && CHANNEL_ID_RE.test(value);
+}
+
+export function isAvatarUrl(value) {
+  if (typeof value !== 'string') return false;
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' && AVATAR_HOSTS.has(url.hostname);
+}
 
 /**
  * A bare token with no @ is a handle — typing "mkbhd" means @mkbhd, not

@@ -11,7 +11,7 @@
 import { thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
-import { buildBackup } from '../lib/backup.js';
+import { buildBackup, backupSizeError } from '../lib/backup.js';
 import {
   resolveLocale,
   loadMessages,
@@ -1973,6 +1973,16 @@ function bindSettings() {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    // Checked before reading: file.text() on a wrong pick of several hundred
+    // MB would hold the popup until it is killed.
+    const tooLarge = backupSizeError(file.size);
+    if (tooLarge) {
+      view.pendingImportText = '';
+      view.importStage = 'idle';
+      view.backupNotice = { text: tooLarge, error: true };
+      render();
+      return;
+    }
     try {
       view.pendingImportText = await file.text();
       view.importStage = 'choose';

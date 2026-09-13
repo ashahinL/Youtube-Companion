@@ -8,18 +8,29 @@
  */
 
 import { DEFAULT_SETTINGS, clampSettings } from './settings.js';
+import { isChannelId, isAvatarUrl } from './yt.js';
 
 // The file format's id predates the extension's current name. Changing it
 // would make every backup already on someone's disk unreadable.
 const APP = 'youtube-companion';
 const VERSION = 1;
 
+// Every channel is one ~21 KB feed request per check, from the user's own IP,
+// so 2,000 channels is already about 42 MB a check. A file asking for more
+// would have the extension hammer YouTube in the user's name. A real
+// 2,000-channel export is under 1 MB; 2 MB leaves room without letting a
+// huge file stall the popup.
+export const MAX_BACKUP_CHANNELS = 2000;
+export const MAX_BACKUP_BYTES = 2_000_000;
+
 const ERR = {
   json: 'That file is not valid JSON.',
   app: 'That file is not a Companion for YouTube backup.',
   version: 'This backup version is not supported.',
   channels: 'That backup has no channel list.',
-  id: 'A channel in that file has no id.',
+  id: 'A channel in that file has no valid channel id.',
+  size: 'That file is too large to be a backup.',
+  count: `That backup has more than ${MAX_BACKUP_CHANNELS} channels.`,
 };
 
 function isPlainObject(value) {
@@ -85,14 +96,16 @@ function exportChannel(raw) {
 
 function normalizeChannel(raw, now) {
   const id = usableId(raw?.id);
-  if (!id) return null;
+  if (!isChannelId(id)) return null;
   const addedAt = Number(raw.addedAt);
   const lastVideoAt = Number(raw.lastVideoAt);
   return {
     id,
     handle: typeof raw.handle === 'string' ? raw.handle : '',
     title: typeof raw.title === 'string' ? raw.title : '',
-    avatar: typeof raw.avatar === 'string' ? raw.avatar : '',
+    // The popup shows it as an <img> and alerts use it as their icon, so an
+    // address from a file would be fetched. Only YouTube's own hosts load.
+    avatar: isAvatarUrl(raw.avatar) ? raw.avatar : '',
     favorite: !!raw.favorite,
     addedAt: Number.isFinite(addedAt) ? addedAt : now,
     lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
@@ -118,8 +131,14 @@ export function buildBackup({ settings, channels } = {}) {
   };
 }
 
+/** The error for a file of `size` bytes or characters, or '' when it fits. */
+export function backupSizeError(size) {
+  return Number(size) > MAX_BACKUP_BYTES ? ERR.size : '';
+}
+
 export function parseBackup(text) {
   if (typeof text !== 'string') return fail(ERR.json);
+  if (backupSizeError(text.length)) return fail(ERR.size);
 
   let raw;
   try {
@@ -132,9 +151,12 @@ export function parseBackup(text) {
   if (raw.app !== APP) return fail(ERR.app);
   if (Number(raw.version) !== VERSION) return fail(ERR.version);
   if (!Array.isArray(raw.channels)) return fail(ERR.channels);
+  if (raw.channels.length > MAX_BACKUP_CHANNELS) return fail(ERR.count);
 
+  // One bad id rejects the whole file: the extension only ever exports real
+  // ids, so a file with anything else was edited or made elsewhere.
   for (const entry of raw.channels) {
-    if (!usableId(entry?.id)) return fail(ERR.id);
+    if (!isChannelId(usableId(entry?.id))) return fail(ERR.id);
   }
 
   return { ok: true, data: raw };

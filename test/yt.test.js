@@ -23,6 +23,8 @@ import {
   fetchChannelHeader,
   isShort,
   classifyVideo,
+  isChannelId,
+  isAvatarUrl,
 } from '../src/lib/yt.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -343,6 +345,12 @@ export default async function run(t) {
       'https://yt3.googleusercontent.com/nxYrc_1_2f77DoBadyxMTmv7ZpRZapHR5jbuYe7PlPd5cIRJxtNNEYyOC0ZsxaDyJJzXrnJiuDE=s120-c-k-c0x00ffffff-no-rj',
     header.avatar,
   );
+  // Backups keep an avatar only when isAvatarUrl accepts it, so the host
+  // list must cover what YouTube actually serves.
+  t.check('the served header avatar passes isAvatarUrl', isAvatarUrl(header.avatar), header.avatar);
+  t.check('a UC id passes isChannelId', isChannelId(header.id));
+  t.check('a handle is not a channel id', !isChannelId('@MrBeast'));
+  t.check('an id with a trailing space is not a channel id', !isChannelId(`${header.id} `));
 
   /* ---- parsePlayer -------------------------------------------------- */
   t.section('parsePlayer');

@@ -4,7 +4,14 @@
  */
 
 import { DEFAULT_SETTINGS, clampSettings } from '../src/lib/settings.js';
-import { buildBackup, parseBackup, mergeBackup } from '../src/lib/backup.js';
+import {
+  buildBackup,
+  parseBackup,
+  mergeBackup,
+  backupSizeError,
+  MAX_BACKUP_BYTES,
+  MAX_BACKUP_CHANNELS,
+} from '../src/lib/backup.js';
 
 const MKBHD = 'UCBJycsmduvYEL83R_U4JriQ';
 const BEAST = 'UCX6OQ3DkcsbYNE6H8uQQuVA';
@@ -151,11 +158,52 @@ export default async function run(t) {
   t.check('blank id is not ok', blankId.ok === false);
   t.check('blank id uses the id error', blankId.error === noId.error, String(blankId.error));
 
-  const five = [notJson.error, wrongApp.error, badVersion.error, noChannels.error, noId.error];
+  for (const [label, id] of [
+    ['a handle', '@mkbhd'],
+    ['a channel URL', `https://www.youtube.com/channel/${MKBHD}`],
+    ['a short UC id', 'UCgone'],
+    ['a 24-character id without UC', `XX${MKBHD.slice(2)}`],
+    ['a number', 12345],
+  ]) {
+    const res = parseBackup(JSON.stringify({ app: 'youtube-companion', version: 1, channels: [{ id }] }));
+    t.check(`${label} as the id rejects the file`, res.ok === false && res.error === noId.error, JSON.stringify(res));
+  }
+  const oneBad = parseBackup(JSON.stringify({
+    app: 'youtube-companion',
+    version: 1,
+    channels: [{ id: MKBHD }, { id: 'not-a-channel' }, { id: BEAST }],
+  }));
+  t.check('one bad id among good ones rejects the whole file', oneBad.ok === false, JSON.stringify(oneBad));
+
+  const manyIds = Array.from({ length: MAX_BACKUP_CHANNELS + 1 }, (_, i) => ({
+    id: `UC${String(i).padStart(22, '0')}`,
+  }));
+  const tooMany = parseBackup(JSON.stringify({ app: 'youtube-companion', version: 1, channels: manyIds }));
+  t.check(`more than ${MAX_BACKUP_CHANNELS} channels is not ok`, tooMany.ok === false, JSON.stringify(tooMany).slice(0, 120));
+  const atLimit = parseBackup(JSON.stringify({
+    app: 'youtube-companion',
+    version: 1,
+    channels: manyIds.slice(0, MAX_BACKUP_CHANNELS),
+  }));
+  t.check(`exactly ${MAX_BACKUP_CHANNELS} channels parses`, atLimit.ok === true, String(atLimit.error));
+
+  const huge = parseBackup(JSON.stringify({
+    app: 'youtube-companion',
+    version: 1,
+    channels: [{ id: MKBHD, title: 'x'.repeat(MAX_BACKUP_BYTES) }],
+  }));
+  t.check('a file over the size limit is not ok', huge.ok === false, String(huge.error));
+  t.check('the size check does not need valid JSON', parseBackup('{'.repeat(MAX_BACKUP_BYTES + 1)).error === huge.error);
+  t.check('backupSizeError is empty at the limit', backupSizeError(MAX_BACKUP_BYTES) === '');
+  t.check('backupSizeError names one byte over', backupSizeError(MAX_BACKUP_BYTES + 1) === huge.error);
+
+  const seven = [
+    notJson.error, wrongApp.error, badVersion.error, noChannels.error, noId.error, tooMany.error, huge.error,
+  ];
   t.check(
-    'the five parse errors are pairwise distinct',
-    new Set(five).size === 5,
-    JSON.stringify(five),
+    'the seven parse errors are pairwise distinct',
+    new Set(seven).size === 7,
+    JSON.stringify(seven),
   );
 
   t.check('parseBackup(null) does not throw', parseBackup(null).ok === false);
@@ -295,4 +343,29 @@ export default async function run(t) {
   t.check('stale seeded was reset', fresh.seeded === false, String(fresh.seeded));
   t.check('favorite still rode along', fresh.favorite === false);
   t.check('addedAt still rode along', fresh.addedAt === 1_700_000_000_000, String(fresh.addedAt));
+
+  t.section('imported avatars load only from YouTube');
+
+  const avatarCases = [
+    ['yt3.ggpht.com', 'https://yt3.ggpht.com/abc=s88-c-k-c0x00ffffff-no-rj', true],
+    ['yt3.googleusercontent.com', 'https://yt3.googleusercontent.com/abc=s120-c-k-c0x00ffffff-no-rj', true],
+    ['another host', 'https://tracker.example/pixel.gif', false],
+    ['a look-alike host', 'https://yt3.ggpht.com.example/a.png', false],
+    ['plain http', 'http://yt3.ggpht.com/a', false],
+    ['a data: URL', 'data:image/png;base64,iVBORw0KGgo=', false],
+    ['javascript:', 'javascript:alert(1)', false],
+    ['not a string', 42, false],
+  ];
+  const withAvatars = mergeBackup(emptyState(), {
+    channels: avatarCases.map(([, avatar], i) => ({ id: `UC${String(i).padStart(22, '0')}`, avatar })),
+  }, 'replace');
+  avatarCases.forEach(([label, avatar, keep], i) => {
+    const got = withAvatars.channels[i]?.avatar;
+    t.check(
+      keep ? `${label} avatar is kept` : `${label} avatar is dropped`,
+      keep ? got === avatar : got === '',
+      JSON.stringify(got),
+    );
+  });
+  t.check('a dropped avatar still imports the channel', withAvatars.channels.length === avatarCases.length);
 }
