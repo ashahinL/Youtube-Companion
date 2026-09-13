@@ -1230,11 +1230,6 @@ body {
   color: var(--text);
 }
 
-.audio-stats__filter:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-
 .audio-stat {
   min-width: 0;
   padding: 10px;

@@ -27,6 +27,8 @@
     seekTo: 1,
     setPlaybackRate: 1,
     setVolume: 1,
+    mute: 0,
+    unMute: 0,
   };
 
   const QUALITIES = {

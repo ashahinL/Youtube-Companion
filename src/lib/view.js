@@ -1,8 +1,9 @@
 /**
  * Popup view decisions for the Feeds, Watchlist and Audio tabs: which
  * rows show, whether Add is live, which empty state applies, which
- * YouTube tab the player drives, and how audioStats fold into the
- * four cards. Pure — no DOM, no chrome, no clock.
+ * YouTube tab the player drives, when the player card may sync a
+ * control, and how audioStats fold into the four cards. Pure — no
+ * DOM, no chrome, no clock.
  */
 
 import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
@@ -170,6 +171,27 @@ export function audioTabView({
     showPicker: listed.length >= 2,
     showNotice: !target,
   };
+}
+
+// Chrome keeps a range focused after a mouse drag. Focus is not
+// "the user is dragging".
+export function shouldSyncAudioSeek(dragging) {
+  return !dragging;
+}
+
+// A select keeps focus after a pick. Skip the poll only while that
+// control's write is still in flight.
+export function shouldSyncAudioSelect(pending) {
+  return !pending;
+}
+
+export function audioVolumeSelectValue(player) {
+  if (!player) return null;
+  if (player.muted) return 0;
+  if (player.volume == null) return null;
+  const n = Number(player.volume);
+  if (!Number.isFinite(n)) return null;
+  return n;
 }
 
 export function audioStatsView(stats, scope, now, core) {

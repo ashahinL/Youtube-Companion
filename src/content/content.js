@@ -524,6 +524,35 @@
     return isFinite(n) ? n : fallback;
   }
 
+  // #movie_player and its <video> stay in the DOM after an in-page
+  // navigation to /; currentSrc is empty and duration is NaN there.
+  function videoHasMedia(video) {
+    if (!video) return false;
+    const src = video.currentSrc;
+    if (typeof src !== 'string' || !src) return false;
+    const duration = Number(video.duration);
+    return isFinite(duration) && duration > 0;
+  }
+
+  // <video>.volume is YouTube's level times a per-video loudness
+  // factor (100 → 0.4629 on the measured video). The slider's
+  // aria-valuenow is the integer the user set.
+  function readVolumeNow() {
+    try {
+      const player = findMoviePlayer();
+      if (!player || typeof player.querySelector !== 'function') return null;
+      const panel = player.querySelector('.ytp-volume-panel');
+      if (!panel || typeof panel.getAttribute !== 'function') return null;
+      const raw = panel.getAttribute('aria-valuenow');
+      if (raw == null || raw === '') return null;
+      const n = Number(raw);
+      if (!isFinite(n) || n < 0 || n > 100 || Math.floor(n) !== n) return null;
+      return n;
+    } catch (err) {
+      return null;
+    }
+  }
+
   function readChannelName() {
     try {
       const doc = root.document;
@@ -569,8 +598,7 @@
 
   function readPlayer() {
     const video = findVideo();
-    if (!video) return { ok: false, on: !!session };
-    const volume01 = finiteOr(video.volume, 0);
+    if (!video || !videoHasMedia(video)) return { ok: false, on: !!session };
     let title = '';
     try {
       title = Core.tabTitleToVideoTitle(root.document && root.document.title);
@@ -584,7 +612,7 @@
       currentTime: Math.max(0, finiteOr(video.currentTime, 0)),
       duration: Math.max(0, finiteOr(video.duration, 0)),
       playbackRate: finiteOr(video.playbackRate, 1),
-      volume: Math.max(0, Math.min(100, Math.round(volume01 * 100))),
+      volume: readVolumeNow(),
       muted: !!video.muted,
       title: title,
       channel: readChannelName(),
@@ -633,7 +661,14 @@
       return { ok: true };
     }
     if (parsed.action === 'volume') {
+      // setVolume does not unmute. Mute keeps the level, matching
+      // YouTube's own mute button.
+      if (parsed.volume === 0) {
+        await callPlayer('mute');
+        return { ok: true };
+      }
       await callPlayer('setVolume', [parsed.volume]);
+      await callPlayer('unMute');
       return { ok: true };
     }
     return { ok: false };

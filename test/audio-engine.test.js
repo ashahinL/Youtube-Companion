@@ -249,6 +249,12 @@ export default async function run(t) {
     setVolume(n) {
       calls.push(['setVolume', n]);
     },
+    mute() {
+      calls.push(['mute']);
+    },
+    unMute() {
+      calls.push(['unMute']);
+    },
     addEventListener() {},
   };
   const { fire, posts, sandbox, win, bridge } = loadBridge(player);
@@ -303,7 +309,7 @@ export default async function run(t) {
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'mute', args: [] },
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'stopVideo', args: [] },
   }));
   t.check('non-allowlisted player method is rejected', calls.length === 0, JSON.stringify(calls));
 
@@ -422,6 +428,11 @@ export default async function run(t) {
   t.check('setVolume extra arg is refused', bridge.isAllowedCall('setVolume', [50, true]) === false);
   t.check('setVolume missing args is refused', bridge.isAllowedCall('setVolume', []) === false);
 
+  t.check('mute with no args is allowed', bridge.isAllowedCall('mute', []) === true);
+  t.check('mute with an arg is refused', bridge.isAllowedCall('mute', [1]) === false);
+  t.check('unMute with no args is allowed', bridge.isAllowedCall('unMute', []) === true);
+  t.check('unMute with an arg is refused', bridge.isAllowedCall('unMute', [true]) === false);
+
   reset();
   fire(req({
     source: win,
@@ -435,6 +446,34 @@ export default async function run(t) {
     data: { type: 'ytc-audio-bridge', dir: 'request', id: 9, method: 'setVolume', args: [50] },
   }));
   t.check('valid setVolume is forwarded', calls.length === 1 && calls[0][0] === 'setVolume' && calls[0][1] === 50, JSON.stringify(calls));
+
+  reset();
+  fire(req({
+    source: win,
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 10, method: 'mute', args: [] },
+  }));
+  t.check('valid mute is forwarded', calls.length === 1 && calls[0][0] === 'mute', JSON.stringify(calls));
+
+  reset();
+  fire(req({
+    source: win,
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 11, method: 'unMute', args: [] },
+  }));
+  t.check('valid unMute is forwarded', calls.length === 1 && calls[0][0] === 'unMute', JSON.stringify(calls));
+
+  reset();
+  fire(req({
+    source: win,
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 12, method: 'mute', args: [0] },
+  }));
+  t.check('mute with an arg is not forwarded', calls.length === 0, JSON.stringify(calls));
+
+  reset();
+  fire(req({
+    source: win,
+    data: { type: 'ytc-audio-bridge', dir: 'request', id: 13, method: 'unMute', args: [1] },
+  }));
+  t.check('unMute with an arg is not forwarded', calls.length === 0, JSON.stringify(calls));
 
   t.section('quality decision');
 
@@ -1095,18 +1134,32 @@ export default async function run(t) {
       ? null
       : {
         currentTime: opts.currentTime != null ? opts.currentTime : 10,
-        duration: opts.duration != null ? opts.duration : 100,
+        duration: Object.prototype.hasOwnProperty.call(opts, 'duration') ? opts.duration : 100,
         paused: opts.paused !== false,
         ended: false,
         playbackRate: opts.playbackRate != null ? opts.playbackRate : 1,
         volume: opts.volume != null ? opts.volume : 0.5,
         muted: !!opts.muted,
+        currentSrc: Object.prototype.hasOwnProperty.call(opts, 'currentSrc')
+          ? opts.currentSrc
+          : 'https://rr.example/video.mp4',
+      };
+    const volumePanel = opts.volumePanel === false
+      ? null
+      : {
+        getAttribute(name) {
+          if (name !== 'aria-valuenow') return null;
+          if (!Object.prototype.hasOwnProperty.call(opts, 'volumeNow')) return null;
+          if (opts.volumeNow == null) return null;
+          return String(opts.volumeNow);
+        },
       };
     const moviePlayer = opts.noPlayer ? null : makeEl('div');
     if (moviePlayer) {
       moviePlayer.id = 'movie_player';
       moviePlayer.querySelector = function (sel) {
         if (video && (sel === 'video.html5-main-video' || sel === 'video')) return video;
+        if (volumePanel && sel === '.ytp-volume-panel') return volumePanel;
         return null;
       };
     }
@@ -1224,6 +1277,7 @@ export default async function run(t) {
     paused: true,
     playbackRate: 1.5,
     volume: 0.4,
+    volumeNow: '40',
     muted: false,
   });
   const liveRead = await live.ask({ type: 'audioMode.player' });
@@ -1232,12 +1286,92 @@ export default async function run(t) {
   t.check('player read reports currentTime', liveRead.currentTime === 15, String(liveRead.currentTime));
   t.check('player read reports duration', liveRead.duration === 120, String(liveRead.duration));
   t.check('player read reports playbackRate', liveRead.playbackRate === 1.5, String(liveRead.playbackRate));
-  t.check('player read reports volume 0-100', liveRead.volume === 40, String(liveRead.volume));
+  t.check('player read reports volume from aria-valuenow', liveRead.volume === 40, String(liveRead.volume));
   t.check('player read reports muted', liveRead.muted === false);
   t.check('player read strips the tab title', liveRead.title === 'A lecture', liveRead.title);
   t.check('player read reports the channel', liveRead.channel === 'Ada', liveRead.channel);
   t.check('player read reports the video id', liveRead.videoId === 'aaaaaaaaaaa', liveRead.videoId);
   t.check('player read still does not inject', live.injected.length === 0, String(live.injected.length));
+
+  const scaled = bootPage({
+    volume: 0.1157,
+    volumeNow: '25',
+    muted: false,
+  });
+  const scaledRead = await scaled.ask({ type: 'audioMode.player' });
+  t.check(
+    'volume comes from aria-valuenow, not video.volume',
+    scaledRead && scaledRead.ok === true && scaledRead.volume === 25,
+    JSON.stringify(scaledRead),
+  );
+
+  const noPanel = bootPage({ volume: 0.5, volumePanel: false });
+  const noPanelRead = await noPanel.ask({ type: 'audioMode.player' });
+  t.check(
+    'volume is null when the panel is missing, even if video.volume is set',
+    noPanelRead && noPanelRead.ok === true && noPanelRead.volume === null,
+    JSON.stringify(noPanelRead),
+  );
+
+  const missingNow = bootPage({ volume: 0.5 });
+  const missingNowRead = await missingNow.ask({ type: 'audioMode.player' });
+  t.check(
+    'volume is null when aria-valuenow is missing',
+    missingNowRead && missingNowRead.ok === true && missingNowRead.volume === null,
+    JSON.stringify(missingNowRead),
+  );
+
+  const badNow = bootPage({ volume: 0.5, volumeNow: 'loud' });
+  const badNowRead = await badNow.ask({ type: 'audioMode.player' });
+  t.check(
+    'volume is null when aria-valuenow is not an integer',
+    badNowRead && badNowRead.ok === true && badNowRead.volume === null,
+    JSON.stringify(badNowRead),
+  );
+
+  const overNow = bootPage({ volume: 0.5, volumeNow: '150' });
+  const overNowRead = await overNow.ask({ type: 'audioMode.player' });
+  t.check(
+    'volume is null when aria-valuenow is outside 0-100',
+    overNowRead && overNowRead.ok === true && overNowRead.volume === null,
+    JSON.stringify(overNowRead),
+  );
+
+  const emptySrc = bootPage({ currentSrc: '', duration: 100, volume: 0.5 });
+  const emptySrcRead = await emptySrc.ask({ type: 'audioMode.player' });
+  t.check(
+    'empty currentSrc is ok: false',
+    emptySrcRead && emptySrcRead.ok === false && Object.prototype.hasOwnProperty.call(emptySrcRead, 'on'),
+    JSON.stringify(emptySrcRead),
+  );
+
+  const nanDur = bootPage({ currentSrc: 'https://rr.example/video.mp4', duration: NaN });
+  const nanDurRead = await nanDur.ask({ type: 'audioMode.player' });
+  t.check(
+    'NaN duration is ok: false',
+    nanDurRead && nanDurRead.ok === false,
+    JSON.stringify(nanDurRead),
+  );
+
+  const zeroDur = bootPage({ currentSrc: 'https://rr.example/video.mp4', duration: 0 });
+  const zeroDurRead = await zeroDur.ask({ type: 'audioMode.player' });
+  t.check(
+    'zero duration is ok: false',
+    zeroDurRead && zeroDurRead.ok === false,
+    JSON.stringify(zeroDurRead),
+  );
+
+  const loaded = bootPage({
+    currentSrc: 'blob:https://www.youtube.com/abc',
+    duration: 12.5,
+    volumeNow: '100',
+  });
+  const loadedRead = await loaded.ask({ type: 'audioMode.player' });
+  t.check(
+    'a loaded video is ok: true',
+    loadedRead && loadedRead.ok === true && loadedRead.duration === 12.5,
+    JSON.stringify(loadedRead),
+  );
 
   const thrown = bootPage({ channelThrows: true });
   const thrownRead = await thrown.ask({ type: 'audioMode.player' });
@@ -1276,12 +1410,40 @@ export default async function run(t) {
     JSON.stringify(live.calls),
   );
 
+  const volumeBefore = live.calls.length;
   const volume = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 75 });
+  const volumeCalls = live.calls.slice(volumeBefore);
   t.check('volume is ok', volume && volume.ok === true);
   t.check(
-    'volume goes through the bridge as setVolume',
-    live.calls.some((c) => c[0] === 'setVolume' && c[1] === 75),
-    JSON.stringify(live.calls),
+    'volume 75 calls setVolume then unMute',
+    volumeCalls.length === 2
+      && volumeCalls[0][0] === 'setVolume'
+      && volumeCalls[0][1] === 75
+      && volumeCalls[1][0] === 'unMute',
+    JSON.stringify(volumeCalls),
+  );
+
+  const muteBefore = live.calls.length;
+  const muteVol = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 0 });
+  const muteCalls = live.calls.slice(muteBefore);
+  t.check('volume 0 is ok', muteVol && muteVol.ok === true);
+  t.check(
+    'volume 0 calls mute and not setVolume',
+    muteCalls.length === 1 && muteCalls[0][0] === 'mute',
+    JSON.stringify(muteCalls),
+  );
+
+  const fiftyBefore = live.calls.length;
+  const fifty = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 50 });
+  const fiftyCalls = live.calls.slice(fiftyBefore);
+  t.check('volume 50 is ok', fifty && fifty.ok === true);
+  t.check(
+    'volume 50 calls setVolume(50) then unMute',
+    fiftyCalls.length === 2
+      && fiftyCalls[0][0] === 'setVolume'
+      && fiftyCalls[0][1] === 50
+      && fiftyCalls[1][0] === 'unMute',
+    JSON.stringify(fiftyCalls),
   );
 
   const badAction = await live.ask({ type: 'audioMode.control', action: 'explode' });

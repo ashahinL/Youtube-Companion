@@ -24,6 +24,9 @@ import {
   watchlistView,
   audioTabView,
   audioStatsView,
+  shouldSyncAudioSeek,
+  shouldSyncAudioSelect,
+  audioVolumeSelectValue,
 } from '../src/lib/view.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -621,6 +624,29 @@ export default async function run(t) {
     'a listed miniplayer tab is controllable',
     mini.targetId === 7 && !mini.showNotice && !mini.showPicker,
     String(mini.targetId),
+  );
+
+  t.section('audio player control sync');
+
+  t.check('seek bar syncs when not dragging', shouldSyncAudioSeek(false) === true);
+  t.check('seek bar holds while dragging', shouldSyncAudioSeek(true) === false);
+  t.check('select syncs when not pending', shouldSyncAudioSelect(false) === true);
+  t.check('select holds while its write is in flight', shouldSyncAudioSelect(true) === false);
+  t.check(
+    'muted maps the volume select to Mute',
+    audioVolumeSelectValue({ muted: true, volume: 75 }) === 0,
+  );
+  t.check(
+    'a missing volume leaves the select alone',
+    audioVolumeSelectValue({ muted: false, volume: null }) === null,
+  );
+  t.check(
+    'an unmuted volume is used',
+    audioVolumeSelectValue({ muted: false, volume: 25 }) === 25,
+  );
+  t.check(
+    'no player leaves the volume select alone',
+    audioVolumeSelectValue(null) === null,
   );
 
   t.section('audio stats view');

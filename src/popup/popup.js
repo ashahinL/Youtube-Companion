@@ -27,6 +27,9 @@ import {
   watchlistView,
   audioTabView,
   audioStatsView,
+  shouldSyncAudioSeek,
+  shouldSyncAudioSelect,
+  audioVolumeSelectValue,
 } from '../lib/view.js';
 
 const Core = globalThis.AudioModeCore;
@@ -69,6 +72,8 @@ const view = {
 let audioPollTimer = null;
 let audioDiscoverTimer = null;
 let audioSeeking = false;
+let audioSpeedPending = false;
+let audioVolumePending = false;
 let audioPickerKey = '';
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
@@ -931,7 +936,7 @@ function renderAudioPlayer(reachable) {
   if (total) total.textContent = Core.formatTime(duration);
   if (seek) {
     seek.disabled = !reachable || !hasDuration;
-    if (!audioSeeking && document.activeElement !== seek) {
+    if (shouldSyncAudioSeek(audioSeeking)) {
       seek.max = hasDuration ? String(duration) : '0';
       seek.value = hasDuration ? String(currentTime) : '0';
     }
@@ -954,7 +959,7 @@ function renderAudioPlayer(reachable) {
   const speed = document.getElementById('audio-speed');
   if (speed) {
     speed.disabled = !reachable;
-    if (player && document.activeElement !== speed) {
+    if (player && shouldSyncAudioSelect(audioSpeedPending)) {
       const snapped = closestSelectValue(speed, Number(player.playbackRate) || 1);
       const next = String(snapped);
       if (speed.value !== next) speed.value = next;
@@ -963,25 +968,27 @@ function renderAudioPlayer(reachable) {
   const volume = document.getElementById('audio-volume');
   if (volume) {
     volume.disabled = !reachable;
-    if (player && document.activeElement !== volume) {
-      const vol = player.muted ? 0 : Number(player.volume) || 0;
-      const snapped = closestSelectValue(volume, vol);
-      const next = String(snapped);
-      if (volume.value !== next) volume.value = next;
+    if (player && shouldSyncAudioSelect(audioVolumePending)) {
+      const vol = audioVolumeSelectValue(player);
+      if (vol != null) {
+        const snapped = closestSelectValue(volume, vol);
+        const next = String(snapped);
+        if (volume.value !== next) volume.value = next;
+      }
     }
   }
 }
 
-function renderAudioStats(reachable) {
+function renderAudioStats() {
   const monthBtn = document.getElementById('audio-stats-month');
   const allBtn = document.getElementById('audio-stats-all');
   const scope = view.audioStatsScope === 'all' ? 'all' : 'month';
   if (monthBtn) {
-    monthBtn.disabled = !reachable;
+    monthBtn.disabled = false;
     monthBtn.setAttribute('aria-pressed', scope === 'month' ? 'true' : 'false');
   }
   if (allBtn) {
-    allBtn.disabled = !reachable;
+    allBtn.disabled = false;
     allBtn.setAttribute('aria-pressed', scope === 'all' ? 'true' : 'false');
   }
   const folded = audioStatsView(view.audioStats, scope, Date.now(), Core);
@@ -1016,7 +1023,7 @@ function renderAudio() {
 
   renderAudioPicker(reachable);
   renderAudioPlayer(reachable);
-  renderAudioStats(reachable);
+  renderAudioStats();
 
   const hint = document.getElementById('audio-shortcut');
   if (hint) {
@@ -1503,16 +1510,21 @@ async function selectAudioTab(id) {
 }
 
 async function controlTarget(action, extra = {}) {
-  const id = view.audioTargetId;
-  if (id == null) return;
-  const res = await sendToTab(id, { type: 'audioMode.control', action, ...extra });
-  if (res == null) {
-    view.audioTargetId = null;
-    await refreshAudioState();
-    renderAudio();
-    return;
+  try {
+    const id = view.audioTargetId;
+    if (id == null) return;
+    const res = await sendToTab(id, { type: 'audioMode.control', action, ...extra });
+    if (res == null) {
+      view.audioTargetId = null;
+      await refreshAudioState();
+      renderAudio();
+      return;
+    }
+    await refreshPlayerCard();
+  } finally {
+    if (action === 'speed') audioSpeedPending = false;
+    if (action === 'volume') audioVolumePending = false;
   }
-  await refreshPlayerCard();
 }
 
 async function refreshAudioStats() {
@@ -1574,10 +1586,12 @@ function bindAudio() {
     const el = event.target;
     if (!(el instanceof HTMLElement)) return;
     if (el.id === 'audio-speed') {
+      audioSpeedPending = true;
       void controlTarget('speed', { rate: Number(el.value) });
       return;
     }
     if (el.id === 'audio-volume') {
+      audioVolumePending = true;
       void controlTarget('volume', { volume: Number(el.value) });
       return;
     }
@@ -1607,8 +1621,8 @@ function bindAudio() {
 
   const seek = document.getElementById('audio-seek');
   seek?.addEventListener('pointerdown', () => { audioSeeking = true; });
-  seek?.addEventListener('pointerup', () => { audioSeeking = false; });
-  seek?.addEventListener('pointercancel', () => { audioSeeking = false; });
+  document.addEventListener('pointerup', () => { audioSeeking = false; });
+  document.addEventListener('pointercancel', () => { audioSeeking = false; });
   seek?.addEventListener('input', () => {
     audioSeeking = true;
     const elapsed = document.getElementById('audio-elapsed');
