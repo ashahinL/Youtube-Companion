@@ -21,9 +21,21 @@ entries, 174,899 bytes, SHA-256
 `682706219de51def937835587acc098c6926e3cdb935166e8988d1174470e575`.
 
 - Download it from the [v1.0.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v1.0.0), or
-- run `npm run pack` on a fresh clone of the `v1.0.0` tag — the zip is
-  byte-identical across runs and machines, so the hash above must match.
-  PowerShell: `Get-FileHash dist\companion-for-youtube-1.0.0.zip`.
+- run `npm run pack` on a fresh clone of the `v1.0.0` tag.
+
+The zip is byte-identical across runs **on the same Node build**, not across
+machines: the compressed bytes depend on the zlib inside Node. Homebrew's
+Node 26.4.0 (system zlib 1.2.12) packs the `v1.0.0` tag to a different hash
+than the one above, with the same files inside. To check a zip against a tag,
+compare the files, not the hash:
+
+```bash
+mkdir /tmp/z && unzip -q companion-for-youtube-1.0.0.zip -d /tmp/z
+cd /tmp/z && find . -type f | sed 's|^\./||' | while read f; do
+  git -C <repo> show v1.0.0:"$f" | cmp -s - "$f" || echo "differs: $f"; done
+```
+
+Checked on 2026-09-14: all 24 files in the uploaded zip match `v1.0.0`.
 
 A later version packs from `main` into
 `dist/companion-for-youtube-<version>.zip`.

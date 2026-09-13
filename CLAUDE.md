@@ -187,6 +187,9 @@ Most live as comments at the line they protect. These span files or tools:
   the command with no shortcut, silently (Dark Reader had `Alt+Shift+A`).
   Anything that shows the shortcut reads `chrome.commands.getAll()` and must
   make sense when it is empty.
+- **Compressed bytes differ between Node builds.** Homebrew's Node links system
+  zlib and packs the same tree to a different zip hash than a Node with its own
+  zlib. Compare files or pixels, never deflate output, across machines.
 - **Store screenshots are only as good as the frame the stub caught.** Open
   every image `npm run shots` writes before it ships; an empty frame went out
   in 1.0.0 and is far smaller on disk than its siblings.

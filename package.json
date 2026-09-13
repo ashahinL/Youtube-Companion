@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.2"
+  },
   "description": "Tooling manifest for the Companion for YouTube extension. Chrome ignores this file; it exists so `npm test` works.",
   "scripts": {
     "test": "node test/run-all.js --summary",
