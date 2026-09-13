@@ -53,7 +53,8 @@ Quick map of the spec:
 ## Where the work is
 
 Built in the order of DESIGN.md §11. All ten jobs are done and the extension is
-loadable; the first release (DESIGN.md §14) is under way. Update this table as
+loadable; the first release (DESIGN.md §14) is out on GitHub and in store
+review. Update this table as
 new work lands.
 
 | # | Job | State |
@@ -68,7 +69,7 @@ new work lands.
 | 8 | Settings tab + `lib/backup.js` (export/import, Merge/Replace) | **done** |
 | 9 | i18n + Arabic + RTL over finished markup | **done** |
 | 10 | The Audio tab: player, overlay and statistics, no recorder (DESIGN.md §13) | **done** — tab, look settings, player card, tab picker, statistics, open in audio mode from the feed (§13.10); the badge keeps the feed count while audio mode is on |
-| 11 | First release (DESIGN.md §14) | **built** — LF line endings, `npm run pack`, rename, redrawn icon, purple accent, support sheet, `npm run shots`, store copy in `store/LISTING.md`, `PRIVACY.md`, version 1.0.0. Store submission is the owner's |
+| 11 | First release (DESIGN.md §14) | **built** — LF line endings, `npm run pack`, rename, redrawn icon, purple accent, support sheet, `npm run shots`, store copy in `store/LISTING.md`, `PRIVACY.md`, version 1.0.0, GitHub release `v1.0.0`. **Edge Add-ons submitted 2026-09-13, in review; Chrome Web Store not submitted yet** — `store/LISTING.md` holds the IDs, every answer given, and the Chrome steps |
 
 **Job 10 carries a provenance constraint**, recorded in DESIGN.md §13.2-13.3,
 with the audit that cleared it for publishing. Read it before touching the
