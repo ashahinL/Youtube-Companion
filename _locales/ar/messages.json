@@ -725,9 +725,9 @@
     "message": "عند التشغيل، يفتح النقر على الفيديو في وضع الصوت مباشرة، ويفتحه زره بشكل عادي.",
     "description": "Tooltip on the Open feed videos in audio mode checkbox."
   },
-  "settingsAudioLook": {
-    "message": "مظهر وضع الصوت",
-    "description": "Settings group heading for the in-page overlay appearance."
+  "settingsAudio": {
+    "message": "وضع الصوت",
+    "description": "Settings group heading for audio mode: opening feed videos in it, and the in-page overlay appearance."
   },
   "settingsAudioBgType": {
     "message": "نوع الخلفية",

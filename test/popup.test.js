@@ -397,7 +397,7 @@ export default async function run(t) {
     'settings-checking',
     'settings-feed',
     'settings-language',
-    'settings-audio-look',
+    'settings-audio',
     'settings-backup',
   ];
   for (const id of groupIds) {
