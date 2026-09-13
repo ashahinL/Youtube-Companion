@@ -37,8 +37,9 @@ cd /tmp/z && find . -type f | sed 's|^\./||' | while read f; do
 
 Checked on 2026-09-14: all 24 files in the uploaded zip match `v1.0.0`.
 
-A later version packs from `main` into
-`dist/companion-for-youtube-<version>.zip`.
+A later version packs from its tag into
+`dist/companion-for-youtube-<version>.zip`. Not every tag is uploaded; the
+table above says what each store has.
 
 ## Images
 

@@ -32,6 +32,11 @@ that file; no browser automation reaches it.
 When a listing goes live, its link goes in the README's install section.
 Release notes are `CHANGELOG.md`.
 
+**1.1.0 is tagged, not released.** Every finished version gets its version
+bump, a dated CHANGELOG entry and an annotated tag `vX.Y.Z`, pushed. A GitHub
+release and a store upload happen only when the owner says so, so the newest
+tag is often ahead of what the stores have.
+
 `docs/youtube.md` is what YouTube actually serves, measured with byte counts —
 read it before touching `src/lib/yt.js` or the audio-mode player calls.
 
