@@ -25,7 +25,7 @@ function decodePng(buf) {
     const i = y * (size * 4 + 1) + 1 + x * 4;
     return [raw[i], raw[i + 1], raw[i + 2], raw[i + 3]];
   };
-  return { size, colourType: buf[25], px };
+  return { size, colourType: buf[25], raw, px };
 }
 
 export default async function run(t) {
@@ -35,9 +35,13 @@ export default async function run(t) {
     t.section(`icon${size}.png`);
     const file = path.join(ROOT, 'icons', `icon${size}.png`);
     const disk = fs.readFileSync(file);
-    t.check('matches what the script renders', disk.equals(renderIcon(size)), 'run: node scripts/draw-icon.js');
-
     const png = decodePng(disk);
+    // Pixels, not file bytes: deflate output differs between zlib builds
+    // (Homebrew's Node links system zlib 1.2.12, others bundle Chromium's),
+    // so identical icons compress to different bytes on another machine.
+    const rendered = decodePng(renderIcon(size));
+    t.check('matches what the script renders', png.raw.equals(rendered.raw), 'run: node scripts/draw-icon.js');
+
     t.check('is square at its size', png.size === size, String(png.size));
     t.check('is RGBA', png.colourType === 6, String(png.colourType));
     t.check('the manifest points at it', manifest.icons?.[size] === `icons/icon${size}.png`);
