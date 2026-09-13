@@ -56,6 +56,8 @@ export function installChromeMock(initial = {}) {
     notifications: [],
     badgeText: '',
     badgeTexts: [],
+    tabBadgeTexts: new Map(),
+    tabBadgeCalls: [],
     badgeColor: null,
     tabsCreated: [],
     messagesSent: [],
@@ -223,7 +225,13 @@ export function installChromeMock(initial = {}) {
     },
 
     action: {
-      async setBadgeText({ text } = {}) {
+      async setBadgeText({ text, tabId } = {}) {
+        if (tabId != null) {
+          handle.tabBadgeCalls.push({ tabId, text });
+          if (text == null) handle.tabBadgeTexts.delete(tabId);
+          else handle.tabBadgeTexts.set(tabId, String(text));
+          return;
+        }
         const value = text == null ? '' : String(text);
         handle.badgeText = value;
         handle.badgeTexts.push(value);
@@ -318,6 +326,8 @@ export function installChromeMock(initial = {}) {
     handle.alarmsCleared.length = 0;
     handle.notifications.length = 0;
     handle.badgeTexts.length = 0;
+    handle.tabBadgeTexts.clear();
+    handle.tabBadgeCalls.length = 0;
     handle.tabsCreated.length = 0;
     handle.messagesSent.length = 0;
     handle.activeTab = null;

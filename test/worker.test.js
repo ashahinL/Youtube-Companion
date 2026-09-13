@@ -854,6 +854,113 @@ export default async function run(t) {
       JSON.stringify(mock.badgeText),
     );
 
+    t.section('audio-mode badge yields the feed count');
+
+    await wipe();
+    await saveFeed([
+      { v: 'v1', c: MKBHD, t: 'A', at: 100, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'v2', c: MKBHD, t: 'B', at: 80, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'v3', c: MKBHD, t: 'C', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    await writePollState({ lastSeenAt: 50 });
+    await writeSettings({ feed: { showShorts: true } });
+    await refreshBadge();
+    t.check('global badge is 2 before audio mode', mock.badgeText === '2', JSON.stringify(mock.badgeText));
+
+    const turnedOn = await handleMessage(
+      { type: 'audioMode.changed', on: true },
+      { tab: { id: 7 } },
+    );
+    t.check('on:true reports ok', turnedOn.ok === true, JSON.stringify(turnedOn));
+    t.check("tab 7's badge is ON", mock.tabBadgeTexts.get(7) === 'ON', String(mock.tabBadgeTexts.get(7)));
+    t.check('on:true leaves the global badge alone', mock.badgeText === '2', JSON.stringify(mock.badgeText));
+
+    mock.tabBadgeCalls.length = 0;
+    const turnedOff = await handleMessage(
+      { type: 'audioMode.changed', on: false },
+      { tab: { id: 7 } },
+    );
+    t.check('on:false reports ok', turnedOff.ok === true, JSON.stringify(turnedOff));
+    t.check(
+      'on:false passes text null for tab 7',
+      mock.tabBadgeCalls.length === 1
+        && mock.tabBadgeCalls[0].tabId === 7
+        && mock.tabBadgeCalls[0].text === null,
+      JSON.stringify(mock.tabBadgeCalls),
+    );
+    t.check('on:false leaves the global badge alone', mock.badgeText === '2', JSON.stringify(mock.badgeText));
+
+    await handleMessage(
+      { type: 'audioMode.changed', on: true },
+      { tab: { id: 7 } },
+    );
+    const tabCallsBeforeRefresh = mock.tabBadgeCalls.length;
+    await writePollState({ lastSeenAt: 0 });
+    await refreshBadge();
+    t.check(
+      'refreshBadge while audio is on changes the global count',
+      mock.badgeText === '3',
+      JSON.stringify(mock.badgeText),
+    );
+    t.check(
+      "refreshBadge does not touch tab 7's entry",
+      mock.tabBadgeTexts.get(7) === 'ON'
+        && mock.tabBadgeCalls.length === tabCallsBeforeRefresh,
+      JSON.stringify({
+        entry: mock.tabBadgeTexts.get(7),
+        calls: mock.tabBadgeCalls.length,
+        before: tabCallsBeforeRefresh,
+      }),
+    );
+
+    const textsLen = mock.badgeTexts.length;
+    const tabLen = mock.tabBadgeCalls.length;
+    const globalSnap = mock.badgeText;
+    const noTab = await handleMessage({ type: 'audioMode.changed', on: true }, {});
+    t.check(
+      'no sender.tab is ok: false',
+      noTab.ok === false && noTab.error === 'no tab',
+      JSON.stringify(noTab),
+    );
+    t.check(
+      'no sender.tab makes no badge call',
+      mock.badgeTexts.length === textsLen
+        && mock.tabBadgeCalls.length === tabLen
+        && mock.badgeText === globalSnap,
+      JSON.stringify({
+        texts: mock.badgeTexts.length,
+        tab: mock.tabBadgeCalls.length,
+        global: mock.badgeText,
+      }),
+    );
+
+    const originalSetBadge = globalThis.chrome.action.setBadgeText;
+    globalThis.chrome.action.setBadgeText = async (opts) => {
+      if (opts && opts.tabId != null) throw new Error('No tab with id');
+      return originalSetBadge(opts);
+    };
+    let closed;
+    let closedErr = null;
+    try {
+      closed = await handleMessage(
+        { type: 'audioMode.changed', on: true },
+        { tab: { id: 9 } },
+      );
+    } catch (err) {
+      closedErr = err;
+    }
+    globalThis.chrome.action.setBadgeText = originalSetBadge;
+    t.check(
+      'per-tab setBadgeText rejection does not throw',
+      closedErr == null,
+      closedErr && closedErr.message,
+    );
+    t.check(
+      'per-tab setBadgeText rejection is not an error reply',
+      closed && closed.ok === true && closed.error == null,
+      JSON.stringify(closed),
+    );
+
     t.section('live item re-classified');
 
     await wipe();

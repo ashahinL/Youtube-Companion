@@ -1130,6 +1130,7 @@ export default async function run(t) {
     const listeners = [];
     const injected = [];
     const calls = [];
+    const sent = [];
     const video = opts.noVideo
       ? null
       : {
@@ -1195,7 +1196,12 @@ export default async function run(t) {
           id: 'test-id',
           getURL(p) { return 'chrome-extension://test/' + p; },
           onMessage: { addListener(fn) { listeners.push(fn); } },
-          sendMessage() { return Promise.resolve({ ok: true, shortcut: '' }); },
+          sendMessage(msg) {
+            sent.push(msg);
+            if (opts.sendThrows) throw new Error('Extension context invalidated');
+            if (opts.sendRejects) return Promise.reject(new Error('no receiving end'));
+            return Promise.resolve({ ok: true, shortcut: '' });
+          },
         },
         storage: {
           local: { async get() { return {}; }, async set() {} },
@@ -1249,7 +1255,7 @@ export default async function run(t) {
         if (ret !== true && !settled) resolve(undefined);
       });
     }
-    return { listeners, injected, calls, video, ask };
+    return { listeners, injected, calls, video, ask, sent };
   }
 
   const noPlayerPage = bootPage({ noPlayer: true, noVideo: true });
@@ -1457,4 +1463,84 @@ export default async function run(t) {
 
   const badVolume = await live.ask({ type: 'audioMode.control', action: 'volume', volume: 50.5 });
   t.check('a non-integer volume is refused', badVolume && badVolume.ok === false, JSON.stringify(badVolume));
+
+  t.section('audioMode.changed');
+
+  function changed(sent) {
+    return sent.filter((m) => m && m.type === 'audioMode.changed');
+  }
+
+  const page = bootPage();
+  const bootMsgs = changed(page.sent);
+  t.check(
+    'boot sends audioMode.changed on:false',
+    bootMsgs.length === 1 && bootMsgs[0].on === false,
+    JSON.stringify(bootMsgs),
+  );
+
+  page.sent.length = 0;
+  const onReply = await page.ask({ type: 'audioMode.toggle' });
+  t.check(
+    'toggle on with a player replies on:true',
+    onReply && onReply.ok === true && onReply.on === true,
+    JSON.stringify(onReply),
+  );
+  const onMsgs = changed(page.sent);
+  t.check(
+    'toggle on sends audioMode.changed on:true',
+    onMsgs.length === 1 && onMsgs[0].on === true,
+    JSON.stringify(onMsgs),
+  );
+
+  page.sent.length = 0;
+  const offReply = await page.ask({ type: 'audioMode.toggle' });
+  t.check(
+    'toggle off replies on:false',
+    offReply && offReply.ok === true && offReply.on === false,
+    JSON.stringify(offReply),
+  );
+  const offMsgs = changed(page.sent);
+  t.check(
+    'toggle off sends audioMode.changed on:false',
+    offMsgs.length === 1 && offMsgs[0].on === false,
+    JSON.stringify(offMsgs),
+  );
+
+  const throwsPage = bootPage({ sendThrows: true });
+  t.check(
+    'boot still registers a listener when sendMessage throws',
+    throwsPage.listeners.length === 1,
+    String(throwsPage.listeners.length),
+  );
+  const throwOn = await throwsPage.ask({ type: 'audioMode.toggle' });
+  t.check(
+    'toggle still replies when sendMessage throws',
+    throwOn && throwOn.ok === true && throwOn.on === true,
+    JSON.stringify(throwOn),
+  );
+  const throwOff = await throwsPage.ask({ type: 'audioMode.toggle' });
+  t.check(
+    'toggle off still replies when sendMessage throws',
+    throwOff && throwOff.ok === true && throwOff.on === false,
+    JSON.stringify(throwOff),
+  );
+
+  const rejectsPage = bootPage({ sendRejects: true });
+  t.check(
+    'boot still registers a listener when sendMessage rejects',
+    rejectsPage.listeners.length === 1,
+    String(rejectsPage.listeners.length),
+  );
+  const rejectOn = await rejectsPage.ask({ type: 'audioMode.toggle' });
+  t.check(
+    'toggle still replies when sendMessage rejects',
+    rejectOn && rejectOn.ok === true && rejectOn.on === true,
+    JSON.stringify(rejectOn),
+  );
+  const rejectOff = await rejectsPage.ask({ type: 'audioMode.toggle' });
+  t.check(
+    'toggle off still replies when sendMessage rejects',
+    rejectOff && rejectOff.ok === true && rejectOff.on === false,
+    JSON.stringify(rejectOff),
+  );
 }
