@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.1.0 — unreleased
+
+**New**
+- Undo after removing a channel. The channel comes back with its star, its
+  place in the list and its videos.
+
+**Safer**
+- Only the popup can change your channels and settings. The script on YouTube
+  pages can only ask the two audio-mode questions it needs.
+- Backup files are checked: real channel ids only, channel pictures only from
+  YouTube's image servers, at most 2,000 channels and 2 MB.
+- When YouTube answers "too many requests" or shows its unusual-traffic page,
+  checking stops and waits (15 minutes, then 30, up to 6 hours) instead of
+  carrying on. The Feeds tab says when the next check is.
+
+**Fixes**
+- The scrolling title in the Audio tab stays still, on two lines, when your
+  system asks for reduced motion.
+
+**For contributors**
+- Tests run on every push (GitHub Actions). Node 22.2 or newer is needed.
+- The icon test compares pixels, so it passes on any Node build.
+- `SECURITY.md` says how to report a security problem.
+
 ## 1.0.0 — 2026-09-13
 
 The first release, on the Chrome Web Store and Edge Add-ons.
