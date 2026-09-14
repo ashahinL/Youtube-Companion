@@ -124,6 +124,42 @@ function headerJson(id, title, handle, avatar) {
   };
 }
 
+function videosTabJson(channelId, rows) {
+  const lockups = rows.map((r) => ({
+    richItemRenderer: {
+      content: {
+        lockupViewModel: {
+          contentId: r.v,
+          contentType: 'LOCKUP_CONTENT_TYPE_VIDEO',
+          metadata: {
+            lockupMetadataViewModel: {
+              title: { content: r.t || r.v },
+              metadata: {
+                contentMetadataViewModel: {
+                  metadataRows: [{
+                    metadataParts: [
+                      { text: { content: `${r.views ?? 0} views` } },
+                      { text: { content: '1 day ago' } },
+                    ],
+                  }],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }));
+  return {
+    metadata: { channelMetadataRenderer: { externalId: channelId, title: 'Channel' } },
+    contents: {
+      twoColumnBrowseResultsRenderer: {
+        tabs: [{ tabRenderer: { selected: true, content: { richGridRenderer: { contents: lockups } } } }],
+      },
+    },
+  };
+}
+
 function bodyOf(opts) {
   try {
     return JSON.parse(opts.body);
@@ -145,6 +181,9 @@ function installFetch(spec = {}) {
       const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
       if (spec.failFeeds && spec.failFeeds[id] === 'http') {
         return textRes('nope', { status: 500 });
+      }
+      if (spec.failFeeds && spec.failFeeds[id] === '404') {
+        return textRes('Not Found', { status: 404 });
       }
       if (spec.failFeeds && spec.failFeeds[id] === 'network') {
         throw new Error('offline');
@@ -185,6 +224,12 @@ function installFetch(spec = {}) {
       return jsonRes({ endpoint: { browseEndpoint: { browseId: id } } });
     }
     if (u.includes('/youtubei/v1/browse')) {
+      const browseId = bodyOf(opts).browseId;
+      const failure = spec.failBrowse && spec.failBrowse[browseId];
+      // A channel that does not exist answers 200 with an alert and no metadata.
+      if (failure === 'gone') return jsonRes({ alerts: [] });
+      if (failure) return jsonRes({}, { status: Number(failure) });
+      if (spec.videosTabs && spec.videosTabs[browseId]) return jsonRes(spec.videosTabs[browseId]);
       return jsonRes(spec.browse || headerJson(MKBHD, 'Marques Brownlee', '@mkbhd', 'https://yt3.ggpht.com/mkbhd'));
     }
     // The worker reads its own message files for alerts in the chosen
@@ -208,6 +253,7 @@ async function putChannel(entry) {
     avatar: entry.avatar || 'https://yt3.ggpht.com/a',
     favorite: !!entry.favorite,
     seeded: !!entry.seeded,
+    lastVideoAt: entry.lastVideoAt,
   });
 }
 
@@ -514,6 +560,7 @@ export default async function run(t) {
     await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
     installFetch({
       failFeeds: { [MKBHD]: 'http' },
+      failBrowse: { [MKBHD]: 'gone' },
       feeds: {
         [BEAST]: rssXml(BEAST, 'MrBeast', [
           { v: 'beastvid001', t: 'Beast video', at: AT.newest, views: 9 },
@@ -540,6 +587,86 @@ export default async function run(t) {
       JSON.stringify(failFeed),
     );
 
+    t.section('the Videos tab stands in for a failing feed');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.mid });
+    await saveFeed([{ v: 'feedknown01', c: MKBHD, t: 'Known', at: AT.mid, d: 600, vw: 1, k: 'video', st: 0 }]);
+    await saveVideoMeta({ feedknown01: { k: 'video', d: 600, st: 0, at: AT.mid } });
+    let tabFetch = installFetch({
+      failFeeds: { [MKBHD]: '404' },
+      videosTabs: {
+        [MKBHD]: videosTabJson(MKBHD, [
+          { v: 'tabnewvid01', t: 'Brand new', views: 12 },
+          { v: 'feedknown01', t: 'Known' },
+          { v: 'taboldvid01', t: 'Old long video' },
+        ]),
+      },
+      players: {
+        tabnewvid01: playerJson('tabnewvid01', { title: 'Brand new', publishDate: '2026-09-12T12:00:00+00:00' }),
+        taboldvid01: playerJson('taboldvid01', { title: 'Old long video', publishDate: '2026-09-01T12:00:00+00:00' }),
+      },
+    });
+    const tabSweep = await runSweep({ scope: 'all' });
+    t.check('a sweep through the Videos tab is ok', tabSweep.ok === true, JSON.stringify(tabSweep));
+    const tabBrowse = tabFetch.calls.filter((c) => c.url.includes('/youtubei/v1/browse'));
+    t.check(
+      'the feed 404 is answered with one Videos-tab browse',
+      tabBrowse.length === 1 && bodyOf(tabBrowse[0].opts).browseId === MKBHD
+        && bodyOf(tabBrowse[0].opts).params === 'EgZ2aWRlb3PyBgQKAjoA',
+      JSON.stringify(tabBrowse.map((c) => c.opts.body)),
+    );
+    t.check('the channel is not marked broken', (await readChannels())[0].lastError === null);
+    const tabFeed = await readFeed();
+    const tabNew = tabFeed.find((row) => row.v === 'tabnewvid01');
+    t.check(
+      'a new row takes its upload time from the player',
+      tabNew?.at === AT.newest && tabNew?.t === 'Brand new' && tabNew?.vw === 12,
+      JSON.stringify(tabNew),
+    );
+    t.check(
+      'a row already stored keeps its time',
+      tabFeed.find((row) => row.v === 'feedknown01')?.at === AT.mid,
+    );
+    t.check(
+      'only the video newer than the channel alerts',
+      mock.notifications.length === 1 && mock.notifications[0].message === 'Brand new',
+      JSON.stringify(mock.notifications),
+    );
+    t.check(
+      'the older video is marked alerted silently',
+      (await readPollState()).notified.includes('taboldvid01'),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    tabFetch = installFetch({ failFeeds: { [MKBHD]: 'network' } });
+    await runSweep({ scope: 'all' });
+    t.check(
+      'a network error does not try the Videos tab',
+      !tabFetch.calls.some((c) => c.url.includes('/youtubei/v1/browse')),
+    );
+    t.check('and is recorded as a network error', (await readChannels())[0].lastError?.message === 'feed network error');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    installFetch({ failFeeds: { [MKBHD]: '404' }, failBrowse: { [MKBHD]: '429' } });
+    const tabBlocked = await runSweep({ scope: 'all' });
+    t.check('a 429 on the Videos tab is pushback', tabBlocked.error === 'slow down', JSON.stringify(tabBlocked));
+    t.check('and does not mark the channel broken', (await readChannels())[0].lastError === null);
+    await writePollState({ backoffUntil: 0, backoffLevel: 0 });
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    installFetch({ failFeeds: { [MKBHD]: '404' }, failBrowse: { [MKBHD]: 'gone' } });
+    await runSweep({ scope: 'all' });
+    const goneError = (await readChannels())[0].lastError;
+    t.check(
+      'a channel gone from both keeps the feed 404',
+      goneError?.message === 'feed failed (404)',
+      JSON.stringify(goneError),
+    );
+
     t.section('channel records are written once per sweep');
 
     await wipe();
@@ -548,6 +675,7 @@ export default async function run(t) {
     await putChannel({ id: 'UCXuqSBlHAE6Xw-yeJA0Tunw', title: 'Linus Tech Tips', seeded: true });
     installFetch({
       failFeeds: { [BEAST]: 'http' },
+      failBrowse: { [BEAST]: 'gone' },
       feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'onewrite001', at: AT.newest }]) },
     });
     let channelWrites = 0;
@@ -657,6 +785,10 @@ export default async function run(t) {
       'no channel starts after the 429',
       JSON.stringify(feedCallsTo(pushFetch.calls)) === JSON.stringify([MKBHD, BEAST, LINUS]),
       JSON.stringify(feedCallsTo(pushFetch.calls)),
+    );
+    t.check(
+      'a 429 is not answered with the Videos tab',
+      !pushFetch.calls.some((c) => c.url.includes('/youtubei/v1/browse')),
     );
     const pushedChannels = await readChannels();
     t.check(

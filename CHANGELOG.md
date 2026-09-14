@@ -22,6 +22,9 @@ shipped yet waits under Unreleased. How a version ships:
 **Fixes**
 - The scrolling title in the Audio tab stays still, on two lines, when your
   system asks for reduced motion.
+- When YouTube's channel feeds are down, checks still work. A channel whose
+  feed fails is read from its Videos tab instead (shorts and live streams wait
+  until the feed is back), and older videos found that way don't alert.
 - Checks are quicker and lighter: three channels at a time, and the channel
   list is saved once per check instead of about twice per channel.
 - A premiere days away is looked at a few times a day, not on every check.

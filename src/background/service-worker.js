@@ -9,7 +9,7 @@ import {
   normalizeChannelInput,
   normalizeVideoInput,
   resolveChannelId,
-  fetchChannelFeed,
+  fetchLatestUploads,
   fetchChannelHeader,
   classifyVideo,
   isPushback,
@@ -319,6 +319,7 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
       const rec = { k: cls.k, d: cls.d, st: cls.st };
       if (Number.isFinite(at)) rec.at = at;
       else if (Number.isFinite(meta[id]?.at)) rec.at = meta[id].at;
+      else if (cls.pa > 0) rec.at = cls.pa;
       if (cls.k === 'live' || cls.k === 'premiere') rec.ck = Date.now();
       meta = putVideoMeta(meta, { [id]: rec });
     } catch (err) {
@@ -369,13 +370,14 @@ async function notifyChannel(channel, items, settings) {
   });
 }
 
-async function notifyNewItems({ added, channels, unseeded, settings }) {
+async function notifyNewItems({ added, channels, unseeded, quiet, settings }) {
   let poll = await readPollState();
   const byId = new Map(channels.map((ch) => [ch.id, ch]));
+  const silent = (item) => unseeded.has(item.c) || quiet.has(item.v);
 
   const seedIds = [];
   for (const item of added) {
-    if (unseeded.has(item.c)) seedIds.push(item.v);
+    if (silent(item)) seedIds.push(item.v);
   }
   if (seedIds.length) {
     // First fetch backfills up to 15 videos. Mark them notified without
@@ -385,7 +387,7 @@ async function notifyNewItems({ added, channels, unseeded, settings }) {
 
   const gated = [];
   for (const item of added) {
-    if (unseeded.has(item.c)) continue;
+    if (silent(item)) continue;
     if (!shouldNotifyItem(item, byId.get(item.c), settings, poll)) continue;
     gated.push(item);
   }
@@ -428,9 +430,9 @@ async function performSweep({ scope, onlyId }) {
   const fetched = new Array(list.length);
   await inLanes(list, LANES, CHANNEL_FETCH_DELAY_MS, async (ch, i) => {
     try {
-      const parsed = await fetchChannelFeed(ch.id, { fetch: fetchImpl });
+      const uploads = await fetchLatestUploads(ch.id, { fetch: fetchImpl });
       patchChannel(ch.id, { lastError: null, lastFetchAt: Date.now() });
-      fetched[i] = { channel: ch, entries: parsed.entries || [] };
+      fetched[i] = { channel: ch, entries: uploads.entries || [], via: uploads.via };
     } catch (err) {
       // The channel is fine; YouTube is refusing this IP. Every further
       // request deepens the block, and marking the rest as broken would
@@ -467,12 +469,19 @@ async function performSweep({ scope, onlyId }) {
   const feedNow = await readFeed();
   const feedByV = new Map(feedNow.map((item) => [item.v, item]));
   const incomingIds = new Set();
+  const quiet = new Set();
 
-  for (const { channel, entries } of succeeded) {
+  for (const { channel, entries, via } of succeeded) {
+    // The Videos tab leaves out shorts, so on a channel that posts them it
+    // reaches back past the feed's window, to videos that are old news.
+    const newestBefore = Math.max(Number(channel.lastVideoAt) || 0, newestAt(feedNow, channel.id));
     for (const entry of entries) {
       const rec = videoMeta[entry.v];
       if (!rec || !rec.k) continue;
-      incoming.push(itemFromEntry(entry, channel.id, rec));
+      const at = Number.isFinite(entry.at) ? entry.at : Number(rec.at);
+      if (!(at > 0)) continue;
+      if (via === 'videos' && at <= newestBefore) quiet.add(entry.v);
+      incoming.push(itemFromEntry({ ...entry, at }, channel.id, rec));
       incomingIds.add(entry.v);
     }
   }
@@ -500,7 +509,7 @@ async function performSweep({ scope, onlyId }) {
   }
   const channels = await updateChannels(patches);
 
-  await notifyNewItems({ added, channels, unseeded, settings });
+  await notifyNewItems({ added, channels, unseeded, quiet, settings });
 
   const now = Date.now();
   if (pushedBack) {

@@ -31,7 +31,20 @@ GET https://www.youtube.com/feeds/videos.xml?channel_id=UC...
   is `cache-control: public, max-age=900`, so without `cache: 'no-cache'` the
   browser serves the same bytes for 15 minutes.
 - A sweep therefore costs about 21 KB per channel with no way to shrink it:
-  40 channels ≈ 840 KB.
+  40 channels ≈ 840 KB. That is the body size; gzipped on the wire it was
+  **3,898 bytes** for MKBHD on 2026-09-14.
+- **The feed can go down while the rest of YouTube works.** At 09:20 and
+  09:28 on 2026-09-13 every feed address (`channel_id=`, `playlist_id=`,
+  `user=`) answered `404`, **1,613 bytes**, for every channel, while the
+  homepage and the `browse` and `player` calls below answered normally. By
+  2026-09-14 the feed was back.
+- A `404` cannot tell that outage from a channel that is gone: an id that
+  does not exist also answers `404`, 1,613 bytes. That is why a failed feed
+  is retried through the Videos tab before the channel is called broken.
+- The uploads playlist (`playlist_id=UU…`, the id with `UC` swapped for `UU`)
+  served the same 15 ids in the same order as the channel feed on 2026-09-14,
+  21,277 bytes against 21,290. It is no backup: it was down in the same
+  outage. Its title reads "Uploads from Marques Brownlee".
 
 ## Channel URL or @handle → channel id
 
@@ -81,7 +94,12 @@ POST https://www.youtube.com/youtubei/v1/player
 - `microformat.playerMicroformatRenderer.liveBroadcastDetails` —
   `{"isLiveNow":true,"startTimestamp":"2026-09-11T10:38:47+00:00"}` — is where a
   premiere's start time comes from.
-- Also: `viewCount`, `likeCount`, `publishDate`, `ownerChannelName`, and
+- `microformat.playerMicroformatRenderer.publishDate` is the upload time to
+  the second, the same instant as the feed's `<published>`:
+  `2026-09-10T00:29:55-07:00` for `Od6M0AXpcxQ` against `07:29:55+00:00` in
+  the feed, and `2026-09-12T14:36:57-07:00` for `6D__H_DO2Xk` against
+  `21:36:57+00:00`. A Videos-tab row gets its time from here.
+- Also: `viewCount`, `likeCount`, `ownerChannelName`, and
   `videoDetails.channelId`, which is how a watch, shorts or youtu.be URL turns
   into its uploader.
 - **`isShortsEligible` is not "is a short"**; it means the video could be shown
@@ -110,18 +128,29 @@ POST https://www.youtube.com/youtubei/v1/browse
 
 - `params` `EgZ2aWRlb3PyBgQKAjoA` is the Videos tab. `200`, ~339 KB, 31
   `richItemRenderer` items, **no shorts** (they have their own tab).
-- The extension reads only the header from it: avatar
+- Adding a channel reads the header from it: avatar
   (`https://yt3.googleusercontent.com/...=s72-c-k-c0x00f`, also `s120`),
   subscribers (`"516M subscribers"`), `pageTitle`, and `externalId`.
-- If the video list is ever parsed: rows are `lockupViewModel`, and the row's id
-  is **`contentId`**. `"videoId"` appears **210 times** on nested
+- A check reads the video rows when the channel's feed fails. Rows are
+  `richGridRenderer.contents[].richItemRenderer.content.lockupViewModel` with
+  `contentType: "LOCKUP_CONTENT_TYPE_VIDEO"`, newest first, and the row's id is
+  **`contentId`**. `"videoId"` appears **210 times** on nested
   `watchEndpoint`, `addToPlaylistCommand` and `offlineVideoEndpoint` objects, so
   harvesting it returns each video several times (30 `contentId` values for 31
   lockups). Grep the raw bytes: re-serialising with `json.dumps` adds a space
   after the colon and hides every match.
-- Duration is `thumbnailBadgeViewModel.text` (`"23:28"`); views and age come
-  from `contentMetadataViewModel` and are **relative only** (`"6 days ago"`),
-  which is why the feed polls RSS instead.
+- The title is `lockupMetadataViewModel.title.content`. Duration is
+  `thumbnailBadgeViewModel.text` (`"23:28"`); views and age are the
+  `metadataParts` of `contentMetadataViewModel` (`"7.1M views"`,
+  `"1 day ago"`) and are **rounded and relative only**, which is why the feed
+  polls RSS and a row's exact time comes from `player`.
+- **It leaves out shorts and live streams**, so it reaches further back. For
+  MKBHD on 2026-09-14 its newest 15 shared 11 ids with the feed's 15; the
+  feed's other 4 were all shorts (`HEAD /shorts/` answered `200` for each).
+- Size, MKBHD, 2026-09-14: **369,073 bytes**, **35,475 bytes** gzipped on the
+  wire — about nine times the feed.
+- **A channel id that does not exist answers `200`**, 11,601 bytes, with
+  `alerts` and no `metadata`.
 
 ## Channel search by name — not used
 

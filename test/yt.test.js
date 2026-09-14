@@ -21,6 +21,8 @@ import {
   resolveChannelId,
   fetchChannelFeed,
   fetchChannelHeader,
+  fetchLatestUploads,
+  parseChannelVideos,
   isShort,
   classifyVideo,
   isChannelId,
@@ -353,6 +355,31 @@ export default async function run(t) {
   t.check('a handle is not a channel id', !isChannelId('@MrBeast'));
   t.check('an id with a trailing space is not a channel id', !isChannelId(`${header.id} `));
 
+  /* ---- parseChannelVideos ------------------------------------------- */
+  t.section('parseChannelVideos');
+
+  const tab = parseChannelVideos(browseJson, 'UCX6OQ3DkcsbYNE6H8uQQuVA');
+  t.check('rows are read from contentId, newest first', tab.entries[0]?.v === 'gTKS8SAwUzE', JSON.stringify(tab.entries[0]));
+  t.check('the tab holds 30 rows; only the feed window of 15 is kept', tab.entries.length === 15, String(tab.entries.length));
+  t.check('each id once', new Set(tab.entries.map((e) => e.v)).size === tab.entries.length);
+  t.check('a row carries its title', tab.entries[0].title === 'I Survived The Most Extreme Places On Earth', tab.entries[0].title);
+  t.check('a row carries its rounded view count', tab.entries[0].views === 79000000, String(tab.entries[0].views));
+  t.check('a row has no upload time to offer', !('at' in tab.entries[0]));
+  let otherChannel = null;
+  try {
+    parseChannelVideos(browseJson, mkbhdId);
+  } catch (err) {
+    otherChannel = err;
+  }
+  t.check('another channel\'s tab is a parse error', otherChannel instanceof YtError && otherChannel.kind === 'parse');
+  let goneTab = null;
+  try {
+    parseChannelVideos({ responseContext: {}, alerts: [] }, mkbhdId);
+  } catch (err) {
+    goneTab = err;
+  }
+  t.check('a missing channel (alert, no metadata) is a parse error', goneTab instanceof YtError && goneTab.kind === 'parse');
+
   /* ---- parsePlayer -------------------------------------------------- */
   t.section('parsePlayer');
 
@@ -438,6 +465,8 @@ export default async function run(t) {
     const got = await classifyVideo('Od6M0AXpcxQ', { fetch });
     t.check('1034s -> video', got.k === 'video' && got.d === 1034 && got.st === 0, JSON.stringify(got));
     t.check('1034s video triggers no shorts request', fetch.calls.length === 1, String(fetch.calls.length));
+    const feedEntry = parseFeedXml(rssMkbhd).entries.find((e) => e.v === 'Od6M0AXpcxQ');
+    t.check('the player upload time matches the feed to the second', got.pa === feedEntry.at && got.pa > 0, `${got.pa} vs ${feedEntry.at}`);
     t.check('the one call was player', fetch.calls[0].url.includes('/youtubei/v1/player'));
   }
 
@@ -649,6 +678,61 @@ export default async function run(t) {
     t.check('isShort redirected to /watch is false', (await isShort('gTKS8SAwUzE', { fetch })) === false);
   }
 
+  {
+    const feedOnly = recordFetch((url) => {
+      if (url.includes('/feeds/videos.xml')) return textRes(rssMkbhd);
+      throw new Error(`unexpected ${url}`);
+    });
+    const got = await fetchLatestUploads(mkbhdId, { fetch: feedOnly });
+    t.check('a working feed is used as is', got.via === 'feed' && got.entries.length === 15 && feedOnly.calls.length === 1);
+  }
+
+  const beastId = 'UCX6OQ3DkcsbYNE6H8uQQuVA';
+  const feedThen = (feedRes, browseRes) => recordFetch((url) => {
+    if (url.includes('/feeds/videos.xml')) {
+      if (feedRes instanceof Error) throw feedRes;
+      return feedRes;
+    }
+    if (url.includes('/youtubei/v1/browse')) return browseRes;
+    throw new Error(`unexpected ${url}`);
+  });
+
+  {
+    const fetch = feedThen(textRes('Not Found', { status: 404 }), jsonRes(browseJson));
+    const got = await fetchLatestUploads(beastId, { fetch });
+    t.check('a feed 404 falls back to the Videos tab', got.via === 'videos' && got.entries[0]?.v === 'gTKS8SAwUzE', JSON.stringify(got.via));
+    const body = JSON.parse(fetch.calls[1]?.opts.body || '{}');
+    t.check('the fallback asks for that channel\'s Videos tab', body.browseId === beastId && body.params === 'EgZ2aWRlb3PyBgQKAjoA');
+  }
+
+  {
+    const fetch = feedThen(textRes('<html>oops</html>'), jsonRes(browseJson));
+    const got = await fetchLatestUploads(beastId, { fetch });
+    t.check('a feed that is not XML falls back too', got.via === 'videos');
+  }
+
+  {
+    const offline = feedThen(new Error('offline'), jsonRes(browseJson));
+    let err = null;
+    try {
+      await fetchLatestUploads(beastId, { fetch: offline });
+    } catch (e) {
+      err = e;
+    }
+    t.check('a network error does not fall back', err?.kind === 'network' && offline.calls.length === 1, String(offline.calls.length));
+  }
+
+  {
+    const fetch = feedThen(textRes('Not Found', { status: 404 }), jsonRes({ alerts: [] }));
+    let err = null;
+    try {
+      await fetchLatestUploads(beastId, { fetch });
+    } catch (e) {
+      err = e;
+    }
+    t.check('when both fail, the feed\'s error is the one thrown', err?.kind === 'http' && err?.status === 404, String(err?.message));
+  }
+
   /* ---- pushback ------------------------------------------------------ */
   t.section('pushback');
 
@@ -679,4 +763,14 @@ export default async function run(t) {
   const lookalikeErr = await thrown(() => isShort('gTKS8SAwUzE', { fetch: lookalike }));
   t.check('a /sorry path on another host is not pushback', !isPushback(lookalikeErr), String(lookalikeErr));
   t.check('a plain Error is not pushback', !isPushback(new Error('429')));
+
+  const feedBlocked = recordFetch((url) => {
+    if (url.includes('/feeds/videos.xml')) return headRes({ status: 429 });
+    throw new Error(`the Videos tab must not be asked during a block: ${url}`);
+  });
+  t.check('a 429 feed does not fall back', isPushback(await thrown(() => fetchLatestUploads(mkbhdId, { fetch: feedBlocked }))) && feedBlocked.calls.length === 1);
+  const tabBlocked = recordFetch((url) => (
+    url.includes('/feeds/videos.xml') ? headRes({ status: 404 }) : headRes({ status: 429 })
+  ));
+  t.check('a 429 on the Videos tab is pushback, not the feed 404', isPushback(await thrown(() => fetchLatestUploads(mkbhdId, { fetch: tabBlocked }))));
 }

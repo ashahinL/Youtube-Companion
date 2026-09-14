@@ -21,8 +21,11 @@ const INNERTUBE_CONTEXT = {
 };
 
 // Videos-tab browse. The channel header (title, handle, avatar, subscribers)
-// is on this same payload; we do not read the video lockups.
+// is on this same payload, and its rows stand in for a failing feed.
 const BROWSE_VIDEOS_TAB_PARAMS = 'EgZ2aWRlb3PyBgQKAjoA';
+
+// The channel feed always carries its 15 newest entries.
+const FEED_WINDOW = 15;
 
 const THUMB_SIZES = new Set(['default', 'mq', 'hq', 'sd', 'maxres']);
 const CHANNEL_ID_RE = /^UC[\w-]{22}$/;
@@ -425,6 +428,38 @@ export function parseChannelHeader(json) {
   return { id, title, handle, avatar, subscribers };
 }
 
+/**
+ * Newest-first video rows of a Videos-tab browse, capped at the feed's own
+ * window: every row the caller has not seen costs a player request to date.
+ * The id is `contentId` — `videoId` sits on nested endpoints several times
+ * per row. There is no upload time, only "3 days ago", so rows have no `at`.
+ */
+export function parseChannelVideos(json, channelId) {
+  json = asJson(json, 'browse');
+  const id = asChannelId(json.metadata?.channelMetadataRenderer?.externalId);
+  // A missing channel answers 200 with an alert and no metadata.
+  if (!id || (channelId && id !== channelId)) throw new YtError('parse', 'browse');
+  const entries = [];
+  const seen = new Set();
+  walk(json.contents, (node) => {
+    const lockup = node.lockupViewModel;
+    if (!lockup || lockup.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO') return;
+    const v = String(lockup.contentId || '');
+    if (!VIDEO_ID_RE.test(v) || seen.has(v)) return;
+    seen.add(v);
+    const meta = lockup.metadata?.lockupMetadataViewModel || {};
+    let views = 0;
+    walk(meta.metadata, (n) => {
+      for (const part of n.metadataParts || []) {
+        const text = ytText(part.text);
+        if (/\bviews?\b/i.test(text)) views = parseCompactCount(text);
+      }
+    });
+    entries.push({ v, title: ytText(meta.title), views });
+  });
+  return { channelId: id, entries: entries.slice(0, FEED_WINDOW) };
+}
+
 export function parsePlayer(json) {
   json = asJson(json, 'player');
   const details = json.videoDetails;
@@ -468,13 +503,13 @@ export async function resolveChannelId(input, { fetch = globalThis.fetch } = {})
   return parseResolveUrl(json);
 }
 
-export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } = {}) {
-  const url = `${YT_ORIGIN}/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`;
+async function fetchFeed(query, fetchImpl) {
+  const url = `${YT_ORIGIN}/feeds/videos.xml?${query}`;
   let res;
   try {
     // The feed's cache-control is max-age=900 with no ETag/304, so a poll
     // without cache:'no-cache' returns the same bytes for 15 minutes.
-    res = await fetch(url, { cache: 'no-cache', credentials: 'omit' });
+    res = await fetchImpl(url, { cache: 'no-cache', credentials: 'omit' });
   } catch {
     throw new YtError('network', 'feed');
   }
@@ -487,6 +522,42 @@ export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } =
     throw new YtError('parse', 'feed');
   }
   return parseFeedXml(xml);
+}
+
+export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } = {}) {
+  return fetchFeed(`channel_id=${encodeURIComponent(channelId)}`, fetch);
+}
+
+export async function fetchChannelVideos(channelId, { fetch = globalThis.fetch } = {}) {
+  const json = await innertubePost('browse', { browseId: channelId, params: BROWSE_VIDEOS_TAB_PARAMS }, fetch);
+  return parseChannelVideos(json, channelId);
+}
+
+/**
+ * A channel's newest uploads: the channel feed, or its Videos tab when the
+ * feed fails. On 2026-09-13 every feed address answered 404 for every channel
+ * while Innertube kept working (docs/youtube.md). The tab is about nine times
+ * the bytes, has no exact upload times, and leaves out shorts and live
+ * streams, so it only stands in. A network error or a pushback skips it: the
+ * tab would fail the same way, and a block must not be pushed on.
+ */
+export async function fetchLatestUploads(channelId, { fetch = globalThis.fetch } = {}) {
+  try {
+    const feed = await fetchChannelFeed(channelId, { fetch });
+    return { via: 'feed', entries: feed.entries };
+  } catch (err) {
+    const standIn = err instanceof YtError
+      && (err.kind === 'parse' || (err.kind === 'http' && !isPushback(err)));
+    if (!standIn) throw err;
+    try {
+      const tab = await fetchChannelVideos(channelId, { fetch });
+      return { via: 'videos', entries: tab.entries };
+    } catch (second) {
+      // The feed's error is the one that describes the channel: a channel
+      // that is gone fails the tab too, as a parse error.
+      throw isPushback(second) ? second : err;
+    }
+  }
 }
 
 export async function fetchChannelHeader(channelId, { fetch = globalThis.fetch } = {}) {
@@ -525,7 +596,12 @@ async function classifyPlayer(p, { fetch = globalThis.fetch } = {}) {
   return { k: short ? 'short' : 'video', d: p.lengthSeconds, st: 0 };
 }
 
+/**
+ * `pa` is the upload time from the player, to the second; it matched the
+ * feed's `<published>` (docs/youtube.md). A row from the Videos tab has no
+ * other source for it.
+ */
 export async function classifyVideo(videoId, { fetch = globalThis.fetch } = {}) {
   const p = await fetchPlayer(videoId, { fetch });
-  return classifyPlayer(p, { fetch });
+  return { ...(await classifyPlayer(p, { fetch })), pa: p.publishedAt };
 }

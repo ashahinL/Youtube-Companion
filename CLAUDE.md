@@ -150,8 +150,12 @@ Most live as comments at the line they protect. These span files or tools:
   like "nothing new" for 15 minutes.
 - **The row id in a Videos-tab `browse` response is `contentId`, not `videoId`.**
   `videoId` is there 210 times on nested endpoint objects, so harvesting it
-  returns each video several times. Nothing parses that video list now — the
-  channel sheet reads the stored feed — so this is for whoever calls it next.
+  returns each video several times. `parseChannelVideos` reads the rows when a
+  channel's feed fails.
+- **A Videos-tab row is not a feed entry.** It has no upload time (the player
+  supplies it), and the tab leaves out shorts, so it reaches back past the
+  feed's window to videos never seen before. Those must merge silently, or a
+  feed outage turns into alerts for old uploads.
 - **The first `"channelId":"UC..."` in channel HTML belongs to a different
   channel.** Use `resolve_url`; if you ever must parse HTML, trust only
   `<link rel="canonical">` or `"externalId"`.
