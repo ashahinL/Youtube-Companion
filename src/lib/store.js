@@ -88,6 +88,24 @@ export async function updateChannel(id, patch) {
   return next;
 }
 
+/**
+ * Several patches with one read and one write. An id no longer on the list is
+ * skipped, so a channel removed while a check ran stays removed.
+ */
+export async function updateChannels(patches) {
+  const channels = await readChannels();
+  if (!(patches instanceof Map) || patches.size === 0) return channels;
+  let changed = false;
+  const next = channels.map((ch) => {
+    const patch = patches.get(ch.id);
+    if (!patch) return ch;
+    changed = true;
+    return { ...ch, ...patch };
+  });
+  if (changed) await writeChannels(next);
+  return next;
+}
+
 export async function removeChannel(id) {
   const channels = (await readChannels()).filter((ch) => ch.id !== id);
   // Drop that channel's rows from the feed, or they would keep showing

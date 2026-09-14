@@ -21,6 +21,7 @@ import {
   saveVideoMeta,
   putVideoMeta,
   pendingLiveIds,
+  updateChannels,
   readPollState,
   writePollState,
   markNotified,
@@ -112,6 +113,29 @@ export default async function run(t) {
     t.check('setFavorite turns it on', (await readChannels())[0].favorite === true);
     await setFavorite('UCBJycsmduvYEL83R_U4JriQ', false);
     t.check('setFavorite turns it off', (await readChannels())[0].favorite === false);
+
+    t.section('updateChannels');
+
+    await addChannel({ id: 'UCsecond', title: 'Second' });
+    let writes = 0;
+    const counter = (changes, area) => {
+      if (area === 'local' && changes.channels) writes++;
+    };
+    globalThis.chrome.storage.onChanged.addListener(counter);
+    const batched = await updateChannels(new Map([
+      ['UCBJycsmduvYEL83R_U4JriQ', { lastFetchAt: 5 }],
+      ['UCsecond', { lastError: { at: 6, message: 'y' } }],
+      ['UCgone', { title: 'resurrected' }],
+    ]));
+    t.check('updateChannels writes once', writes === 1, String(writes));
+    t.check('updateChannels applies each patch',
+      batched[0].lastFetchAt === 5 && batched[1].lastError?.at === 6 && batched[0].title === 'Marques Brownlee');
+    t.check('updateChannels does not bring back a removed channel',
+      !(await readChannels()).some((ch) => ch.id === 'UCgone'));
+    await updateChannels(new Map([['UCgone', { title: 'x' }]]));
+    await updateChannels(new Map());
+    t.check('updateChannels skips the write when nothing matches', writes === 1, String(writes));
+    await removeChannel('UCsecond');
 
     t.section('removeChannel');
 

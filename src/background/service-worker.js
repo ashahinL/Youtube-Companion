@@ -21,7 +21,7 @@ import {
   readChannels,
   writeChannels,
   addChannel,
-  updateChannel,
+  updateChannels,
   removeChannel,
   setFavorite,
   readFeed,
@@ -51,7 +51,9 @@ const AUDIO_TOGGLE_COMMAND = 'toggle-audio-mode';
 // YouTube 403s that Origin. Fetch cannot override it; this rule can.
 const YT_ORIGIN_RULE_ID = 1;
 
-// Politeness pause between channel fetches — not a rate limit YouTube published.
+// YouTube publishes no rate limit. Three requests at a time, with a pause
+// between channel fetches in each lane, is a choice, not a measured ceiling.
+const LANES = 3;
 const CHANNEL_FETCH_DELAY_MS = 250;
 
 // The content script shares a renderer with youtube.com, so it is the sender
@@ -288,9 +290,29 @@ function pickChannels(channels, { scope, onlyId }) {
   return channels.slice();
 }
 
+/**
+ * Runs `task` over `items` in `lanes` parallel lanes, each pausing `pauseMs`
+ * between its own items. A task that returns true stops the run: requests
+ * already in flight finish, and no lane starts another.
+ */
+async function inLanes(items, lanes, pauseMs, task) {
+  let next = 0;
+  let stopped = false;
+  async function lane() {
+    for (let first = true; ; first = false) {
+      if (!first && pauseMs) await sleep(pauseMs);
+      if (stopped || next >= items.length) return;
+      const i = next++;
+      if (await task(items[i], i)) stopped = true;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(lanes, items.length) }, lane));
+}
+
 async function classifyIds(ids, videoMeta, fetchImpl, atById) {
   let meta = videoMeta;
-  for (const id of ids) {
+  let pushedBack = false;
+  await inLanes(ids, LANES, 0, async (id) => {
     try {
       const cls = await classifyVideo(id, { fetch: fetchImpl });
       const at = atById.get(id);
@@ -301,10 +323,14 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
       meta = putVideoMeta(meta, { [id]: rec });
     } catch (err) {
       // Leave it out of videoMeta so the next sweep retries this id.
-      if (isPushback(err)) return { meta, pushedBack: true };
+      if (isPushback(err)) {
+        pushedBack = true;
+        return true;
+      }
     }
-  }
-  return { meta, pushedBack: false };
+    return false;
+  });
+  return { meta, pushedBack };
 }
 
 function itemFromEntry(entry, channelId, rec) {
@@ -391,30 +417,33 @@ async function performSweep({ scope, onlyId }) {
   const allChannels = await readChannels();
   const list = pickChannels(allChannels, { scope, onlyId });
   const unseeded = new Set(list.filter((ch) => !ch.seeded).map((ch) => ch.id));
-  const succeeded = [];
   const incoming = [];
   let pushedBack = false;
 
-  for (let i = 0; i < list.length; i++) {
-    if (i > 0) await sleep(CHANNEL_FETCH_DELAY_MS);
-    const ch = list[i];
+  // Every channel's changes go out in one write after the fetches. A write
+  // per change rewrote the whole list about twice per channel per check.
+  const patches = new Map();
+  const patchChannel = (id, fields) => patches.set(id, { ...patches.get(id), ...fields });
+
+  const fetched = new Array(list.length);
+  await inLanes(list, LANES, CHANNEL_FETCH_DELAY_MS, async (ch, i) => {
     try {
       const parsed = await fetchChannelFeed(ch.id, { fetch: fetchImpl });
-      await updateChannel(ch.id, { lastError: null, lastFetchAt: Date.now() });
-      succeeded.push({ channel: ch, entries: parsed.entries || [] });
+      patchChannel(ch.id, { lastError: null, lastFetchAt: Date.now() });
+      fetched[i] = { channel: ch, entries: parsed.entries || [] };
     } catch (err) {
       // The channel is fine; YouTube is refusing this IP. Every further
       // request deepens the block, and marking the rest as broken would
       // be wrong, so stop here and keep what already arrived.
       if (isPushback(err)) {
         pushedBack = true;
-        break;
+        return true;
       }
-      await updateChannel(ch.id, {
-        lastError: { at: Date.now(), message: errMessage(err) },
-      });
+      patchChannel(ch.id, { lastError: { at: Date.now(), message: errMessage(err) } });
     }
-  }
+    return false;
+  });
+  const succeeded = fetched.filter(Boolean);
 
   let videoMeta = await readVideoMeta();
   const atById = new Map();
@@ -462,15 +491,15 @@ async function performSweep({ scope, onlyId }) {
   const { feed, added } = await applyFeedMerge(incoming, settings.feed.maxItems);
 
   for (const { channel } of succeeded) {
-    const patch = { lastVideoAt: newestAt(feed, channel.id) };
+    const fields = { lastVideoAt: newestAt(feed, channel.id) };
     // A pushback can stop classification before a new channel's backfill is
     // all in. Left unseeded, the rest arrives silently next time instead of
     // as a burst of alerts for old videos.
-    if (unseeded.has(channel.id) && !pushedBack) patch.seeded = true;
-    await updateChannel(channel.id, patch);
+    if (unseeded.has(channel.id) && !pushedBack) fields.seeded = true;
+    patchChannel(channel.id, fields);
   }
+  const channels = await updateChannels(patches);
 
-  const channels = await readChannels();
   await notifyNewItems({ added, channels, unseeded, settings });
 
   const now = Date.now();

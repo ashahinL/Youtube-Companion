@@ -540,6 +540,60 @@ export default async function run(t) {
       JSON.stringify(failFeed),
     );
 
+    t.section('channel records are written once per sweep');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: false });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    await putChannel({ id: 'UCXuqSBlHAE6Xw-yeJA0Tunw', title: 'Linus Tech Tips', seeded: true });
+    installFetch({
+      failFeeds: { [BEAST]: 'http' },
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'onewrite001', at: AT.newest }]) },
+    });
+    let channelWrites = 0;
+    let countWrites = true;
+    globalThis.chrome.storage.onChanged.addListener((changes, area) => {
+      if (countWrites && area === 'local' && changes.channels) channelWrites++;
+    });
+    await runSweep({ scope: 'all' });
+    countWrites = false;
+    const oneWrite = await readChannels();
+    t.check('three channels, one write', channelWrites === 1, String(channelWrites));
+    t.check(
+      'and it carries every change',
+      oneWrite[0].seeded === true && oneWrite[0].lastVideoAt === AT.newest
+        && oneWrite[1].lastError?.message === 'feed failed (500)' && oneWrite[2].lastFetchAt > 0,
+      JSON.stringify(oneWrite),
+    );
+
+    t.section('feeds are fetched three at a time');
+
+    await wipe();
+    const laneIds = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((ch) => `UC${ch.repeat(22)}`);
+    for (const id of laneIds) await putChannel({ id, title: id, seeded: true });
+    let inFlight = 0;
+    let most = 0;
+    const laneFetch = installFetch({
+      async hook(u) {
+        if (!u.includes('/feeds/videos.xml')) return undefined;
+        inFlight++;
+        most = Math.max(most, inFlight);
+        await wait(30);
+        inFlight--;
+        return undefined;
+      },
+    });
+    const laneStart = Date.now();
+    await runSweep({ scope: 'all' });
+    const laneMs = Date.now() - laneStart;
+    t.check('never more than three at once', most === 3, String(most));
+    t.check(
+      'every channel is fetched',
+      laneFetch.calls.filter((c) => c.url.includes('/feeds/videos.xml')).length === laneIds.length,
+    );
+    // Seven one after another, 250 ms apart, took over 1.5 s.
+    t.check('the lanes run side by side', laneMs < 1200, `${laneMs} ms`);
+
     t.section('far-off premieres are not rechecked every sweep');
 
     await wipe();
@@ -576,6 +630,8 @@ export default async function run(t) {
     t.section('YouTube pushback stops the sweep and waits');
 
     const LINUS = 'UCXuqSBlHAE6Xw-yeJA0Tunw';
+    const FOURTH = `UC${'d'.repeat(22)}`;
+    const FIFTH = `UC${'e'.repeat(22)}`;
     const QUARTER_HOUR = 15 * 60_000;
     const feedCallsTo = (calls) => calls
       .filter((c) => c.url.includes('/feeds/videos.xml'))
@@ -585,6 +641,8 @@ export default async function run(t) {
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
     await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
     await putChannel({ id: LINUS, title: 'Linus Tech Tips', seeded: true });
+    await putChannel({ id: FOURTH, title: 'Fourth', seeded: true });
+    await putChannel({ id: FIFTH, title: 'Fifth', seeded: true });
     let pushFetch = installFetch({
       failFeeds: { [BEAST]: '429' },
       feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'beforeblock', t: 'Before', at: AT.newest }]) },
@@ -593,9 +651,11 @@ export default async function run(t) {
     const pushed = await runSweep({ scope: 'all' });
     const pushEnd = Date.now();
     t.check('a 429 makes the sweep report slow down', pushed.ok === false && pushed.error === 'slow down', JSON.stringify(pushed));
+    // Three lanes start together, so the third channel was already on its
+    // way when the 429 came back. Nothing starts after it.
     t.check(
-      'no channel after the 429 is fetched',
-      JSON.stringify(feedCallsTo(pushFetch.calls)) === JSON.stringify([MKBHD, BEAST]),
+      'no channel starts after the 429',
+      JSON.stringify(feedCallsTo(pushFetch.calls)) === JSON.stringify([MKBHD, BEAST, LINUS]),
       JSON.stringify(feedCallsTo(pushFetch.calls)),
     );
     const pushedChannels = await readChannels();
@@ -604,7 +664,7 @@ export default async function run(t) {
       pushedChannels.find((c) => c.id === BEAST).lastError === null,
       JSON.stringify(pushedChannels.find((c) => c.id === BEAST).lastError),
     );
-    t.check('the skipped channel is not marked broken', pushedChannels.find((c) => c.id === LINUS).lastError === null);
+    t.check('the skipped channel is not marked broken', pushedChannels.find((c) => c.id === FOURTH).lastError === null);
     // A new video still needs a player request to classify it, and that is
     // one more request into the block. It waits for the next clean sweep.
     t.check(
@@ -667,23 +727,22 @@ export default async function run(t) {
 
     await wipe();
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: false });
-    const seedEntries = [
-      { v: 'blockseed01', t: 'Old one', at: AT.older },
-      { v: 'blockseed02', t: 'Old two', at: AT.mid },
-    ];
+    const seedEntries = ['01', '02', '03', '04', '05'].map((n, i) => (
+      { v: `blockseed${n}`, t: `Old ${n}`, at: AT.older + i * 60_000 }
+    ));
     pushFetch = installFetch({ feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', seedEntries) }, playerStatus: 429 });
     const classifyPush = await runSweep({ scope: 'all' });
     t.check('a 429 while classifying is pushback too', classifyPush.error === 'slow down', JSON.stringify(classifyPush));
     t.check(
-      'classification stops at the first 429',
-      pushFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 1,
+      'classification starts nothing after the first 429',
+      pushFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 3,
       String(pushFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length),
     );
     t.check('a new channel stays unseeded when its backfill was cut short', (await readChannels())[0].seeded === false);
     await writePollState({ backoffUntil: Date.now() - 1 });
     installFetch({ feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', seedEntries) } });
     await runSweep({ scope: 'all' });
-    t.check('the backfill finishes on the next sweep', (await readFeed()).length === 2, String((await readFeed()).length));
+    t.check('the backfill finishes on the next sweep', (await readFeed()).length === 5, String((await readFeed()).length));
     t.check('and is still silent', mock.notifications.length === 0, JSON.stringify(mock.notifications));
     t.check('the channel is seeded afterwards', (await readChannels())[0].seeded === true);
 
