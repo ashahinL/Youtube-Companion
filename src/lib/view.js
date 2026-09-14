@@ -2,8 +2,8 @@
  * Popup view decisions for the Feeds, Watchlist and Audio tabs: which
  * rows show, whether Add is live, which empty state applies, which
  * YouTube tab the player drives, when the player card may sync a
- * control, and how audioStats fold into the four cards. Pure — no
- * DOM, no chrome, no clock.
+ * control, how audioStats fold into the four cards, and how a failed
+ * channel is described. Pure — no DOM, no chrome, no clock.
  */
 
 import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
@@ -225,6 +225,32 @@ export function audioStatsView(stats, scope, now, core) {
     usedMb: savings.usedMb,
     savedMb: savings.savedMb,
   };
+}
+
+/**
+ * The sentence for a channel whose last check failed, as a message key and
+ * its substitutions, or null when it did not fail. Records written before
+ * the worker kept `kind` carry only the English message, so the status is
+ * read back out of "feed failed (404)".
+ */
+export function channelProblem(lastError) {
+  if (!lastError || typeof lastError !== 'object') return null;
+  const message = String(lastError.message || '');
+  let kind = lastError.kind;
+  let status = Number(lastError.status) || 0;
+  if (!kind) {
+    const http = message.match(/failed \((\d{3})\)/);
+    if (http) {
+      kind = 'http';
+      status = Number(http[1]);
+    } else if (/network error/.test(message)) kind = 'network';
+    else if (/parse error/.test(message)) kind = 'parse';
+  }
+  if (kind === 'http' && status === 404) return { key: 'channelProblemGone', subs: [] };
+  if (kind === 'http' && status) return { key: 'channelProblemHttp', subs: [String(status)] };
+  if (kind === 'network') return { key: 'channelProblemNetwork', subs: [] };
+  if (kind === 'parse') return { key: 'channelProblemUnreadable', subs: [] };
+  return { key: 'channelProblemOther', subs: [] };
 }
 
 export function watchlistView({ channels, feed, query }) {

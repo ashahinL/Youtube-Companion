@@ -29,6 +29,7 @@ import {
   watchlistView,
   audioTabView,
   audioStatsView,
+  channelProblem,
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
@@ -376,11 +377,10 @@ function channelRow(ch, locale) {
     meta.appendChild(age);
   }
 
-  if (ch.lastError && ch.lastError.message) {
-    const warn = textEl('span', 'channel-row__warn', '⚠');
-    warn.title = String(ch.lastError.message);
-    warn.setAttribute('aria-label', t('watchlistChannelError'));
-    meta.appendChild(warn);
+  // The row is the button that opens the sheet, which says why and offers
+  // Retry; a second button cannot sit inside this one.
+  if (channelProblem(ch.lastError)) {
+    meta.appendChild(textEl('span', 'channel-row__warn', t('channelProblemShort')));
   }
 
   text.appendChild(meta);
@@ -910,6 +910,16 @@ function renderChannelSheet() {
     statusEl.textContent = '';
     statusEl.classList.remove('banner--error');
   }
+
+  const problemRow = document.getElementById('channel-sheet-problem');
+  const problemText = document.getElementById('channel-sheet-problem-text');
+  const retryBtn = document.getElementById('channel-sheet-retry');
+  // While the check runs, the spinner is the answer; the old sentence would
+  // read as the result of the retry.
+  const problem = locked ? null : channelProblem(ch.lastError);
+  problemRow.hidden = !problem;
+  problemText.textContent = problem ? t(problem.key, problem.subs) : '';
+  retryBtn.disabled = locked || !!slowText;
 
   const items = visibleFeedItems(view.feed, !!view.settings?.feed?.showShorts)
     .filter((item) => item.c === ch.id);
@@ -2117,6 +2127,10 @@ function bindChannelSheet() {
     closeChannelSheet();
   });
   document.getElementById('channel-sheet-refresh')?.addEventListener('click', () => {
+    if (!view.sheetId) return;
+    void requestSweep({ onlyId: view.sheetId });
+  });
+  document.getElementById('channel-sheet-retry')?.addEventListener('click', () => {
     if (!view.sheetId) return;
     void requestSweep({ onlyId: view.sheetId });
   });

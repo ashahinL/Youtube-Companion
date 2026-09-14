@@ -153,6 +153,40 @@
       }
     }
   },
+  "channelProblemShort": {
+    "message": "فشل الفحص",
+    "description": "Short red text on a Watchlist row whose last check failed. Opening the channel shows why."
+  },
+  "channelProblemGone": {
+    "message": "لم يجد يوتيوب فيديوهات هذه القناة. ربما حُذفت أو أصبحت خاصة.",
+    "description": "Channel sheet, when YouTube answered 404 for the channel's feed and its Videos tab also failed."
+  },
+  "channelProblemHttp": {
+    "message": "لم يستجب يوتيوب لهذه القناة (خطأ $CODE$). غالبًا يعود للعمل لاحقًا.",
+    "description": "Channel sheet, when YouTube answered the channel's check with an HTTP error. $CODE$ is the status number, such as 500.",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "500"
+      }
+    }
+  },
+  "channelProblemNetwork": {
+    "message": "تعذّر الوصول إلى يوتيوب. تحقّق من اتصالك بالإنترنت.",
+    "description": "Channel sheet, when the channel's last check could not reach YouTube at all."
+  },
+  "channelProblemUnreadable": {
+    "message": "تعذّرت قراءة ردّ يوتيوب لهذه القناة.",
+    "description": "Channel sheet, when YouTube's answer for the channel could not be parsed."
+  },
+  "channelProblemOther": {
+    "message": "فشل آخر فحص لهذه القناة.",
+    "description": "Channel sheet, when the channel's last check failed for a reason not covered by the other messages."
+  },
+  "channelProblemRetry": {
+    "message": "إعادة المحاولة",
+    "description": "Button beside the problem sentence in the channel sheet. Checks this one channel again."
+  },
   "watchlistFavoriteAdd": {
     "message": "أضف إلى المفضلة",
     "description": "Menu item that marks the channel as a favourite."
@@ -174,10 +208,6 @@
         "example": "Marques Brownlee"
       }
     }
-  },
-  "watchlistChannelError": {
-    "message": "تعذّر تحديث هذه القناة",
-    "description": "Accessible name of the warning marker on a Watchlist row whose last fetch failed. The worker's error text is in the tooltip."
   },
   "feedFilterPlaceholder": {
     "message": "ابحث في الخلاصة، أو ألصق رابطًا أو @معرّف",

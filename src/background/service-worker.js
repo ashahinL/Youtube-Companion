@@ -6,6 +6,7 @@
  */
 
 import {
+  YtError,
   normalizeChannelInput,
   normalizeVideoInput,
   resolveChannelId,
@@ -347,6 +348,16 @@ function itemFromEntry(entry, channelId, rec) {
   };
 }
 
+/** What the popup needs to explain a failed channel in the reader's language. */
+function channelError(err) {
+  const record = { at: Date.now(), message: errMessage(err) };
+  if (err instanceof YtError) {
+    record.kind = err.kind;
+    if (err.kind === 'http') record.status = err.status;
+  }
+  return record;
+}
+
 function shouldNotifyItem(item, channel, settings, poll) {
   if (!settings.alerts.enabled) return false;
   if (item.k === 'short' && !settings.feed.showShorts) return false;
@@ -441,7 +452,7 @@ async function performSweep({ scope, onlyId }) {
         pushedBack = true;
         return true;
       }
-      patchChannel(ch.id, { lastError: { at: Date.now(), message: errMessage(err) } });
+      patchChannel(ch.id, { lastError: channelError(err) });
     }
     return false;
   });

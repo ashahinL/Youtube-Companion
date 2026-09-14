@@ -578,6 +578,11 @@ export default async function run(t) {
       mk.lastError?.message === 'feed failed (500)',
       String(mk.lastError?.message),
     );
+    t.check(
+      'failed channel keeps the error kind and status for the popup',
+      mk.lastError?.kind === 'http' && mk.lastError?.status === 500,
+      JSON.stringify(mk.lastError),
+    );
     t.check('successful channel lastError is null', mb.lastError === null);
     t.check('successful channel lastFetchAt is set', mb.lastFetchAt > 0, String(mb.lastFetchAt));
     const failFeed = await readFeed();
@@ -646,7 +651,7 @@ export default async function run(t) {
       'a network error does not try the Videos tab',
       !tabFetch.calls.some((c) => c.url.includes('/youtubei/v1/browse')),
     );
-    t.check('and is recorded as a network error', (await readChannels())[0].lastError?.message === 'feed network error');
+    t.check('and is recorded as a network error', (await readChannels())[0].lastError?.kind === 'network');
 
     await wipe();
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
@@ -663,7 +668,7 @@ export default async function run(t) {
     const goneError = (await readChannels())[0].lastError;
     t.check(
       'a channel gone from both keeps the feed 404',
-      goneError?.message === 'feed failed (404)',
+      goneError?.kind === 'http' && goneError?.status === 404,
       JSON.stringify(goneError),
     );
 
@@ -690,7 +695,7 @@ export default async function run(t) {
     t.check(
       'and it carries every change',
       oneWrite[0].seeded === true && oneWrite[0].lastVideoAt === AT.newest
-        && oneWrite[1].lastError?.message === 'feed failed (500)' && oneWrite[2].lastFetchAt > 0,
+        && oneWrite[1].lastError?.status === 500 && oneWrite[2].lastFetchAt > 0,
       JSON.stringify(oneWrite),
     );
 

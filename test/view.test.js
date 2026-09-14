@@ -1,6 +1,7 @@
 /**
  * Popup view decisions: feed/watchlist filters, row matching, Add-enabled,
- * the exact-URL force-show, Audio-tab target choice, and stats folding.
+ * the exact-URL force-show, Audio-tab target choice, stats folding, and how
+ * a failed channel is described.
  * Hand-made rows; no fixtures, no network.
  */
 
@@ -29,6 +30,7 @@ import {
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
+  channelProblem,
 } from '../src/lib/view.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -658,6 +660,23 @@ export default async function run(t) {
     mini.targetId === 7 && !mini.showNotice && !mini.showPicker,
     String(mini.targetId),
   );
+
+  t.section('channel problem');
+
+  const problemKey = (lastError) => channelProblem(lastError)?.key ?? null;
+  t.check('no error, no problem', channelProblem(null) === null && channelProblem(undefined) === null);
+  t.check('a 404 says the channel cannot be found', problemKey({ at: 1, message: 'feed failed (404)', kind: 'http', status: 404 }) === 'channelProblemGone');
+  const http500 = channelProblem({ at: 1, message: 'feed failed (500)', kind: 'http', status: 500 });
+  t.check('another status names its code', http500?.key === 'channelProblemHttp' && http500.subs[0] === '500', JSON.stringify(http500));
+  t.check('network', problemKey({ at: 1, message: 'feed network error', kind: 'network' }) === 'channelProblemNetwork');
+  t.check('parse', problemKey({ at: 1, message: 'feed parse error', kind: 'parse' }) === 'channelProblemUnreadable');
+  t.check('an error from outside yt.js still gets a sentence', problemKey({ at: 1, message: 'boom' }) === 'channelProblemOther');
+  // Stored before the worker kept kind and status.
+  const oldHttp = channelProblem({ at: 1, message: 'feed failed (503)' });
+  t.check('an older record is read from its message', oldHttp?.key === 'channelProblemHttp' && oldHttp.subs[0] === '503', JSON.stringify(oldHttp));
+  t.check('an older 404 record', problemKey({ at: 1, message: 'feed failed (404)' }) === 'channelProblemGone');
+  t.check('an older network record', problemKey({ at: 1, message: 'feed network error' }) === 'channelProblemNetwork');
+  t.check('an older parse record', problemKey({ at: 1, message: 'feed parse error' }) === 'channelProblemUnreadable');
 
   t.section('audio player control sync');
 

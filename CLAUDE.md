@@ -63,6 +63,8 @@ asks.
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
   tab. **No name search, no bulk paste, no file import.** Typing in either box
   only filters.
+- **A failed channel** reads "Check failed" on its Watchlist row; its sheet
+  says why in a translated sentence, with Retry.
 - **Clicking a video** opens a new focused tab on youtube.com and closes the
   popup. A channel name opens the in-popup channel sheet, which shows stored
   videos and never fetches on open.

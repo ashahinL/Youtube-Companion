@@ -302,7 +302,8 @@ body {
   color: var(--ok);
 }
 
-.undo-row {
+.undo-row,
+.problem-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -310,13 +311,19 @@ body {
   font-size: 12px;
 }
 
-.undo-row__text {
+.undo-row__text,
+.problem-row__text {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.undo-row__btn {
+.problem-row__text {
+  color: var(--accent);
+}
+
+.undo-row__btn,
+.problem-row__btn {
   padding-block: 4px;
   padding-inline: 10px;
 }
@@ -422,7 +429,6 @@ body {
 
 .channel-row__warn {
   color: var(--accent);
-  cursor: help;
 }
 
 .channel-row__actions {

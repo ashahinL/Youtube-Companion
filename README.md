@@ -55,7 +55,8 @@
 - Add a channel by pasting its URL or `@handle`, or press **Add** with an
   empty box to add the channel of the tab you are on.
 - Star your favourites. They sit at the top and are checked more often.
-- Click a channel to see its latest videos without leaving the popup.
+- Click a channel to see its latest videos without leaving the popup. If its
+  last check failed, it says why and offers **Retry**.
 
 **Alerts**
 - A desktop notification when a channel uploads. One alert per channel, even

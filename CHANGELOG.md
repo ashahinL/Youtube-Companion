@@ -25,6 +25,9 @@ shipped yet waits under Unreleased. How a version ships:
 - When YouTube's channel feeds are down, checks still work. A channel whose
   feed fails is read from its Videos tab instead (shorts and live streams wait
   until the feed is back), and older videos found that way don't alert.
+- A channel that fails says so in your language: "Check failed" on its row,
+  and a plain sentence with a Retry button when you open it. No more ⚠ with an
+  English tooltip.
 - Checks are quicker and lighter: three channels at a time, and the channel
   list is saved once per check instead of about twice per channel.
 - A premiere days away is looked at a few times a day, not on every check.

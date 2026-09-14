@@ -560,6 +560,12 @@ export default async function run(t) {
   t.check('sheet has a refresh control', /id="channel-sheet-refresh"/.test(html));
   t.check('sheet has a video list', /id="channel-sheet-videos"/.test(html));
   t.check(
+    'sheet has a problem sentence with a Retry button',
+    /id="channel-sheet-problem"[\s\S]{0,240}id="channel-sheet-problem-text"[\s\S]{0,240}id="channel-sheet-retry"/.test(html),
+  );
+  t.check('Retry sweeps only that channel', /channel-sheet-retry[\s\S]{0,160}onlyId:\s*view\.sheetId/.test(js));
+  t.check('a failed row shows translated text, not the worker\'s English', !/lastError\.message/.test(js));
+  t.check(
     'watchlist row opens the channel sheet by id',
     /openChannelSheet\(\s*ch\.id\s*\)/.test(js),
   );

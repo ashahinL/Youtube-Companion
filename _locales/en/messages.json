@@ -153,6 +153,40 @@
       }
     }
   },
+  "channelProblemShort": {
+    "message": "Check failed",
+    "description": "Short red text on a Watchlist row whose last check failed. Opening the channel shows why."
+  },
+  "channelProblemGone": {
+    "message": "YouTube can't find this channel's videos. It may have been deleted or made private.",
+    "description": "Channel sheet, when YouTube answered 404 for the channel's feed and its Videos tab also failed."
+  },
+  "channelProblemHttp": {
+    "message": "YouTube didn't answer for this channel (error $CODE$). It usually works again later.",
+    "description": "Channel sheet, when YouTube answered the channel's check with an HTTP error. $CODE$ is the status number, such as 500.",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "500"
+      }
+    }
+  },
+  "channelProblemNetwork": {
+    "message": "Couldn't reach YouTube. Check your internet connection.",
+    "description": "Channel sheet, when the channel's last check could not reach YouTube at all."
+  },
+  "channelProblemUnreadable": {
+    "message": "YouTube's answer for this channel couldn't be read.",
+    "description": "Channel sheet, when YouTube's answer for the channel could not be parsed."
+  },
+  "channelProblemOther": {
+    "message": "The last check of this channel failed.",
+    "description": "Channel sheet, when the channel's last check failed for a reason not covered by the other messages."
+  },
+  "channelProblemRetry": {
+    "message": "Retry",
+    "description": "Button beside the problem sentence in the channel sheet. Checks this one channel again."
+  },
   "watchlistFavoriteAdd": {
     "message": "Add to favourites",
     "description": "Menu item that marks the channel as a favourite."
@@ -174,10 +208,6 @@
         "example": "Marques Brownlee"
       }
     }
-  },
-  "watchlistChannelError": {
-    "message": "Could not update this channel",
-    "description": "Accessible name of the warning marker on a Watchlist row whose last fetch failed. The worker's error text is in the tooltip."
   },
   "feedFilterPlaceholder": {
     "message": "Search your feed, or a URL / @handle",
