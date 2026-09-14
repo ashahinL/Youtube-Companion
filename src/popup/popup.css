@@ -328,6 +328,34 @@ body {
   padding-inline: 10px;
 }
 
+/* The focused tab's channel, offered when it is not on the list yet. */
+.follow-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: 12px;
+  padding-block: 8px;
+  padding-inline: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.follow-card__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.follow-card__name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ↻ and its spinner share one 28×28 cell so the row does not shift
    when the button hides and the spinner takes its place. */
 .reload-slot {

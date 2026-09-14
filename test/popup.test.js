@@ -627,6 +627,17 @@ export default async function run(t) {
       && /getAttribute\(\s*'aria-selected'\s*\)/.test(js),
   );
 
+  t.section('follow card');
+
+  const audioPanel = html.slice(html.indexOf('<section id="audio"'), html.indexOf('</section>', html.indexOf('<section id="audio"')));
+  t.check('the Follow card sits in the Audio tab', /id="follow-card"/.test(audioPanel));
+  t.check(
+    'it comes before the audio mode switch',
+    audioPanel.indexOf('id="follow-card"') >= 0 && audioPanel.indexOf('id="follow-card"') < audioPanel.indexOf('class="audio-head"'),
+  );
+  t.check('it starts hidden', /id="follow-card"[^>]*\bhidden\b/.test(html));
+  t.check('Follow adds through the worker', /followTab[\s\S]{0,400}type:\s*'addChannel'/.test(js));
+
   t.section('support sheet');
 
   const appbarSupport = html.match(/<button\b[^>]*\bid="appbar-support"[^>]*>/);

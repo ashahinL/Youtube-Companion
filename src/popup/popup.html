@@ -78,6 +78,16 @@
     </nav>
 
     <section id="audio" class="panel" role="tabpanel" aria-labelledby="tab-audio">
+      <div id="follow-card" class="follow-card" hidden>
+        <span class="follow-card__text">
+          <span id="follow-card-label" class="footnote"></span>
+          <span id="follow-card-name" class="follow-card__name"></span>
+        </span>
+        <span id="follow-card-spinner" class="spinner" hidden></span>
+        <button id="follow-card-btn" class="btn btn--primary" type="button" data-i18n="followButton">Follow</button>
+      </div>
+      <p id="follow-ok" class="banner banner--ok" role="status" hidden></p>
+      <p id="follow-error" class="banner banner--error" role="status" hidden></p>
       <div class="audio-head">
         <span id="audio-mode-label" class="audio-head__label" data-i18n="audioModeLabel">Audio mode</span>
         <label

@@ -63,6 +63,9 @@ asks.
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
   tab. **No name search, no bulk paste, no file import.** Typing in either box
   only filters.
+- **Follow card**: when the focused tab is a YouTube channel or video whose
+  channel is not on the list, the top of the Audio tab names it with a Follow
+  button. It is the same add; deciding whether to show it fetches nothing.
 - **A failed channel** reads "Check failed" on its Watchlist row; its sheet
   says why in a translated sentence, with Retry.
 - **Clicking a video** opens a new focused tab on youtube.com and closes the

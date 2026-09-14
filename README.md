@@ -54,6 +54,8 @@
 **Watchlist**
 - Add a channel by pasting its URL or `@handle`, or press **Add** with an
   empty box to add the channel of the tab you are on.
+- On a YouTube channel or video you don't follow yet, the Audio tab shows
+  that channel with a **Follow** button.
 - Star your favourites. They sit at the top and are checked more often.
 - Click a channel to see its latest videos without leaving the popup. If its
   last check failed, it says why and offers **Retry**.

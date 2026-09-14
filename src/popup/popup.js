@@ -4,8 +4,9 @@
  * timeline; its box filters videos, and Add adds a channel the same way
  * the Watchlist box does. The Watchlist tab adds by URL or handle,
  * filters the list as you type, favourites and removes channels. Empty
- * Add reads the focused tab. The worker owns all network; this page
- * only renders.
+ * Add reads the focused tab, and on a YouTube channel or video the Audio
+ * tab offers that channel with a Follow button. The worker owns all
+ * network; this page only renders.
  */
 
 import { thumbUrl } from '../lib/yt.js';
@@ -30,6 +31,7 @@ import {
   audioTabView,
   audioStatsView,
   channelProblem,
+  followView,
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
@@ -65,6 +67,12 @@ const view = {
   supportOpen: false,
   feedError: '',
   feedOk: '',
+  followError: '',
+  followOk: '',
+  // The focused tab when it is a YouTube page, and the channel name its
+  // watch page shows, for the Follow card.
+  activeTab: null,
+  activePageChannel: '',
   audioKnown: false,
   audioReachable: false,
   audioOn: false,
@@ -1288,7 +1296,64 @@ function renderAudioStats() {
   if (active) active.textContent = Core.formatTime(folded.active);
 }
 
+function currentFollow() {
+  return followView({
+    tab: view.activeTab,
+    pageChannel: view.activePageChannel,
+    channels: view.channels,
+    feed: view.feed,
+    core: Core,
+  });
+}
+
+function renderFollow() {
+  const card = document.getElementById('follow-card');
+  if (!card) return;
+  const follow = currentFollow();
+  card.hidden = !follow.show;
+  const btn = document.getElementById('follow-card-btn');
+  btn.disabled = view.busy;
+  document.getElementById('follow-card-spinner').hidden = !view.busy;
+  if (follow.show) {
+    document.getElementById('follow-card-label').textContent = t(
+      follow.kind === 'video' ? 'followVideoLabel' : 'followChannelLabel',
+    );
+    const nameEl = document.getElementById('follow-card-name');
+    nameEl.textContent = follow.name;
+    nameEl.hidden = !follow.name;
+    btn.setAttribute('aria-label', follow.name ? t('followButtonNamed', [follow.name]) : t('followButton'));
+  }
+
+  const okEl = document.getElementById('follow-ok');
+  const errorEl = document.getElementById('follow-error');
+  okEl.hidden = !view.followOk;
+  okEl.textContent = view.followOk;
+  errorEl.hidden = !view.followError;
+  errorEl.textContent = view.followError;
+}
+
+async function followTab() {
+  const follow = currentFollow();
+  if (!follow.show || view.busy) return;
+  view.followOk = '';
+  await withBusy(async () => {
+    view.undo = null;
+    const res = await send({ type: 'addChannel', input: follow.input });
+    if (!res || res.ok === false) {
+      view.followError = formatError(res?.error);
+      return;
+    }
+    await refreshState();
+    const ch = res.channel || {};
+    view.followOk = t('followDone', [isolate(ch.title || ch.handle || follow.name || ch.id || '')]);
+  }, 'followError');
+  // The button left with the card.
+  const button = document.getElementById('follow-card-btn');
+  if (button?.closest('[hidden]')) document.getElementById('tab-audio')?.focus();
+}
+
 function renderAudio() {
+  renderFollow();
   const reachable = view.audioReachable;
   const notice = document.getElementById('audio-page-notice');
   if (notice) notice.hidden = !view.audioKnown || reachable;
@@ -1778,6 +1843,18 @@ async function refreshAudioState() {
     if (kept) target = kept;
   }
 
+  // Only YouTube tabs show their URL to this extension, so any other focused
+  // tab reads as none.
+  const activeTab = ytTabs.find((tab) => tab && tab.id === activeId) || null;
+  // "You're following …" belongs to the page it was said on.
+  if ((activeTab?.url || '') !== (view.activeTab?.url || '')) {
+    view.followOk = '';
+    view.followError = '';
+  }
+  view.activeTab = activeTab;
+  const activePlayer = playerById.get(activeId);
+  view.activePageChannel = typeof activePlayer?.channel === 'string' ? activePlayer.channel : '';
+
   view.audioKnown = true;
   view.audioTabs = decision.tabs;
   view.audioTargetId = target ? target.id : null;
@@ -1894,6 +1971,10 @@ function scheduleAudioDiscover() {
 }
 
 function bindAudio() {
+  document.getElementById('follow-card-btn')?.addEventListener('click', () => {
+    void followTab();
+  });
+
   const toggle = document.getElementById('audio-toggle');
   toggle?.addEventListener('change', () => {
     void toggleAudioMode();

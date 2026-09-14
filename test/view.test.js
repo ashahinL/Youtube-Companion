@@ -1,7 +1,7 @@
 /**
  * Popup view decisions: feed/watchlist filters, row matching, Add-enabled,
- * the exact-URL force-show, Audio-tab target choice, stats folding, and how
- * a failed channel is described.
+ * the exact-URL force-show, Audio-tab target choice, stats folding, how a
+ * failed channel is described, and the Follow card.
  * Hand-made rows; no fixtures, no network.
  */
 
@@ -31,6 +31,7 @@ import {
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
   channelProblem,
+  followView,
 } from '../src/lib/view.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -677,6 +678,53 @@ export default async function run(t) {
   t.check('an older 404 record', problemKey({ at: 1, message: 'feed failed (404)' }) === 'channelProblemGone');
   t.check('an older network record', problemKey({ at: 1, message: 'feed network error' }) === 'channelProblemNetwork');
   t.check('an older parse record', problemKey({ at: 1, message: 'feed parse error' }) === 'channelProblemUnreadable');
+
+  t.section('follow card');
+
+  const MK = 'UCBJycsmduvYEL83R_U4JriQ';
+  const followed = [{ id: MK, title: 'Marques Brownlee', handle: '@mkbhd' }];
+  const storedFeed = [{ v: 'Od6M0AXpcxQ', c: MK, t: 'Stored video', at: 1, k: 'video' }];
+  const follow = (tab, pageChannel = '', channels = followed) => followView({
+    tab, pageChannel, channels, feed: storedFeed, core,
+  });
+
+  const newChannel = follow({ url: 'https://www.youtube.com/@veritasium/videos', title: 'Veritasium - YouTube' });
+  t.check(
+    'a channel page not on the list shows the card with its name',
+    newChannel.show && newChannel.kind === 'channel' && newChannel.name === 'Veritasium'
+      && newChannel.input === 'https://www.youtube.com/@veritasium/videos',
+    JSON.stringify(newChannel),
+  );
+  t.check(
+    'the unread count in the title is not part of the name',
+    follow({ url: 'https://www.youtube.com/@veritasium', title: '(3) Veritasium - YouTube' }).name === 'Veritasium',
+  );
+  t.check(
+    'a channel page still loading has no name yet',
+    follow({ url: 'https://www.youtube.com/@veritasium', title: 'YouTube' }).name === '',
+  );
+  t.check('a followed handle hides the card', !follow({ url: 'https://www.youtube.com/@MKBHD', title: 'Marques Brownlee - YouTube' }).show);
+  t.check('a followed channel id hides the card', !follow({ url: `https://www.youtube.com/channel/${MK}`, title: 'x - YouTube' }).show);
+  t.check('a stored video of a followed channel hides the card', !follow({ url: 'https://www.youtube.com/watch?v=Od6M0AXpcxQ', title: 'Stored video - YouTube' }).show);
+  const unknownVideo = follow({ url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz', title: 'Some video - YouTube' }, 'Veritasium');
+  t.check(
+    'a video by someone else shows the card with the page\'s channel name',
+    unknownVideo.show && unknownVideo.kind === 'video' && unknownVideo.name === 'Veritasium',
+    JSON.stringify(unknownVideo),
+  );
+  t.check(
+    'a video never takes its name from the tab title, which is the video\'s',
+    follow({ url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz', title: 'Some video - YouTube' }).name === '',
+  );
+  t.check(
+    'an older video of a followed channel is hidden by the name the page shows',
+    !follow({ url: 'https://www.youtube.com/watch?v=yyyyyyyyyyy', title: 'Old - YouTube' }, 'marques brownlee').show,
+  );
+  t.check('a short counts as a video', follow({ url: 'https://www.youtube.com/shorts/zzzzzzzzzzz', title: 'x - YouTube' }).kind === 'video');
+  t.check('the home page shows nothing', !follow({ url: 'https://www.youtube.com/', title: 'YouTube' }).show);
+  t.check('search results show nothing', !follow({ url: 'https://www.youtube.com/results?search_query=x', title: 'x - YouTube' }).show);
+  t.check('a non-YouTube tab shows nothing', !follow({ url: 'https://example.com/@veritasium', title: 'x' }).show);
+  t.check('no tab shows nothing', !follow(null).show);
 
   t.section('audio player control sync');
 

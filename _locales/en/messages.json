@@ -187,6 +187,38 @@
     "message": "Retry",
     "description": "Button beside the problem sentence in the channel sheet. Checks this one channel again."
   },
+  "followChannelLabel": {
+    "message": "This channel",
+    "description": "Small label on the Follow card at the top of the Audio tab, when the focused tab is a YouTube channel page."
+  },
+  "followVideoLabel": {
+    "message": "Channel of this video",
+    "description": "Small label on the Follow card at the top of the Audio tab, when the focused tab is a YouTube video."
+  },
+  "followButton": {
+    "message": "Follow",
+    "description": "Button on the Follow card that adds the focused tab's channel to the Watchlist."
+  },
+  "followButtonNamed": {
+    "message": "Follow $NAME$",
+    "description": "Accessible name of the Follow button when the channel name is known. $NAME$ is the channel name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
+  },
+  "followDone": {
+    "message": "You're following $NAME$ now.",
+    "description": "Green status on the Audio tab after the Follow button added a channel. $NAME$ is the channel name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
+  },
   "watchlistFavoriteAdd": {
     "message": "Add to favourites",
     "description": "Menu item that marks the channel as a favourite."

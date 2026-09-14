@@ -2,8 +2,9 @@
  * Popup view decisions for the Feeds, Watchlist and Audio tabs: which
  * rows show, whether Add is live, which empty state applies, which
  * YouTube tab the player drives, when the player card may sync a
- * control, how audioStats fold into the four cards, and how a failed
- * channel is described. Pure — no DOM, no chrome, no clock.
+ * control, how audioStats fold into the four cards, how a failed channel
+ * is described, and when the Follow card shows. Pure — no DOM, no
+ * chrome, no clock.
  */
 
 import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
@@ -251,6 +252,31 @@ export function channelProblem(lastError) {
   if (kind === 'network') return { key: 'channelProblemNetwork', subs: [] };
   if (kind === 'parse') return { key: 'channelProblemUnreadable', subs: [] };
   return { key: 'channelProblemOther', subs: [] };
+}
+
+const HIDDEN_FOLLOW = { show: false, input: '', name: '', kind: '' };
+
+/**
+ * The Follow card for the focused tab: a YouTube channel or video page whose
+ * channel is not on the list. It fetches nothing, so "on the list" is what
+ * stored data can tell — the id, the handle, a stored video, or the exact
+ * name the page shows. What slips past that is caught by Add's own
+ * "already added".
+ *
+ * `pageChannel` is the channel name the watch page shows, when its content
+ * script answered. A channel page's name comes from the tab title.
+ */
+export function followView({ tab, pageChannel, channels, feed, core }) {
+  const url = String(tab?.url || '');
+  const ref = normalizeChannelInput(url);
+  if (!ref || listedMatch(url, channels, feed)) return HIDDEN_FOLLOW;
+  const title = String(tab?.title || '');
+  let name = '';
+  if (ref.kind === 'video') name = String(pageChannel || '').trim();
+  // Before a channel page settles, its title is just "YouTube".
+  else if (/\s-\sYouTube\s*$/.test(title)) name = core.tabTitleToVideoTitle(title);
+  if (name && channels.some((ch) => fold(ch.title) === fold(name))) return HIDDEN_FOLLOW;
+  return { show: true, input: url, name, kind: ref.kind === 'video' ? 'video' : 'channel' };
 }
 
 export function watchlistView({ channels, feed, query }) {

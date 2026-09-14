@@ -9,6 +9,8 @@ shipped yet waits under Unreleased. How a version ships:
 **New**
 - Undo after removing a channel. The channel comes back with its star, its
   place in the list and its videos.
+- A Follow button. Open the popup on a YouTube channel or video you don't
+  follow yet, and the Audio tab shows that channel with one button to add it.
 
 **Safer**
 - Only the popup can change your channels and settings. The script on YouTube
