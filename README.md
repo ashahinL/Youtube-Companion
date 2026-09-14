@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd"><img src="https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-1f6feb" alt="Add to Chrome from the Chrome Web Store" /></a>
   <img src="https://img.shields.io/badge/Chrome%20%2F%20Edge-Manifest%20V3-1f6feb" alt="Chrome / Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/account-not%20needed-2ea043" alt="No account needed" />
   <img src="https://img.shields.io/badge/dependencies-none-2ea043" alt="No dependencies" />
@@ -37,16 +38,18 @@
   goes over it. You keep the sound and use about 8× less data than 720p.
 - Turn it off and the video goes back to the quality you were watching.
 - Control playback from the popup: seek, back and forward 10 seconds, play
-  and pause, speed, and volume. A ✔ before the channel name means you follow
-  it.
+  and pause, speed, and volume.
+- A ✔ before the channel name in the player means you follow it.
+  *(coming in 1.1.0)*
 - Sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the
-  popup closes.
+  popup closes. *(coming in 1.1.0)*
 - With more than one YouTube tab open, pick which one to control.
 - See how much data you used and saved, and how long you listened, this
   month or all time.
-- Keyboard shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> turns audio
-  mode on or off, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd> opens the popup.
-  Settings shows the keys and a button to change them.
+- Keyboard shortcut: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> turns audio
+  mode on or off (change it at `chrome://extensions/shortcuts`).
+- <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd> opens the popup, and Settings
+  shows both keys with a button to change them. *(coming in 1.1.0)*
 
 **Feeds**
 - Every video from your channels in one list, newest first.
@@ -60,11 +63,13 @@
   empty box to add the channel of the tab you are on.
 - On a YouTube channel or video you don't follow yet, the Audio tab shows
   that channel with a **Follow** button. A video made by several channels
-  lists each one, with a ✔ on those you already follow.
+  lists each one, with a ✔ on those you already follow. *(coming in 1.1.0)*
 - Star your favourites. They sit at the top and are checked more often.
 - Mute one channel's alerts from its ⋯ menu. Its videos still show in Feeds.
-- Click a channel to see its latest videos without leaving the popup. If its
-  last check failed, it says why and offers **Retry**.
+  *(coming in 1.1.0)*
+- Click a channel to see its latest videos without leaving the popup.
+- If a channel's last check failed, it says why and offers **Retry**.
+  *(coming in 1.1.0)*
 
 **Alerts**
 - A desktop notification when a channel uploads. One alert per channel, even
@@ -81,7 +86,14 @@
 
 ## Install
 
-Until it is on the Chrome Web Store and Edge Add-ons, load it from source:
+**Chrome:** get it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd).
+
+**Edge:** the Edge Add-ons listing is still in review. Until then, Edge can
+install it from the same Chrome Web Store page once you turn on **Allow
+extensions from other stores**.
+
+**From source**, which can be newer than the store version:
 
 1. Download this repo (**Code → Download ZIP**) and unzip it, or clone it.
 2. Open `chrome://extensions` (or `edge://extensions`).

@@ -10,7 +10,7 @@ the short description come from `_locales/*/messages.json` (`extName`,
 | Store | State | Record |
 |---|---|---|
 | Edge Add-ons | **Submitted 2026-09-13, in review** (Microsoft quotes up to 7 business days) | Store ID `0RDCKC7S7L34` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
-| Chrome Web Store | **Submitted 2026-09-13, in review** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing will be `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
+| Chrome Web Store | **Live 2026-09-14** (submitted 2026-09-13) | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
 
 When a listing goes live, put its link in the README's install section.
 
