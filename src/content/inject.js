@@ -1,8 +1,9 @@
 /**
  * MAIN-world bridge to #movie_player. Isolated content scripts can see
- * the element but not its methods, which is the only reason this file
- * exists. It receives a request, calls the player, and posts the result
- * back. Never throws into the page.
+ * the element but not its methods or the page's own data, which is the
+ * only reason this file exists. It receives a request, calls the player
+ * or reads a collab video's channel list, and posts the result back.
+ * Never throws into the page.
  */
 
 (function (root) {
@@ -29,7 +30,11 @@
     setVolume: 1,
     mute: 0,
     unMute: 0,
+    // Not a player method: read-only page data, answered without the player.
+    collaborators: 0,
   };
+
+  const MAX_COLLABORATORS = 10;
 
   const QUALITIES = {
     tiny: true,
@@ -113,6 +118,51 @@
     }
   }
 
+  function pick(obj, keys) {
+    let node = obj;
+    for (let i = 0; i < keys.length; i++) {
+      if (!node || typeof node !== 'object') return undefined;
+      node = node[keys[i]];
+    }
+    return node;
+  }
+
+  /*
+   * A collab video's owner line is one link with no address ("A and B"); the
+   * channels behind it exist only in the renderer's data, as the list its
+   * Collaborators dialog opens (docs/youtube.md). Plain strings go back; the
+   * content script checks them.
+   */
+  function readCollaborators() {
+    const doc = root.document;
+    if (!doc || typeof doc.querySelector !== 'function') return [];
+    const owner = doc.querySelector('ytd-watch-metadata ytd-video-owner-renderer');
+    const items = pick(owner && owner.data, [
+      'navigationEndpoint', 'showDialogCommand', 'panelLoadingStrategy', 'inlineContent',
+      'dialogViewModel', 'customContent', 'listViewModel', 'listItems',
+    ]);
+    if (!Array.isArray(items)) return [];
+    const out = [];
+    for (let i = 0; i < items.length && out.length < MAX_COLLABORATORS; i++) {
+      const row = pick(items[i], ['listItemViewModel']);
+      const name = pick(row, ['title', 'content']);
+      const runs = pick(row, ['title', 'commandRuns']);
+      const id = pick(runs, [0, 'onTap', 'innertubeCommand', 'browseEndpoint', 'browseId']);
+      const subtitle = pick(row, ['subtitle', 'content']);
+      // The subtitle reads "@TheDiaryOfACEO • 19.6M subscribers", with each
+      // part wrapped in direction marks.
+      const handle = typeof subtitle === 'string'
+        ? subtitle.match(/@[^\s\u200e\u200f\u2066-\u2069\u2022]+/)
+        : null;
+      out.push({
+        id: typeof id === 'string' ? id : '',
+        name: typeof name === 'string' ? name : '',
+        handle: handle ? handle[0] : '',
+      });
+    }
+    return out;
+  }
+
   function reply(id, payload) {
     try {
       const msg = {
@@ -160,6 +210,10 @@
     try {
       const req = readRequest(event, win);
       if (!req) return;
+      if (req.method === 'collaborators') {
+        reply(req.id, { ok: true, result: readCollaborators() });
+        return;
+      }
       const player = getPlayer();
       if (!player || typeof player[req.method] !== 'function') {
         reply(req.id, { ok: false, error: 'no player' });
@@ -197,6 +251,7 @@
     isVolumeLevel,
     isAllowedCall,
     readRequest,
+    readCollaborators,
     onMessage,
   };
 

@@ -25,6 +25,7 @@ import {
   updateChannels,
   removeChannel,
   setFavorite,
+  setMuted,
   readFeed,
   saveFeed,
   mergeFeedItems,
@@ -47,6 +48,8 @@ const ALARM_FAV = 'poll-fav';
 const BADGE_COLOR = '#5b3fd6';
 const EXT_ICON = 'icons/icon128.png';
 const AUDIO_TOGGLE_COMMAND = 'toggle-audio-mode';
+// Chrome opens the popup for this one itself; it never reaches onCommand.
+const POPUP_COMMAND = '_execute_action';
 
 // Innertube POSTs from the worker carry Origin: chrome-extension://… and
 // YouTube 403s that Origin. Fetch cannot override it; this rule can.
@@ -362,6 +365,9 @@ function shouldNotifyItem(item, channel, settings, poll) {
   if (!settings.alerts.enabled) return false;
   if (item.k === 'short' && !settings.feed.showShorts) return false;
   if (hasNotified(poll, item.v)) return false;
+  // Muting beats the star: the channel stays a favourite in the list and the
+  // feed, just without alerts.
+  if (channel?.muted) return false;
   if (channel?.favorite) return true;
   return !!settings.alerts.notifyNormal;
 }
@@ -683,6 +689,9 @@ export async function handleMessage(msg, sender) {
         await syncAlarms();
         return { ok: true };
       }
+      case 'setMuted':
+        await setMuted(msg.id, msg.on);
+        return { ok: true };
       case 'updateSettings': {
         // Alarms and the badge both derive from settings (poll periods,
         // showShorts). Writing storage from the popup would leave them stale.
@@ -826,20 +835,24 @@ chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
  * The real binding, not suggested_key. Chrome registers the command with
  * an empty shortcut when the combination is already taken.
  */
+/**
+ * The keys Chrome actually bound: `shortcut` toggles audio mode, `popup` opens
+ * the popup. Either is empty when the suggested combination was taken.
+ */
 async function readAudioModeShortcut() {
   const api = chromeApi();
   const getAll = api?.commands?.getAll;
-  if (typeof getAll !== 'function') return { ok: true, shortcut: '' };
+  if (typeof getAll !== 'function') return { ok: true, shortcut: '', popup: '' };
   try {
     const list = await getAll.call(api.commands);
-    const found = (Array.isArray(list) ? list : []).find(
-      (c) => c && c.name === AUDIO_TOGGLE_COMMAND,
-    );
-    const raw = found && found.shortcut;
-    const shortcut = typeof raw === 'string' ? raw.trim() : '';
-    return { ok: true, shortcut };
+    const bound = (name) => {
+      const found = (Array.isArray(list) ? list : []).find((c) => c && c.name === name);
+      const raw = found && found.shortcut;
+      return typeof raw === 'string' ? raw.trim() : '';
+    };
+    return { ok: true, shortcut: bound(AUDIO_TOGGLE_COMMAND), popup: bound(POPUP_COMMAND) };
   } catch {
-    return { ok: true, shortcut: '' };
+    return { ok: true, shortcut: '', popup: '' };
   }
 }
 

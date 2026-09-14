@@ -32,6 +32,8 @@ import {
   audioVolumeSelectValue,
   channelProblem,
   followView,
+  pageChannelsView,
+  sleepMinutesLeft,
 } from '../src/lib/view.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -682,49 +684,137 @@ export default async function run(t) {
   t.section('follow card');
 
   const MK = 'UCBJycsmduvYEL83R_U4JriQ';
+  const VERITASIUM = 'UCHnyfMqiRRG1u-2MsSQLbXA';
+  const STARTALK = 'UCqoAEDirJPjEUFcF2FklnBA';
   const followed = [{ id: MK, title: 'Marques Brownlee', handle: '@mkbhd' }];
   const storedFeed = [{ v: 'Od6M0AXpcxQ', c: MK, t: 'Stored video', at: 1, k: 'video' }];
-  const follow = (tab, pageChannel = '', channels = followed) => followView({
-    tab, pageChannel, channels, feed: storedFeed, core,
+  const follow = (tab, page = null, channels = followed) => followView({
+    tab, page, channels, feed: storedFeed, core,
   });
+  const onlyRow = (card) => (card.rows.length === 1 ? card.rows[0] : {});
 
   const newChannel = follow({ url: 'https://www.youtube.com/@veritasium/videos', title: 'Veritasium - YouTube' });
   t.check(
     'a channel page not on the list shows the card with its name',
-    newChannel.show && newChannel.kind === 'channel' && newChannel.name === 'Veritasium'
-      && newChannel.input === 'https://www.youtube.com/@veritasium/videos',
+    newChannel.show && newChannel.kind === 'channel' && onlyRow(newChannel).name === 'Veritasium'
+      && onlyRow(newChannel).input === 'https://www.youtube.com/@veritasium/videos'
+      && onlyRow(newChannel).followed === false,
     JSON.stringify(newChannel),
   );
   t.check(
     'the unread count in the title is not part of the name',
-    follow({ url: 'https://www.youtube.com/@veritasium', title: '(3) Veritasium - YouTube' }).name === 'Veritasium',
+    onlyRow(follow({ url: 'https://www.youtube.com/@veritasium', title: '(3) Veritasium - YouTube' })).name === 'Veritasium',
   );
   t.check(
     'a channel page still loading has no name yet',
-    follow({ url: 'https://www.youtube.com/@veritasium', title: 'YouTube' }).name === '',
+    onlyRow(follow({ url: 'https://www.youtube.com/@veritasium', title: 'YouTube' })).name === '',
   );
   t.check('a followed handle hides the card', !follow({ url: 'https://www.youtube.com/@MKBHD', title: 'Marques Brownlee - YouTube' }).show);
   t.check('a followed channel id hides the card', !follow({ url: `https://www.youtube.com/channel/${MK}`, title: 'x - YouTube' }).show);
   t.check('a stored video of a followed channel hides the card', !follow({ url: 'https://www.youtube.com/watch?v=Od6M0AXpcxQ', title: 'Stored video - YouTube' }).show);
-  const unknownVideo = follow({ url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz', title: 'Some video - YouTube' }, 'Veritasium');
+  const unknownVideo = follow(
+    { url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz', title: 'Some video - YouTube' },
+    { channel: 'Veritasium', channels: [{ handle: '@veritasium', name: 'Veritasium' }] },
+  );
   t.check(
     'a video by someone else shows the card with the page\'s channel name',
-    unknownVideo.show && unknownVideo.kind === 'video' && unknownVideo.name === 'Veritasium',
+    unknownVideo.show && unknownVideo.kind === 'video' && onlyRow(unknownVideo).name === 'Veritasium'
+      && onlyRow(unknownVideo).input === 'https://www.youtube.com/watch?v=zzzzzzzzzzz',
     JSON.stringify(unknownVideo),
   );
   t.check(
     'a video never takes its name from the tab title, which is the video\'s',
-    follow({ url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz', title: 'Some video - YouTube' }).name === '',
+    onlyRow(follow({ url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz', title: 'Some video - YouTube' })).name === '',
   );
   t.check(
-    'an older video of a followed channel is hidden by the name the page shows',
-    !follow({ url: 'https://www.youtube.com/watch?v=yyyyyyyyyyy', title: 'Old - YouTube' }, 'marques brownlee').show,
+    'an older video of a followed channel is hidden by the handle the page links to',
+    !follow({ url: 'https://www.youtube.com/watch?v=yyyyyyyyyyy', title: 'Old - YouTube' }, { channel: 'MKBHD', channels: [{ handle: '@MKBHD', name: 'MKBHD' }] }).show,
+  );
+  t.check(
+    'or by the name alone when the page gave no link',
+    !follow({ url: 'https://www.youtube.com/watch?v=yyyyyyyyyyy', title: 'Old - YouTube' }, { channel: 'marques brownlee', channels: [] }).show,
   );
   t.check('a short counts as a video', follow({ url: 'https://www.youtube.com/shorts/zzzzzzzzzzz', title: 'x - YouTube' }).kind === 'video');
   t.check('the home page shows nothing', !follow({ url: 'https://www.youtube.com/', title: 'YouTube' }).show);
   t.check('search results show nothing', !follow({ url: 'https://www.youtube.com/results?search_query=x', title: 'x - YouTube' }).show);
   t.check('a non-YouTube tab shows nothing', !follow({ url: 'https://example.com/@veritasium', title: 'x' }).show);
   t.check('no tab shows nothing', !follow(null).show);
+
+  t.section('follow card: collab videos');
+
+  const collabTab = { url: 'https://www.youtube.com/watch?v=PHpsdIHpLUE', title: 'Aliens - YouTube' };
+  const collabPage = (ids) => ({
+    channel: 'Marques Brownlee and StarTalk',
+    collab: true,
+    channels: ids.map((id) => ({ id, handle: '', name: id === MK ? 'Marques Brownlee' : id === STARTALK ? 'StarTalk' : 'Veritasium' })),
+  });
+  const mixed = follow(collabTab, collabPage([MK, STARTALK]));
+  t.check(
+    'every channel gets a row, the followed one checked',
+    mixed.show && mixed.kind === 'collab' && mixed.rows.length === 2
+      && mixed.rows[0].followed === true && mixed.rows[0].name === 'Marques Brownlee'
+      && mixed.rows[1].followed === false && mixed.rows[1].input === STARTALK,
+    JSON.stringify(mixed),
+  );
+  const noneFollowed = follow(collabTab, collabPage([VERITASIUM, STARTALK]));
+  t.check(
+    'each row adds its own channel by id',
+    noneFollowed.rows.map((row) => row.input).join() === `${VERITASIUM},${STARTALK}`
+      && noneFollowed.rows.every((row) => !row.followed),
+    JSON.stringify(noneFollowed),
+  );
+  t.check(
+    'the card goes once every channel is followed',
+    !follow(collabTab, collabPage([MK, STARTALK]), followed.concat({ id: STARTALK, title: 'StarTalk', handle: '' })).show,
+  );
+  t.check(
+    'a stored video does not hide a collab card',
+    follow({ url: 'https://www.youtube.com/watch?v=Od6M0AXpcxQ', title: 'x - YouTube' }, collabPage([MK, STARTALK])).show,
+  );
+  t.check(
+    'an id is matched by id only, not by a channel with the same title',
+    !follow(collabTab, collabPage([VERITASIUM, STARTALK]), [{ id: MK, title: 'StarTalk', handle: '' }]).rows[1].followed,
+  );
+  const listless = follow(collabTab, { channel: 'Marques Brownlee and StarTalk', collab: true, channels: [] });
+  t.check(
+    'a collab line with no list behind it shows no name, not the joined line',
+    listless.show && listless.kind === 'video' && onlyRow(listless).name === '',
+    JSON.stringify(listless),
+  );
+
+  t.section('credited channels');
+
+  const credited = pageChannelsView({
+    page: collabPage([MK, STARTALK]), videoId: 'PHpsdIHpLUE', channels: followed, feed: storedFeed,
+  });
+  t.check(
+    'a collab video marks each channel',
+    credited.map((row) => `${row.name}:${row.followed}`).join() === 'Marques Brownlee:true,StarTalk:false',
+    JSON.stringify(credited),
+  );
+  t.check(
+    'a normal video is followed by its handle',
+    pageChannelsView({ page: { channel: 'MKBHD', channels: [{ handle: '@mkbhd', name: 'MKBHD' }] }, channels: followed, feed: [] })[0]?.followed === true,
+  );
+  t.check(
+    'a stored copy of the video counts for a name that changed',
+    pageChannelsView({ page: { channel: 'MKBHD (new name)', channels: [] }, videoId: 'Od6M0AXpcxQ', channels: followed, feed: storedFeed })[0]?.followed === true,
+  );
+  t.check(
+    'a video with no channel read yet has no rows',
+    pageChannelsView({ page: { channel: '', channels: [] }, videoId: 'zzzzzzzzzzz', channels: followed, feed: [] }).length === 0,
+  );
+  t.check(
+    'no page, no rows',
+    pageChannelsView({ page: null, videoId: '', channels: followed, feed: [] }).length === 0,
+  );
+
+  t.section('sleep timer');
+
+  t.check('no timer, no minutes', sleepMinutesLeft(0, 1000) === 0 && sleepMinutesLeft(undefined, 1000) === 0);
+  t.check('minutes round up', sleepMinutesLeft(1000 + 61_000, 1000) === 2);
+  t.check('a full minute left is one', sleepMinutesLeft(1000 + 60_000, 1000) === 1);
+  t.check('a timer in the past is none', sleepMinutesLeft(500, 1000) === 0);
 
   t.section('audio player control sync');
 

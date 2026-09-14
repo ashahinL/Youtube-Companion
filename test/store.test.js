@@ -11,6 +11,7 @@ import {
   updateChannel,
   removeChannel,
   setFavorite,
+  setMuted,
   sortChannelsForDisplay,
   readFeed,
   saveFeed,
@@ -113,6 +114,11 @@ export default async function run(t) {
     t.check('setFavorite turns it on', (await readChannels())[0].favorite === true);
     await setFavorite('UCBJycsmduvYEL83R_U4JriQ', false);
     t.check('setFavorite turns it off', (await readChannels())[0].favorite === false);
+    t.check('a new channel is not muted', (await readChannels())[0].muted === false);
+    await setMuted('UCBJycsmduvYEL83R_U4JriQ', true);
+    t.check('setMuted turns it on', (await readChannels())[0].muted === true);
+    await setMuted('UCBJycsmduvYEL83R_U4JriQ', false);
+    t.check('setMuted turns it off', (await readChannels())[0].muted === false);
 
     t.section('updateChannels');
 

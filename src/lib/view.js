@@ -3,8 +3,8 @@
  * rows show, whether Add is live, which empty state applies, which
  * YouTube tab the player drives, when the player card may sync a
  * control, how audioStats fold into the four cards, how a failed channel
- * is described, and when the Follow card shows. Pure — no DOM, no
- * chrome, no clock.
+ * is described, when the Follow card shows, and which credited channels
+ * are followed. Pure — no DOM, no chrome, no clock.
  */
 
 import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
@@ -254,29 +254,75 @@ export function channelProblem(lastError) {
   return { key: 'channelProblemOther', subs: [] };
 }
 
-const HIDDEN_FOLLOW = { show: false, input: '', name: '', kind: '' };
+/**
+ * The channels a watch page credits, each marked when it is on the list.
+ * `page` is what the content script read: `channels` holds a normal video's
+ * channel (with its handle or id) or every channel of a collab video, and
+ * `channel` is the name on the owner line. A channel with an id is matched by
+ * it; otherwise by handle or exact title. A stored copy of the video means
+ * its one channel is followed.
+ */
+export function pageChannelsView({ page, videoId, channels, feed }) {
+  const list = Array.isArray(channels) ? channels : [];
+  const credited = Array.isArray(page?.channels) ? page.channels.filter(Boolean) : [];
+  const name = String(page?.channel || '').trim();
+  // A collab line with no list behind it is several names in one string.
+  const rows = credited.length ? credited : (name && !page?.collab ? [{ name }] : []);
+  const stored = videoId ? (feed || []).find((row) => row && row.v === videoId) : null;
+  return rows.map((row) => {
+    const id = String(row.id || '');
+    const handle = handleKey(row.handle);
+    const title = String(row.name || '').trim();
+    let followed;
+    if (id) followed = list.some((ch) => ch.id === id);
+    else {
+      // A stored channel can lack a handle, so the name still counts.
+      followed = list.some((ch) => (handle && handleKey(ch.handle) === handle) || fold(ch.title) === fold(title));
+    }
+    if (!followed && stored && rows.length === 1) followed = list.some((ch) => ch.id === stored.c);
+    return { id, name: title, followed };
+  });
+}
+
+const HIDDEN_FOLLOW = { show: false, kind: '', rows: [] };
 
 /**
- * The Follow card for the focused tab: a YouTube channel or video page whose
- * channel is not on the list. It fetches nothing, so "on the list" is what
- * stored data can tell — the id, the handle, a stored video, or the exact
- * name the page shows. What slips past that is caught by Add's own
+ * The Follow card for the focused tab: a YouTube channel or video page with a
+ * channel not on the list. It fetches nothing, so "on the list" is what
+ * stored data can tell. What slips past that is caught by Add's own
  * "already added".
  *
- * `pageChannel` is the channel name the watch page shows, when its content
- * script answered. A channel page's name comes from the tab title.
+ * Each row is `{ name, input, followed }`. A collab video lists every channel
+ * and stays up while any of them is not followed; a followed one keeps its
+ * row with a check instead of a button. A channel page's name comes from the
+ * tab title.
  */
-export function followView({ tab, pageChannel, channels, feed, core }) {
+export function followView({ tab, page, channels, feed, core }) {
   const url = String(tab?.url || '');
   const ref = normalizeChannelInput(url);
-  if (!ref || listedMatch(url, channels, feed)) return HIDDEN_FOLLOW;
+  if (!ref) return HIDDEN_FOLLOW;
+  if (ref.kind === 'video') {
+    const credited = pageChannelsView({ page, videoId: ref.id, channels, feed });
+    if (credited.length > 1) {
+      if (credited.every((row) => row.followed)) return HIDDEN_FOLLOW;
+      const rows = credited.map((row) => ({ name: row.name, input: row.id, followed: row.followed }));
+      return { show: true, kind: 'collab', rows };
+    }
+    if (listedMatch(url, channels, feed) || credited[0]?.followed) return HIDDEN_FOLLOW;
+    return { show: true, kind: 'video', rows: [{ name: credited[0]?.name || '', input: url, followed: false }] };
+  }
+  if (listedMatch(url, channels, feed)) return HIDDEN_FOLLOW;
   const title = String(tab?.title || '');
-  let name = '';
-  if (ref.kind === 'video') name = String(pageChannel || '').trim();
   // Before a channel page settles, its title is just "YouTube".
-  else if (/\s-\sYouTube\s*$/.test(title)) name = core.tabTitleToVideoTitle(title);
+  const name = /\s-\sYouTube\s*$/.test(title) ? core.tabTitleToVideoTitle(title) : '';
   if (name && channels.some((ch) => fold(ch.title) === fold(name))) return HIDDEN_FOLLOW;
-  return { show: true, input: url, name, kind: ref.kind === 'video' ? 'video' : 'channel' };
+  return { show: true, kind: 'channel', rows: [{ name, input: url, followed: false }] };
+}
+
+/** Whole minutes left on a sleep timer, rounded up; 0 when none runs. */
+export function sleepMinutesLeft(sleepAt, now) {
+  const left = Number(sleepAt) - Number(now);
+  return Number.isFinite(left) && left > 0 ? Math.ceil(left / 60000) : 0;
 }
 
 export function watchlistView({ channels, feed, query }) {

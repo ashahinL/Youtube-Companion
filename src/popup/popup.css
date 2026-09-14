@@ -330,9 +330,6 @@ body {
 
 /* The focused tab's channel, offered when it is not on the list yet. */
 .follow-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin-block-end: 12px;
   padding-block: 8px;
   padding-inline: 12px;
@@ -341,19 +338,42 @@ body {
   background: var(--surface);
 }
 
-.follow-card__text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
+.follow-card__label {
+  margin: 0;
   line-height: 1.35;
 }
 
+.follow-card__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.follow-card__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
 .follow-card__name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* On the list already. A text check rather than the emoji, which some
+   systems draw dark grey and would vanish on the dark theme. */
+.follow-check {
+  flex: none;
+  margin-inline-end: 4px;
+  color: var(--ok);
+  font-weight: 700;
 }
 
 /* ↻ and its spinner share one 28×28 cell so the row does not shift
@@ -634,6 +654,12 @@ body {
 }
 
 /* Pin the box so a late-loading thumbnail cannot reflow the list. */
+.feed-more {
+  display: block;
+  width: 100%;
+  margin-block-start: 8px;
+}
+
 .feed-row__thumb {
   position: relative;
   flex: none;
@@ -833,6 +859,23 @@ body {
   height: 15px;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+.settings-key {
+  justify-content: space-between;
+  margin: 0;
+  cursor: default;
+}
+
+.settings-key__keys {
+  padding-block: 1px;
+  padding-inline: 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  direction: ltr;
 }
 
 .settings-note {
@@ -1361,7 +1404,7 @@ body {
   grid-column: 1 / -1;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -1369,7 +1412,7 @@ body {
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .audio-player__play {
@@ -1377,9 +1420,11 @@ body {
   height: 32px;
 }
 
+/* Speed, volume and the sleep timer share one row with the transport; the
+   tighter gaps and padding are what fit all three into 400px. */
 .audio-player__sliders {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -1387,6 +1432,7 @@ body {
   flex: none;
   width: auto;
   max-width: 7.5em;
+  padding-inline: 4px;
 }
 
 .audio-stats {

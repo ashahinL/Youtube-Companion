@@ -58,14 +58,19 @@ asks.
   Settings. It opens on Audio.
 - **One list.** The Watchlist is the subscription list; Feeds is its merged
   timeline, newest first, with **no read state** and no hiding. The newest
-  **500** videos are kept (a setting).
+  **500** videos are kept (a setting). Feeds draws them 50 at a time; more
+  come with scrolling or **Show more**.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
   tab. **No name search, no bulk paste, no file import.** Typing in either box
   only filters.
 - **Follow card**: when the focused tab is a YouTube channel or video whose
   channel is not on the list, the top of the Audio tab names it with a Follow
-  button. It is the same add; deciding whether to show it fetches nothing.
+  button. It is the same add; deciding whether to show it fetches nothing. A
+  collab video lists every channel, each with its own Follow button, and a
+  check before the ones already followed; the card goes once all are.
+- **Followed mark**: the Audio tab's player card puts the same check before
+  each channel name that is on the list.
 - **A failed channel** reads "Check failed" on its Watchlist row; its sheet
   says why in a translated sentence, with Retry.
 - **Clicking a video** opens a new focused tab on youtube.com and closes the
@@ -73,7 +78,9 @@ asks.
   videos and never fetches on open.
 - **Alerts**: one notification per channel per check ("3 new videos"), never
   one per video. Favourites always alert while alerts are on; other channels
-  only if "Notify for non-favourite channels" is on. A video alerts once.
+  only if "Notify for non-favourite channels" is on. A video alerts once. A
+  channel muted from its ⋯ menu never alerts, favourite or not, and stays in
+  the feed. The mute goes into backups.
 - **Shorts** hidden by default behind a setting, tagged `SHORT` when shown.
   **Live and premieres** are shown and tagged (`LIVE` red, `PREMIERE <time>`).
 - **Toolbar badge**: videos newer than the last popup open, counted with the
@@ -83,7 +90,8 @@ asks.
 - **Audio mode**: its switch lives only inside the Audio tab. No recorder. The
   overlay look is a group in Settings. With two or more YouTube tabs open, a
   picker chooses which one the player drives. The keyboard command acts on the
-  active tab only.
+  active tab only. The sleep timer (15, 30 or 60 minutes) sits in the player
+  card and runs in the YouTube tab, not the popup or the worker.
 - **Backup** exports settings and channels (merge or replace on import), not
   the feed.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
@@ -157,6 +165,12 @@ Most live as comments at the line they protect. These span files or tools:
   `videoId` is there 210 times on nested endpoint objects, so harvesting it
   returns each video several times. `parseChannelVideos` reads the rows when a
   channel's feed fails.
+- **A collab video's channels are not in the DOM.** Its owner line is one
+  link with no address, "A and B"; the ids exist only in the owner renderer's
+  `.data`, which only `inject.js` (the MAIN world) can read. The avatar stack
+  stays in the page after moving on to a normal video, and on an in-page move
+  the address changes before the owner line does, so `content.js` trusts the
+  line only when `ytd-watch-flexy`'s `video-id` matches the address.
 - **A Videos-tab row is not a feed entry.** It has no upload time (the player
   supplies it), and the tab leaves out shorts, so it reaches back past the
   feed's window to videos never seen before. Those must merge silently, or a
@@ -214,6 +228,14 @@ Most live as comments at the line they protect. These span files or tools:
   `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
   with `not allowed` until it is added there. Add it only if a compromised
   youtube.com page could not misuse it.
+- **`render()` draws only the open tab.** A hidden tab's DOM is whatever it
+  was when it was last open, and `activate()` draws a tab as it opens. Code
+  that reads a hidden tab's elements after `render()` reads stale ones, and
+  `scripts/shots/stub.js` waits on the Audio tab's first draw for that reason.
+- **The popup loads images only from hosts in the manifest's `img-src`.**
+  A picture from any other host is blocked without an error in the page;
+  `test/skeleton.test.js` checks the policy against `thumbUrl` and
+  `isAvatarUrl`, so a new image host goes into both.
 - **Stop at YouTube's pushback.** A 429 or a redirect to `google.com/sorry`
   ends the sweep and sets `pollState.backoffUntil`; nothing fetches until then,
   manual refresh included. A new request path in `src/lib/yt.js` must throw

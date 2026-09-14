@@ -195,6 +195,14 @@
     "message": "Channel of this video",
     "description": "Small label on the Follow card at the top of the Audio tab, when the focused tab is a YouTube video."
   },
+  "followCollabLabel": {
+    "message": "Channels of this video",
+    "description": "Small label on the Follow card when the focused tab is a video made by several channels. Each channel gets its own row."
+  },
+  "followingChannel": {
+    "message": "You follow this channel",
+    "description": "Accessible name and tooltip of the check mark before a channel name that is already on the Watchlist, on the Follow card and in the Audio tab's player card."
+  },
   "followButton": {
     "message": "Follow",
     "description": "Button on the Follow card that adds the focused tab's channel to the Watchlist."
@@ -222,6 +230,18 @@
   "watchlistFavoriteAdd": {
     "message": "Add to favourites",
     "description": "Menu item that marks the channel as a favourite."
+  },
+  "watchlistMuteAdd": {
+    "message": "Mute alerts",
+    "description": "Menu item that stops desktop alerts for this one channel. Its videos still show in the feed."
+  },
+  "watchlistMuteRemove": {
+    "message": "Unmute alerts",
+    "description": "Menu item that turns desktop alerts for this channel back on."
+  },
+  "watchlistMuted": {
+    "message": "Alerts muted",
+    "description": "Short grey text on a Watchlist row whose alerts are muted."
   },
   "watchlistFavorite": {
     "message": "Favourite",
@@ -274,6 +294,16 @@
   "feedRefresh": {
     "message": "Refresh",
     "description": "Accessible name of the Feeds refresh control, and the label of the refresh button in the empty-feed state."
+  },
+  "feedShowMore": {
+    "message": "Show $COUNT$ more",
+    "description": "Button under the Feeds list that draws the next rows. $COUNT$ is how many, up to 50. Scrolling near it does the same.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "50"
+      }
+    }
   },
   "feedLastSweep": {
     "message": "Last check $TIME$",
@@ -490,6 +520,26 @@
   "settingsShowShortsTitle": {
     "message": "Off hides shorts from the feed and from the toolbar badge.",
     "description": "Tooltip on the show-shorts switch."
+  },
+  "settingsKeys": {
+    "message": "Keyboard shortcuts",
+    "description": "Settings group heading for the extension's keyboard shortcuts."
+  },
+  "settingsKeyPopup": {
+    "message": "Open this popup",
+    "description": "Settings row label for the shortcut that opens the extension's popup."
+  },
+  "settingsKeyAudio": {
+    "message": "Audio mode on or off",
+    "description": "Settings row label for the shortcut that toggles audio mode on the active YouTube tab."
+  },
+  "settingsKeyNone": {
+    "message": "Not set",
+    "description": "Shown in place of a key combination when Chrome bound no shortcut, usually because another extension had it."
+  },
+  "settingsKeysChange": {
+    "message": "Change shortcuts",
+    "description": "Settings button that opens the browser's page for changing extension shortcuts."
   },
   "settingsLanguage": {
     "message": "Language",
@@ -712,6 +762,36 @@
   "audioQualityHighres": {
     "message": "Highest",
     "description": "Restore-quality option that asks for the player's highest level."
+  },
+  "audioSleep": {
+    "message": "Sleep timer",
+    "description": "Accessible name and tooltip of the Audio tab select that pauses the video after a set time."
+  },
+  "audioSleepOff": {
+    "message": "Sleep off",
+    "description": "Sleep timer option: no timer. Keep it short; the select is narrow."
+  },
+  "audioSleep15": {
+    "message": "15 min",
+    "description": "Sleep timer option: pause after 15 minutes. Keep it short."
+  },
+  "audioSleep30": {
+    "message": "30 min",
+    "description": "Sleep timer option: pause after 30 minutes. Keep it short."
+  },
+  "audioSleep60": {
+    "message": "60 min",
+    "description": "Sleep timer option: pause after 60 minutes. Keep it short."
+  },
+  "audioSleepLeft": {
+    "message": "⏾ $MINUTES$ min",
+    "description": "Shown in the sleep timer select while a timer runs. $MINUTES$ is the whole minutes left, rounded up. Keep it short.",
+    "placeholders": {
+      "minutes": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
   },
   "audioShortcutBound": {
     "message": "Shortcut $SHORTCUT$ — click to change",

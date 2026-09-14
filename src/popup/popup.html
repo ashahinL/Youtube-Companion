@@ -79,12 +79,8 @@
 
     <section id="audio" class="panel" role="tabpanel" aria-labelledby="tab-audio">
       <div id="follow-card" class="follow-card" hidden>
-        <span class="follow-card__text">
-          <span id="follow-card-label" class="footnote"></span>
-          <span id="follow-card-name" class="follow-card__name"></span>
-        </span>
-        <span id="follow-card-spinner" class="spinner" hidden></span>
-        <button id="follow-card-btn" class="btn btn--primary" type="button" data-i18n="followButton">Follow</button>
+        <p id="follow-card-label" class="footnote follow-card__label"></p>
+        <ul id="follow-card-list" class="follow-card__list"></ul>
       </div>
       <p id="follow-ok" class="banner banner--ok" role="status" hidden></p>
       <p id="follow-error" class="banner banner--error" role="status" hidden></p>
@@ -223,6 +219,20 @@
                 <option value="75">75%</option>
                 <option value="100" selected>100%</option>
               </select>
+              <select
+                id="audio-sleep"
+                class="settings-select"
+                data-i18n-label="audioSleep"
+                data-i18n-title="audioSleep"
+                aria-label="Sleep timer"
+                title="Sleep timer"
+              >
+                <option value="0" data-i18n="audioSleepOff">Sleep off</option>
+                <option value="15" data-i18n="audioSleep15">15 min</option>
+                <option value="30" data-i18n="audioSleep30">30 min</option>
+                <option value="60" data-i18n="audioSleep60">60 min</option>
+                <option id="audio-sleep-left" value="left" hidden></option>
+              </select>
             </div>
           </div>
         </div>
@@ -340,6 +350,7 @@
       <p id="feed-error" class="banner banner--error" role="status" hidden></p>
       <p id="feed-notice" class="banner" role="status" hidden></p>
       <div id="feed-list" class="list"></div>
+      <button id="feed-more" class="btn feed-more" type="button" hidden></button>
       <div id="feed-empty-no-channels" class="empty" hidden>
         <p data-i18n="emptyFeeds">No channels yet</p>
         <button id="feed-goto-watchlist" class="btn btn--primary" type="button" data-i18n="feedEmptyAdd">
@@ -493,6 +504,21 @@
             <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
           </select>
         </label>
+      </fieldset>
+
+      <fieldset class="group" id="settings-keys">
+        <legend class="group__legend" data-i18n="settingsKeys">Keyboard shortcuts</legend>
+        <p class="row row--inline settings-key">
+          <span data-i18n="settingsKeyPopup">Open this popup</span>
+          <kbd id="settings-key-popup" class="settings-key__keys"></kbd>
+        </p>
+        <p class="row row--inline settings-key">
+          <span data-i18n="settingsKeyAudio">Audio mode on or off</span>
+          <kbd id="settings-key-audio" class="settings-key__keys"></kbd>
+        </p>
+        <button id="settings-keys-change" class="btn" type="button" data-i18n="settingsKeysChange">
+          Change shortcuts
+        </button>
       </fieldset>
 
       <fieldset class="group" id="settings-audio">

@@ -993,6 +993,36 @@ export default async function run(t) {
       JSON.stringify(mock.notifications[0]),
     );
 
+    t.section('a muted channel does not alert');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true, favorite: true });
+    const muteRes = await handleMessage({ type: 'setMuted', id: MKBHD, on: true });
+    t.check('setMuted reports ok', muteRes.ok === true, JSON.stringify(muteRes));
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'mutednew001', t: 'Muted video', at: AT.newest }]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'loudnew0001', t: 'Loud video', at: AT.mid }]),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    t.check(
+      'a muted favourite stays quiet while another favourite alerts',
+      mock.notifications.length === 1 && mock.notifications[0].title === 'MrBeast',
+      JSON.stringify(mock.notifications),
+    );
+    t.check('its video still reaches the feed', (await readFeed()).some((row) => row.v === 'mutednew001'));
+    t.check('and it stays a favourite', (await readChannels()).find((c) => c.id === MKBHD)?.favorite === true);
+    await handleMessage({ type: 'setMuted', id: MKBHD, on: false });
+    const beforeUnmuted = mock.notifications.length;
+    await runSweep({ scope: 'all' });
+    t.check(
+      'unmuting does not alert for the video that arrived while muted',
+      mock.notifications.length === beforeUnmuted,
+      JSON.stringify(mock.notifications),
+    );
+
     t.section('alerts.enabled false');
 
     await wipe();
@@ -1639,7 +1669,7 @@ export default async function run(t) {
     t.check('the channel list is untouched', JSON.stringify(await readChannels()) === channelsBefore);
 
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
-      'setFavorite', 'updateSettings', 'openInAudioMode', 'importBackup', 'undoRemove']) {
+      'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode', 'importBackup', 'undoRemove']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }

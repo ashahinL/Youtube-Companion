@@ -11,6 +11,15 @@ shipped yet waits under Unreleased. How a version ships:
   place in the list and its videos.
 - A Follow button. Open the popup on a YouTube channel or video you don't
   follow yet, and the Audio tab shows that channel with one button to add it.
+  A video made by several channels lists each one with its own button, and a
+  ✔ on the ones you already follow.
+- The player card in the Audio tab shows a ✔ before a channel you follow.
+- A sleep timer in the Audio tab: pause after 15, 30 or 60 minutes. It keeps
+  counting after you close the popup.
+- Open the popup with Alt+Shift+Y. Settings lists both keyboard shortcuts
+  and opens the page to change them.
+- Mute alerts for one channel from its ⋯ menu. Its videos still show in
+  Feeds, it can stay a favourite, and backups keep the setting.
 
 **Safer**
 - Only the popup can change your channels and settings. The script on YouTube
@@ -20,6 +29,9 @@ shipped yet waits under Unreleased. How a version ships:
 - When YouTube answers "too many requests" or shows its unusual-traffic page,
   checking stops and waits (15 minutes, then 30, up to 6 hours) instead of
   carrying on. The Feeds tab says when the next check is.
+- Stricter page rules for the popup: it loads pictures only from YouTube's
+  image servers, runs no plugins, and cannot be pointed at another base
+  address.
 
 **Fixes**
 - The scrolling title in the Audio tab stays still, on two lines, when your
@@ -32,6 +44,11 @@ shipped yet waits under Unreleased. How a version ships:
   English tooltip.
 - Checks are quicker and lighter: three channels at a time, and the channel
   list is saved once per check instead of about twice per channel.
+- The popup stays quick with a big feed. Feeds shows 50 videos at a time and
+  adds more as you scroll, thumbnails load as they come into view, and typing
+  in a box redraws only the tab you are on.
+- On a video made by several channels, the Follow card showed no name. It now
+  lists each channel.
 - A premiere days away is looked at a few times a day, not on every check.
 - Requests to YouTube carry its current web client version.
 

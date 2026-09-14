@@ -37,12 +37,16 @@
   goes over it. You keep the sound and use about 8× less data than 720p.
 - Turn it off and the video goes back to the quality you were watching.
 - Control playback from the popup: seek, back and forward 10 seconds, play
-  and pause, speed, and volume.
+  and pause, speed, and volume. A ✔ before the channel name means you follow
+  it.
+- Sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the
+  popup closes.
 - With more than one YouTube tab open, pick which one to control.
 - See how much data you used and saved, and how long you listened, this
   month or all time.
-- Keyboard shortcut: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> (change it
-  at `chrome://extensions/shortcuts`).
+- Keyboard shortcuts: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> turns audio
+  mode on or off, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd> opens the popup.
+  Settings shows the keys and a button to change them.
 
 **Feeds**
 - Every video from your channels in one list, newest first.
@@ -55,8 +59,10 @@
 - Add a channel by pasting its URL or `@handle`, or press **Add** with an
   empty box to add the channel of the tab you are on.
 - On a YouTube channel or video you don't follow yet, the Audio tab shows
-  that channel with a **Follow** button.
+  that channel with a **Follow** button. A video made by several channels
+  lists each one, with a ✔ on those you already follow.
 - Star your favourites. They sit at the top and are checked more often.
+- Mute one channel's alerts from its ⋯ menu. Its videos still show in Feeds.
 - Click a channel to see its latest videos without leaving the popup. If its
   last check failed, it says why and offers **Retry**.
 

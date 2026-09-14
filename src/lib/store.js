@@ -67,6 +67,7 @@ export async function addChannel(entry) {
     title: entry.title ?? '',
     avatar: entry.avatar ?? '',
     favorite: !!entry.favorite,
+    muted: !!entry.muted,
     addedAt: Number.isFinite(entry.addedAt) ? entry.addedAt : Date.now(),
     lastFetchAt: Number.isFinite(entry.lastFetchAt) ? entry.lastFetchAt : 0,
     lastVideoAt: Number.isFinite(entry.lastVideoAt) ? entry.lastVideoAt : 0,
@@ -118,6 +119,10 @@ export async function removeChannel(id) {
 
 export async function setFavorite(id, on) {
   return updateChannel(id, { favorite: !!on });
+}
+
+export async function setMuted(id, on) {
+  return updateChannel(id, { muted: !!on });
 }
 
 function newestVideoAt(channel, feed) {

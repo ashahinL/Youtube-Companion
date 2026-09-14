@@ -182,6 +182,11 @@ export default async function run(t) {
   );
   t.check('menu remove is a danger item', /menu__item--danger/.test(js));
   t.check(
+    'menu mutes and unmutes a channel\'s alerts',
+    /watchlistMuteAdd/.test(js) && /watchlistMuteRemove/.test(js) && /type:\s*'setMuted'/.test(js),
+  );
+  t.check('a muted row says so', /ch\.muted\)[\s\S]{0,80}watchlistMuted'/.test(js));
+  t.check(
     'menu remove calls removeChannel with no extra confirm',
     /removeChannel\(\s*ch\.id\s*\)/.test(js) && !/pendingRemoveId/.test(js),
   );
@@ -636,7 +641,17 @@ export default async function run(t) {
     audioPanel.indexOf('id="follow-card"') >= 0 && audioPanel.indexOf('id="follow-card"') < audioPanel.indexOf('class="audio-head"'),
   );
   t.check('it starts hidden', /id="follow-card"[^>]*\bhidden\b/.test(html));
-  t.check('Follow adds through the worker', /followTab[\s\S]{0,400}type:\s*'addChannel'/.test(js));
+  t.check('Follow adds through the worker', /async function followChannel[\s\S]{0,500}type:\s*'addChannel'/.test(js));
+  t.check('each channel gets its own row in a list', /id="follow-card-list"/.test(html) && /function followRow/.test(js));
+  t.check(
+    'the check mark is named in the reader\'s language',
+    /function followCheck[\s\S]{0,240}aria-label',\s*t\('followingChannel'\)/.test(js),
+  );
+  t.check('the player card marks followed channels too', /renderPlayerChannels\(channelEl,/.test(js));
+  t.check(
+    'a redraw keeps focus on a Follow button',
+    /card\.dataset\.sig !== sig/.test(js) && /\[data-input=/.test(js),
+  );
 
   t.section('support sheet');
 
@@ -676,6 +691,51 @@ export default async function run(t) {
   t.check('support sheet never uses execCommand', !/\bexecCommand\s*\(/.test(js));
   t.check('support sheet never uses alert(', !/\balert\s*\(/.test(js));
   t.check('support sheet never uses confirm(', !/\bconfirm\s*\(/.test(js));
+
+  t.section('a big feed stays fast');
+
+  const renderBody = (js.match(/\nfunction render\(\) \{[\s\S]*?\n\}/) || [''])[0];
+  t.check(
+    'render draws only the open tab',
+    /openTabName\(\)/.test(renderBody)
+      && /if \(open === 'feeds'\) renderFeeds/.test(renderBody)
+      && /if \(open === 'watchlist'\) renderWatchlist/.test(renderBody)
+      && !/^\s*renderFeeds\(locale\);$/m.test(renderBody),
+    renderBody,
+  );
+  t.check('opening a tab draws it', /panel\.hidden = panel\.id !== name;[\s\S]{0,120}render\(\);/.test(js));
+  t.check('the feed is drawn 50 rows at a time', /const FEED_PAGE = 50;/.test(js) && /shown\.slice\(0, feedLimit\)/.test(js));
+  t.check('a new query or filter starts again at one page', /pageKey !== feedPageKey[\s\S]{0,80}feedLimit = FEED_PAGE/.test(js));
+  t.check(
+    'more rows come from a button that scrolling also triggers',
+    /id="feed-more"[^>]*hidden/.test(html) && /new IntersectionObserver/.test(js) && /showMoreFeed\(\)/.test(js),
+  );
+  t.check('thumbnails and avatars load lazily', (js.match(/img\.loading = 'lazy';/g) || []).length >= 2);
+
+  t.section('sleep timer');
+
+  const sleepSelect = html.match(/<select\b[^>]*\bid="audio-sleep"[^>]*>[\s\S]*?<\/select>/);
+  t.check('the player card has a sleep timer', !!sleepSelect);
+  t.check(
+    'it offers off, 15, 30 and 60 minutes',
+    ['0', '15', '30', '60'].every((v) => new RegExp(`<option value="${v}"`).test(sleepSelect?.[0] || '')),
+  );
+  t.check('a pick is sent to the tab', /audio-sleep[\s\S]{0,160}controlTarget\('sleep', \{ minutes: Number\(el\.value\) \}\)/.test(js));
+  t.check('a running timer shows the minutes left', /sleepMinutesLeft\(player\?\.sleepAt/.test(js) && /audioSleepLeft/.test(js));
+
+  t.section('keyboard shortcuts in Settings');
+
+  const keysGroup = html.match(/<fieldset\b[^>]*\bid="settings-keys"[^>]*>[\s\S]*?<\/fieldset>/);
+  t.check('Settings has a keyboard shortcuts group', !!keysGroup);
+  t.check(
+    'it shows the popup and audio mode keys',
+    /id="settings-key-popup"/.test(keysGroup?.[0] || '') && /id="settings-key-audio"/.test(keysGroup?.[0] || ''),
+  );
+  t.check(
+    'a key Chrome did not bind reads as not set',
+    /view\.popupShortcut/.test(js) && /settingsKeyNone/.test(js),
+  );
+  t.check('Change opens the browser\'s shortcut page', /settings-keys-change[\s\S]{0,120}chrome:\/\/extensions\/shortcuts/.test(js));
 
   t.section('message types');
 

@@ -171,6 +171,42 @@ Add takes a URL or handle only, so nothing calls this. For whoever does:
   `videoCountText` held `"21.2M subscribers"`. Match the text against
   `/subscriber/i`, not the key name.
 
+## The owner line under a watch-page video
+
+Measured in a browser on 2026-09-14. The line is
+`ytd-watch-metadata ytd-video-owner-renderer`.
+
+- **A normal video's line is a link to the channel.** For `Od6M0AXpcxQ` it
+  held two `<a>`, both `href="/@mkbhd"`, the second with the text
+  `Marques Brownlee`. A fresh load had no avatar stack in it.
+- **A collab video's line is one name with no address.** For `PHpsdIHpLUE`
+  the two `<a>` had no `href`; the second read
+  `The Diary Of A CEO and StarTalk`. `ytd-channel-name` was empty, so a
+  reader of `#channel-name` found no name. Beside it sat `#avatar-stack` with
+  `yt-avatar-stack-view-model aria-label="Collaboration channels"`.
+- **The channels of a collab exist only in the renderer's data**, which only
+  the page's own JavaScript world can read: `.data.navigationEndpoint
+  .showDialogCommand.panelLoadingStrategy.inlineContent.dialogViewModel
+  .customContent.listViewModel.listItems[]`, the list the Collaborators
+  dialog opens. Per row, `listItemViewModel.title.content` is the name,
+  `title.commandRuns[0].onTap.innertubeCommand.browseEndpoint.browseId` the
+  channel id, and `subtitle.content` reads `@TheDiaryOfACEO • 19.6M
+  subscribers` with each part wrapped in U+200E, U+2068 and U+2069.
+- The same dialog is in `/youtubei/v1/next` for the video (888,633 bytes) and
+  on a search result's byline, under a `"Collaborators"` headline; a search
+  for "podcast" returned 7 collab videos.
+- The player's `videoDetails.channelId` is the first channel listed
+  (`UCGq-a57w-aPwyi3pW7XLiHw`), so adding a collab video by its watch URL adds
+  that one.
+- **On an in-page move the address changes first.** Collab to normal
+  (`sL6OWsT47zc`) and back: the owner text, its links, the data, the avatar
+  stack and `ytd-watch-flexy`'s `video-id` attribute all changed together,
+  between 0.45 s and 0.6 s later in one run and 3.8 s later with the tab in
+  the background. Until then the old video's line is what shows.
+- **The avatar stack stays in the page** after moving on to a normal video,
+  hidden. Its presence does not mean a collab; a line whose links have no
+  address does.
+
 ## The watch-page player
 
 The player is `#movie_player`. Its methods exist only in the page's own

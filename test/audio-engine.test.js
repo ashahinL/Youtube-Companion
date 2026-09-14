@@ -36,6 +36,9 @@ function loadBridge(player, opts) {
       getElementById(id) {
         return id === 'movie_player' ? player : null;
       },
+      querySelector(sel) {
+        return opts && opts.owner && sel === 'ytd-watch-metadata ytd-video-owner-renderer' ? opts.owner : null;
+      },
     },
   };
   if (!opts || opts.harness !== false) sandbox.__ytcHarness = true;
@@ -391,6 +394,64 @@ export default async function run(t) {
   t.check('isAllowedCall rejects a third arg', bridge.isAllowedCall('setPlaybackQualityRange', ['tiny', 'tiny', 'tiny']) === false);
   t.check('isAllowedCall rejects auto as a get arg', bridge.isAllowedCall('getPlaybackQuality', ['auto']) === false);
   t.check('readRequest returns null for a foreign origin', bridge.readRequest(req({ source: sandbox, origin: 'https://evil.com' }), sandbox) === null);
+
+  t.section('collab channels on the bridge');
+
+  // The owner renderer's data on a collab watch page, trimmed to the path
+  // read (measured 2026-09-14, docs/youtube.md).
+  const collabRow = (id, name, handle) => ({
+    listItemViewModel: {
+      title: {
+        content: name,
+        commandRuns: [{ startIndex: 0, length: name.length, onTap: { innertubeCommand: { browseEndpoint: { browseId: id, canonicalBaseUrl: `/channel/${id}` } } } }],
+      },
+      subtitle: { content: `\u200e\u2068${handle}\u2069 \u2022 \u20685.9M subscribers\u2069` },
+    },
+  });
+  const collabOwner = {
+    data: {
+      navigationEndpoint: {
+        showDialogCommand: {
+          panelLoadingStrategy: {
+            inlineContent: {
+              dialogViewModel: {
+                customContent: {
+                  listViewModel: {
+                    listItems: [
+                      collabRow('UCGq-a57w-aPwyi3pW7XLiHw', 'The Diary Of A CEO', '@TheDiaryOfACEO'),
+                      collabRow('UCqoAEDirJPjEUFcF2FklnBA', 'StarTalk', '@StarTalk'),
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+  const collabBridge = loadBridge(null, { owner: collabOwner });
+  t.check(
+    'collaborators reads each id, name and handle',
+    JSON.stringify(collabBridge.bridge.readCollaborators()) === JSON.stringify([
+      { id: 'UCGq-a57w-aPwyi3pW7XLiHw', name: 'The Diary Of A CEO', handle: '@TheDiaryOfACEO' },
+      { id: 'UCqoAEDirJPjEUFcF2FklnBA', name: 'StarTalk', handle: '@StarTalk' },
+    ]),
+    JSON.stringify(collabBridge.bridge.readCollaborators()),
+  );
+  collabBridge.fire(req({ source: collabBridge.win, data: { type: 'ytc-audio-bridge', dir: 'request', id: 7, method: 'collaborators', args: [] } }));
+  t.check(
+    'a collaborators request is answered with no player on the page',
+    collabBridge.posts[0]?.data?.ok === true && collabBridge.posts[0]?.data?.result?.length === 2,
+    JSON.stringify(collabBridge.posts[0]?.data),
+  );
+  t.check('collaborators takes no arguments', bridge.isAllowedCall('collaborators', ['x']) === false);
+  t.check('a normal video has no list to read', loadBridge(null, { owner: { data: { title: {} } } }).bridge.readCollaborators().length === 0);
+  t.check('no owner renderer, no list', loadBridge(null).bridge.readCollaborators().length === 0);
+  const many = { data: JSON.parse(JSON.stringify(collabOwner.data)) };
+  const manyItems = many.data.navigationEndpoint.showDialogCommand.panelLoadingStrategy.inlineContent.dialogViewModel.customContent.listViewModel.listItems;
+  while (manyItems.length < 14) manyItems.push(manyItems[0]);
+  t.check('the list is capped at ten', loadBridge(null, { owner: many }).bridge.readCollaborators().length === 10);
 
   t.section('player writes on the bridge');
 
@@ -930,6 +991,7 @@ export default async function run(t) {
     cmdMock.commandList = [
       { name: 'other', shortcut: 'Ctrl+K' },
       { name: 'toggle-audio-mode', shortcut: 'Ctrl+Shift+Y' },
+      { name: '_execute_action', shortcut: 'Alt+Shift+Y' },
     ];
     const picked = await handleMessage({ type: 'audioMode.shortcut' });
     t.check(
@@ -937,12 +999,13 @@ export default async function run(t) {
       picked.ok === true && picked.shortcut === 'Ctrl+Shift+Y',
       JSON.stringify(picked),
     );
+    t.check('and the popup\'s own shortcut beside it', picked.popup === 'Alt+Shift+Y', JSON.stringify(picked));
 
     cmdMock.commandList = [{ name: 'other', shortcut: 'Ctrl+K' }];
     const missing = await handleMessage({ type: 'audioMode.shortcut' });
     t.check(
       'missing toggle-audio-mode is an empty shortcut, not another command',
-      missing.ok === true && missing.shortcut === '',
+      missing.ok === true && missing.shortcut === '' && missing.popup === '',
       JSON.stringify(missing),
     );
 
@@ -1180,13 +1243,27 @@ export default async function run(t) {
       },
     };
     const channelEl = opts.channel ? { textContent: opts.channel } : null;
+    const ownerEl = opts.owner
+      ? {
+        querySelector(sel) {
+          return sel === 'yt-avatar-stack-view-model' && opts.owner.collab ? {} : null;
+        },
+        querySelectorAll(sel) {
+          if (sel !== 'a') return [];
+          return (opts.owner.links || []).map((link) => ({
+            textContent: link.text || '',
+            getAttribute(name) { return name === 'href' ? link.href || null : null; },
+          }));
+        },
+      }
+      : null;
     const box = { win: null, listeners: [] };
     const sandbox = {
       __ytcHarness: true,
       URL,
       AbortController,
-      setTimeout,
-      clearTimeout,
+      setTimeout: opts.setTimeout || setTimeout,
+      clearTimeout: opts.clearTimeout || clearTimeout,
       setInterval,
       clearInterval,
       location: { href: opts.href || 'https://www.youtube.com/watch?v=aaaaaaaaaaa' },
@@ -1219,6 +1296,10 @@ export default async function run(t) {
         querySelector(sel) {
           if (opts.channelThrows) throw new Error('boom');
           if (channelEl && /channel-name/.test(sel)) return channelEl;
+          if (ownerEl && sel === 'ytd-watch-metadata ytd-video-owner-renderer') return ownerEl;
+          if (opts.flexyVideo && sel === 'ytd-watch-flexy') {
+            return { getAttribute(name) { return name === 'video-id' ? opts.flexyVideo : null; } };
+          }
           return null;
         },
         createElement(tag) {
@@ -1235,10 +1316,11 @@ export default async function run(t) {
       postMessage(data) {
         if (!data || data.dir !== 'request') return;
         calls.push([data.method].concat(Array.isArray(data.args) ? data.args : []));
+        const result = data.method === 'collaborators' ? opts.collaborators : true;
         const event = {
           source: box.win,
           origin: PAGE,
-          data: { type: data.type, dir: 'response', id: data.id, ok: true, result: true },
+          data: { type: data.type, dir: 'response', id: data.id, ok: true, result },
         };
         for (let i = 0; i < box.listeners.length; i++) box.listeners[i](event);
       },
@@ -1259,6 +1341,7 @@ export default async function run(t) {
       });
     }
     return {
+      sandbox,
       listeners,
       injected,
       calls,
@@ -1313,6 +1396,149 @@ export default async function run(t) {
   t.check('player read reports the channel', liveRead.channel === 'Ada', liveRead.channel);
   t.check('player read reports the video id', liveRead.videoId === 'aaaaaaaaaaa', liveRead.videoId);
   t.check('player read still does not inject', live.injected.length === 0, String(live.injected.length));
+
+  t.section('sleep timer');
+
+  const timers = [];
+  const sleepy = bootPage({
+    paused: false,
+    setTimeout(fn, ms) { timers.push({ fn, ms, live: true }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) timers[id - 1].live = false; },
+  });
+  t.check('a player read with no timer has sleepAt 0', (await sleepy.ask({ type: 'audioMode.player' })).sleepAt === 0);
+  const before = Date.now();
+  const set = await sleepy.ask({ type: 'audioMode.control', action: 'sleep', minutes: 30 });
+  const sleepRead = await sleepy.ask({ type: 'audioMode.player' });
+  t.check(
+    'a 30-minute timer reports when it ends',
+    set.ok === true && sleepRead.sleepAt >= before + 30 * 60000 && sleepRead.sleepAt <= Date.now() + 30 * 60000,
+    JSON.stringify({ set, sleepAt: sleepRead.sleepAt }),
+  );
+  t.check('and needs no bridge to start', sleepy.injected.length === 0, String(sleepy.injected.length));
+  const sleepTimerRow = timers.filter((row) => row.ms === 30 * 60000);
+  t.check('one timer runs for 30 minutes', sleepTimerRow.length === 1 && sleepTimerRow[0].live, JSON.stringify(timers.map((row) => row.ms)));
+  await sleepy.ask({ type: 'audioMode.control', action: 'sleep', minutes: 15 });
+  t.check(
+    'a new length replaces the old timer',
+    !sleepTimerRow[0].live && timers.filter((row) => row.live && row.ms === 15 * 60000).length === 1,
+  );
+  timers.find((row) => row.live && row.ms === 15 * 60000).fn();
+  await new Promise((resolve) => setImmediate(resolve));
+  t.check('when it ends the video is paused', sleepy.calls.some((c) => c[0] === 'pauseVideo'), JSON.stringify(sleepy.calls));
+  t.check('and the timer is gone', (await sleepy.ask({ type: 'audioMode.player' })).sleepAt === 0);
+  await sleepy.ask({ type: 'audioMode.control', action: 'sleep', minutes: 60 });
+  await sleepy.ask({ type: 'audioMode.control', action: 'sleep', minutes: 0 });
+  t.check(
+    'Off cancels a running timer',
+    (await sleepy.ask({ type: 'audioMode.player' })).sleepAt === 0 && !timers.some((row) => row.live && row.ms === 60 * 60000),
+  );
+  const oddLength = await sleepy.ask({ type: 'audioMode.control', action: 'sleep', minutes: 20 });
+  t.check('only the offered lengths are accepted', oddLength.ok === false, JSON.stringify(oddLength));
+  const textLength = await sleepy.ask({ type: 'audioMode.control', action: 'sleep', minutes: '15' });
+  t.check('a length must be a number', textLength.ok === false, JSON.stringify(textLength));
+
+  t.section('the channels a watch page credits');
+
+  const MKBHD_ID = 'UCBJycsmduvYEL83R_U4JriQ';
+  const DOAC_ID = 'UCGq-a57w-aPwyi3pW7XLiHw';
+  const STARTALK_ID = 'UCqoAEDirJPjEUFcF2FklnBA';
+
+  const normalOwner = bootPage({ owner: { links: [{ href: '/@mkbhd', text: '' }, { href: '/@mkbhd', text: ' Marques Brownlee\n' }] } });
+  const normalRead = await normalOwner.ask({ type: 'audioMode.player' });
+  t.check(
+    'a normal video credits its channel by the owner link\'s handle',
+    normalRead.collab === false && normalRead.channels.length === 1
+      && normalRead.channels[0].handle === '@mkbhd' && normalRead.channels[0].name === 'Marques Brownlee',
+    JSON.stringify(normalRead.channels),
+  );
+  t.check('and needs no bridge for it', normalOwner.injected.length === 0 && normalOwner.calls.length === 0);
+
+  const idOwner = await bootPage({ owner: { links: [{ href: `/channel/${MKBHD_ID}`, text: 'Marques Brownlee' }] } })
+    .ask({ type: 'audioMode.player' });
+  t.check('a /channel/ link credits the id', idOwner.channels[0]?.id === MKBHD_ID, JSON.stringify(idOwner.channels));
+
+  const oddOwner = await bootPage({ owner: { links: [{ href: '/watch?v=aaaaaaaaaaa', text: 'Someone' }] } })
+    .ask({ type: 'audioMode.player' });
+  t.check('a link that is not a channel credits nothing', oddOwner.channels.length === 0, JSON.stringify(oddOwner.channels));
+
+  const doacLine = 'The Diary Of A CEO and StarTalk';
+  const collabRows = [
+    { id: DOAC_ID, name: 'The Diary Of A CEO', handle: '@TheDiaryOfACEO' },
+    { id: STARTALK_ID, name: 'StarTalk', handle: '@StarTalk' },
+  ];
+  const collab = bootPage({ owner: { collab: true, links: [{ text: '' }, { text: doacLine }] }, collaborators: collabRows });
+  const collabRead = await collab.ask({ type: 'audioMode.player' });
+  t.check(
+    'a collab video credits every channel from the bridge',
+    collabRead.collab === true
+      && JSON.stringify(collabRead.channels) === JSON.stringify(collabRows.map(({ id, handle, name }) => ({ id, handle, name }))),
+    JSON.stringify(collabRead.channels),
+  );
+  t.check('the line itself stands in as the channel name', collabRead.channel === doacLine, collabRead.channel);
+  t.check(
+    'the bridge is asked once, with no arguments',
+    collab.injected.length === 1 && JSON.stringify(collab.calls) === JSON.stringify([['collaborators']]),
+    JSON.stringify(collab.calls),
+  );
+  await collab.ask({ type: 'audioMode.player' });
+  t.check('the list is kept while the same line shows', collab.calls.length === 1, String(collab.calls.length));
+
+  const moving = await bootPage({
+    flexyVideo: 'bbbbbbbbbbb',
+    channel: 'The Diary Of A CEO',
+    owner: { collab: true, links: [{ text: doacLine }] },
+    collaborators: collabRows,
+  }).ask({ type: 'audioMode.player' });
+  t.check(
+    'while the address is ahead of the page, the owner line is the last video\'s and credits nothing',
+    moving.ok === true && moving.collab === false && moving.channels.length === 0 && moving.channel === '',
+    JSON.stringify(moving),
+  );
+  const settledPage = await bootPage({
+    flexyVideo: 'aaaaaaaaaaa',
+    owner: { links: [{ href: '/@mkbhd', text: 'Marques Brownlee' }] },
+  }).ask({ type: 'audioMode.player' });
+  t.check('once they match, the line counts', settledPage.channels[0]?.handle === '@mkbhd', JSON.stringify(settledPage.channels));
+  const leftoverStack = await bootPage({
+    owner: { collab: true, links: [{ href: '/@LinusTechTips', text: 'Linus Tech Tips' }] },
+    collaborators: collabRows,
+  }).ask({ type: 'audioMode.player' });
+  t.check(
+    'an avatar stack left behind next to a real link is not a collab',
+    leftoverStack.collab === false && leftoverStack.channels[0]?.handle === '@LinusTechTips',
+    JSON.stringify(leftoverStack),
+  );
+
+  const stale = await bootPage({
+    owner: { collab: true, links: [{ text: 'Veritasium and Kurzgesagt' }] },
+    collaborators: collabRows,
+  }).ask({ type: 'audioMode.player' });
+  t.check('a list whose names are not on the line is the last video\'s, and dropped', stale.channels.length === 0, JSON.stringify(stale.channels));
+
+  const broken = await bootPage({
+    owner: { collab: true, links: [{ text: doacLine }] },
+    collaborators: [collabRows[0], { id: 'not-a-channel', name: 'StarTalk' }],
+  }).ask({ type: 'audioMode.player' });
+  t.check('one real channel is not a collab list', broken.channels.length === 0, JSON.stringify(broken.channels));
+
+  const noAnswer = await bootPage({ owner: { collab: true, links: [{ text: doacLine }] } }).ask({ type: 'audioMode.player' });
+  t.check('no answer from the bridge credits nothing', noAnswer.ok === true && noAnswer.channels.length === 0, JSON.stringify(noAnswer));
+
+  const cleaned = normalOwner.sandbox.AudioModeContent.cleanCollaborators([
+    { id: DOAC_ID, name: 'The Diary Of A CEO', handle: '@bad handle' },
+    { id: DOAC_ID, name: 'The Diary Of A CEO' },
+    { id: STARTALK_ID, name: 'x'.repeat(201) },
+    { id: STARTALK_ID, name: ' StarTalk ', handle: 7 },
+    null,
+  ], doacLine);
+  t.check(
+    'cleaning drops a bad handle, a repeat, an overlong name and junk',
+    JSON.stringify(cleaned) === JSON.stringify([
+      { id: DOAC_ID, handle: '', name: 'The Diary Of A CEO' },
+      { id: STARTALK_ID, handle: '', name: 'StarTalk' },
+    ]),
+    JSON.stringify(cleaned),
+  );
 
   const scaled = bootPage({
     volume: 0.1157,

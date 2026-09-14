@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { thumbUrl, isAvatarUrl } from '../src/lib/yt.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -46,6 +47,29 @@ export default async function run(t) {
     JSON.stringify(hosts),
   );
 
+  t.section('page rules');
+
+  const csp = String(manifest.content_security_policy?.extension_pages || '');
+  const directive = (name) => {
+    const found = csp.split(';').map((part) => part.trim().split(/\s+/)).find((words) => words[0] === name);
+    return found ? found.slice(1) : null;
+  };
+  t.check('scripts only from the extension', JSON.stringify(directive('script-src')) === JSON.stringify(["'self'"]), csp);
+  t.check('no plugins', JSON.stringify(directive('object-src')) === JSON.stringify(["'none'"]), csp);
+  t.check('no <base>', JSON.stringify(directive('base-uri')) === JSON.stringify(["'none'"]), csp);
+  const imgSrc = directive('img-src') || [];
+  // The hosts the code actually builds, so a new image host cannot slip past
+  // the policy unnoticed and show up as broken pictures.
+  t.check('thumbnails load', imgSrc.includes(new URL(thumbUrl('Od6M0AXpcxQ')).origin), JSON.stringify(imgSrc));
+  for (const host of ['yt3.ggpht.com', 'yt3.googleusercontent.com']) {
+    t.check(`channel pictures from ${host} load`, isAvatarUrl(`https://${host}/a`) && imgSrc.includes(`https://${host}`), JSON.stringify(imgSrc));
+  }
+  t.check(
+    'no other image source',
+    imgSrc.length === 4 && imgSrc.includes("'self'"),
+    JSON.stringify(imgSrc),
+  );
+
   const cs = (manifest.content_scripts || [])[0] || {};
   t.check(
     'content_scripts matches youtube.com',
@@ -64,6 +88,11 @@ export default async function run(t) {
     JSON.stringify(cs.css),
   );
 
+  t.check(
+    'the popup has a suggested shortcut of its own',
+    manifest.commands?._execute_action?.suggested_key?.default === 'Alt+Shift+Y',
+    JSON.stringify(manifest.commands),
+  );
   t.check(
     'commands has toggle-audio-mode',
     !!manifest.commands && typeof manifest.commands['toggle-audio-mode'] === 'object',

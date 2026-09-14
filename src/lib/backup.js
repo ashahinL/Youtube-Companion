@@ -89,6 +89,7 @@ function exportChannel(raw) {
     title: typeof raw.title === 'string' ? raw.title : '',
     avatar: typeof raw.avatar === 'string' ? raw.avatar : '',
     favorite: !!raw.favorite,
+    muted: !!raw.muted,
     addedAt: Number.isFinite(addedAt) ? addedAt : 0,
     lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
   };
@@ -107,6 +108,7 @@ function normalizeChannel(raw, now) {
     // address from a file would be fetched. Only YouTube's own hosts load.
     avatar: isAvatarUrl(raw.avatar) ? raw.avatar : '',
     favorite: !!raw.favorite,
+    muted: !!raw.muted,
     addedAt: Number.isFinite(addedAt) ? addedAt : now,
     lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
     lastFetchAt: 0,
@@ -186,7 +188,7 @@ export function mergeBackup(current, incoming, mode) {
 
   if (!replace) {
     // The live record is newer than a file, so an id already present
-    // keeps its favourite flag and stamps instead of taking the file's.
+    // keeps its favourite and mute flags and stamps instead of the file's.
     for (const ch of currentList) {
       const id = usableId(ch?.id);
       if (!id || seen.has(id)) continue;

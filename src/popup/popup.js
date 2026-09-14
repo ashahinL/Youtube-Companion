@@ -32,6 +32,8 @@ import {
   audioStatsView,
   channelProblem,
   followView,
+  pageChannelsView,
+  sleepMinutesLeft,
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
@@ -69,14 +71,17 @@ const view = {
   feedOk: '',
   followError: '',
   followOk: '',
-  // The focused tab when it is a YouTube page, and the channel name its
-  // watch page shows, for the Follow card.
+  // The focused tab when it is a YouTube page, and what its content script
+  // read about the page's channels, for the Follow card.
   activeTab: null,
-  activePageChannel: '',
+  activePage: null,
+  // The Follow card row whose add is running.
+  followPending: '',
   audioKnown: false,
   audioReachable: false,
   audioOn: false,
   audioShortcut: '',
+  popupShortcut: '',
   audioTargetId: null,
   audioTabs: [],
   audioPlayer: null,
@@ -89,6 +94,12 @@ let audioDiscoverTimer = null;
 let audioSeeking = false;
 let audioSpeedPending = false;
 let audioVolumePending = false;
+let audioSleepPending = false;
+// The feed is drawn a page at a time; the same list keeps its length across
+// redraws, and a new query or filter starts again at one page.
+const FEED_PAGE = 50;
+let feedLimit = FEED_PAGE;
+let feedPageKey = '';
 let audioPickerKey = '';
 let supportOpenerId = null;
 const supportCopiedTimers = new WeakMap();
@@ -107,7 +118,13 @@ function activate(tab) {
   for (const panel of panels) {
     panel.hidden = panel.id !== name;
   }
+  // Hidden tabs are not kept drawn, so the one that opens is drawn now.
+  render();
   syncAudioPolling();
+}
+
+function openTabName() {
+  return panels.find((panel) => !panel.hidden)?.id || 'audio';
 }
 
 for (const tab of tabs) {
@@ -208,6 +225,8 @@ function avatarEl(url) {
     const img = document.createElement('img');
     img.className = 'avatar';
     img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
     img.src = url;
     return img;
   }
@@ -385,6 +404,8 @@ function channelRow(ch, locale) {
     meta.appendChild(age);
   }
 
+  if (ch.muted) meta.appendChild(textEl('span', '', t('watchlistMuted')));
+
   // The row is the button that opens the sheet, which says why and offers
   // Retry; a second button cannot sit inside this one.
   if (channelProblem(ch.lastError)) {
@@ -452,12 +473,20 @@ function channelMenu(ch) {
       void toggleFavorite(ch.id, !ch.favorite);
     },
   );
+  const mute = buttonEl(
+    'menu__item',
+    t(ch.muted ? 'watchlistMuteRemove' : 'watchlistMuteAdd'),
+    () => {
+      closeAllMenus();
+      void toggleMuted(ch.id, !ch.muted);
+    },
+  );
   const remove = buttonEl('menu__item menu__item--danger', t('watchlistRemove'), () => {
     closeAllMenus();
     void removeChannel(ch.id);
   });
 
-  list.append(fav, remove);
+  list.append(fav, mute, remove);
   menu.append(toggle, list);
   return menu;
 }
@@ -548,6 +577,9 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   thumb.className = 'feed-row__thumb';
   const img = document.createElement('img');
   img.alt = title;
+  // A 500-row feed would otherwise ask YouTube for every thumbnail on open.
+  img.loading = 'lazy';
+  img.decoding = 'async';
   img.src = thumbUrl(item.v, 'mq');
   thumb.appendChild(img);
   // Duration rides on the thumbnail rather than the meta line. Four parts on
@@ -750,10 +782,16 @@ function renderFeeds(locale) {
     : (q ? t('feedFilterPlaceholder') : t('watchlistAddFromTab'));
   if (clearBtn) clearBtn.hidden = !q || view.busy;
 
-  listEl.replaceChildren();
-  for (const item of shown) {
-    listEl.appendChild(feedRow(item, locale, channelsById.get(item.c)));
+  const pageKey = JSON.stringify([q, favOnly, !!view.settings?.feed?.showShorts]);
+  if (pageKey !== feedPageKey) {
+    feedPageKey = pageKey;
+    feedLimit = FEED_PAGE;
   }
+  listEl.replaceChildren(...shown.slice(0, feedLimit).map((item) => feedRow(item, locale, channelsById.get(item.c))));
+  const moreEl = document.getElementById('feed-more');
+  const rest = shown.length - feedLimit;
+  moreEl.hidden = rest <= 0;
+  moreEl.textContent = rest > 0 ? t('feedShowMore', [String(Math.min(FEED_PAGE, rest))]) : '';
 
   const searching = feeds.searching;
   countEl.hidden = !searching;
@@ -774,8 +812,12 @@ function renderFeeds(locale) {
   }
 }
 
-function render() {
+function showMoreFeed() {
+  feedLimit += FEED_PAGE;
   renderFeeds(locale);
+}
+
+function renderWatchlist(locale) {
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
   const addBtn = document.getElementById('watchlist-add-btn');
@@ -847,8 +889,18 @@ function render() {
       ? t('watchlistNoMatchAdd', [q])
       : t('watchlistNoMatch', [q]);
   }
-  renderAudio();
-  renderSettings(locale);
+}
+
+/*
+ * Only the open tab is drawn, and a tab is drawn again when it opens. Drawing
+ * all four rebuilt a 500-row feed on every key typed in the Watchlist box.
+ */
+function render() {
+  const open = openTabName();
+  if (open === 'feeds') renderFeeds(locale);
+  if (open === 'watchlist') renderWatchlist(locale);
+  if (open === 'audio') renderAudio();
+  if (open === 'settings') renderSettings(locale);
   renderChannelSheet();
   renderSupportSheet();
 }
@@ -1192,7 +1244,6 @@ function renderAudioPlayer(reachable) {
   const titleFromPlayer = player && player.title ? player.title : '';
   const titleFromTab = tab ? Core.tabTitleToVideoTitle(tab.title) : '';
   const title = titleFromPlayer || titleFromTab || t('audioPlayerNoTitle');
-  const channel = (player && player.channel) || '';
   const videoId = (player && player.videoId)
     || (tab ? Core.videoIdFromUrl(tab.url) : '')
     || '';
@@ -1200,7 +1251,7 @@ function renderAudioPlayer(reachable) {
   updateTitleScroll(document.getElementById('audio-title'), title);
 
   const channelEl = document.getElementById('audio-channel');
-  if (channelEl) channelEl.textContent = channel;
+  if (channelEl) renderPlayerChannels(channelEl, player, videoId);
 
   const thumb = document.getElementById('audio-thumb');
   if (thumb) {
@@ -1270,6 +1321,21 @@ function renderAudioPlayer(reachable) {
       }
     }
   }
+  const sleep = document.getElementById('audio-sleep');
+  if (sleep) {
+    sleep.disabled = !reachable;
+    if (shouldSyncAudioSelect(audioSleepPending)) {
+      // While a timer runs the select shows what is left, not the length picked.
+      const left = sleepMinutesLeft(player?.sleepAt, Date.now());
+      const leftOption = document.getElementById('audio-sleep-left');
+      if (leftOption) {
+        leftOption.hidden = !left;
+        leftOption.textContent = left ? t('audioSleepLeft', [String(left)]) : '';
+      }
+      const next = left ? 'left' : '0';
+      if (sleep.value !== next) sleep.value = next;
+    }
+  }
 }
 
 function renderAudioStats() {
@@ -1299,11 +1365,41 @@ function renderAudioStats() {
 function currentFollow() {
   return followView({
     tab: view.activeTab,
-    pageChannel: view.activePageChannel,
+    page: view.activePage,
     channels: view.channels,
     feed: view.feed,
     core: Core,
   });
+}
+
+function followCheck() {
+  const mark = textEl('span', 'follow-check', '\u2714\uFE0E');
+  mark.setAttribute('role', 'img');
+  mark.setAttribute('aria-label', t('followingChannel'));
+  mark.title = t('followingChannel');
+  return mark;
+}
+
+function followRow(row) {
+  const li = document.createElement('li');
+  li.className = 'follow-card__row';
+  if (row.followed) li.appendChild(followCheck());
+  const name = textEl('span', 'follow-card__name', row.name);
+  name.dir = 'auto';
+  name.hidden = !row.name;
+  li.appendChild(name);
+  if (row.followed) return li;
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner';
+  spinner.hidden = !(view.busy && view.followPending === row.input);
+  li.appendChild(spinner);
+  const btn = buttonEl('btn btn--primary follow-card__btn', t('followButton'), () => {
+    void followChannel(row.input);
+  });
+  btn.dataset.input = row.input;
+  btn.setAttribute('aria-label', row.name ? t('followButtonNamed', [row.name]) : t('followButton'));
+  li.appendChild(btn);
+  return li;
 }
 
 function renderFollow() {
@@ -1311,17 +1407,17 @@ function renderFollow() {
   if (!card) return;
   const follow = currentFollow();
   card.hidden = !follow.show;
-  const btn = document.getElementById('follow-card-btn');
-  btn.disabled = view.busy;
-  document.getElementById('follow-card-spinner').hidden = !view.busy;
-  if (follow.show) {
-    document.getElementById('follow-card-label').textContent = t(
-      follow.kind === 'video' ? 'followVideoLabel' : 'followChannelLabel',
-    );
-    const nameEl = document.getElementById('follow-card-name');
-    nameEl.textContent = follow.name;
-    nameEl.hidden = !follow.name;
-    btn.setAttribute('aria-label', follow.name ? t('followButtonNamed', [follow.name]) : t('followButton'));
+  const list = document.getElementById('follow-card-list');
+  // The card redraws every second with the player; rebuilding rows that did
+  // not change would take keyboard focus off a Follow button.
+  const sig = JSON.stringify([locale, follow, view.busy, view.followPending]);
+  if (follow.show && card.dataset.sig !== sig) {
+    card.dataset.sig = sig;
+    const labels = { channel: 'followChannelLabel', video: 'followVideoLabel', collab: 'followCollabLabel' };
+    document.getElementById('follow-card-label').textContent = t(labels[follow.kind]);
+    const focused = document.activeElement?.dataset?.input;
+    list.replaceChildren(...follow.rows.map(followRow));
+    if (focused) list.querySelector(`[data-input="${CSS.escape(focused)}"]`)?.focus();
   }
 
   const okEl = document.getElementById('follow-ok');
@@ -1332,24 +1428,61 @@ function renderFollow() {
   errorEl.textContent = view.followError;
 }
 
-async function followTab() {
-  const follow = currentFollow();
-  if (!follow.show || view.busy) return;
+async function followChannel(input) {
+  const row = currentFollow().rows.find((r) => r.input === input && !r.followed);
+  if (!row || view.busy) return;
   view.followOk = '';
+  view.followPending = input;
   await withBusy(async () => {
     view.undo = null;
-    const res = await send({ type: 'addChannel', input: follow.input });
+    const res = await send({ type: 'addChannel', input });
     if (!res || res.ok === false) {
       view.followError = formatError(res?.error);
       return;
     }
     await refreshState();
     const ch = res.channel || {};
-    view.followOk = t('followDone', [isolate(ch.title || ch.handle || follow.name || ch.id || '')]);
+    view.followOk = t('followDone', [isolate(ch.title || ch.handle || row.name || ch.id || '')]);
   }, 'followError');
-  // The button left with the card.
-  const button = document.getElementById('follow-card-btn');
-  if (button?.closest('[hidden]')) document.getElementById('tab-audio')?.focus();
+  view.followPending = '';
+  render();
+  // The rows were redrawn while busy. Back to the same button if the add
+  // failed; otherwise the pressed one left with its row or the whole card.
+  const card = document.getElementById('follow-card');
+  const buttons = card && !card.hidden ? [...card.querySelectorAll('.follow-card__btn')] : [];
+  const target = buttons.find((btn) => btn.dataset.input === input) || buttons[0]
+    || document.getElementById('tab-audio');
+  target?.focus();
+}
+
+/**
+ * The player card's channel line: every credited channel in the popup's own
+ * list format ("A and B"), a check before each one on the list.
+ */
+function renderPlayerChannels(el, player, videoId) {
+  const rows = pageChannelsView({ page: player, videoId, channels: view.channels, feed: view.feed });
+  const fallback = (player && player.channel) || '';
+  const sig = JSON.stringify([locale, rows, fallback]);
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  if (!rows.length) {
+    el.textContent = fallback;
+    return;
+  }
+  el.replaceChildren();
+  const parts = new Intl.ListFormat(locale)
+    .formatToParts(rows.map((row) => row.name));
+  let i = 0;
+  for (const part of parts) {
+    if (part.type !== 'element') {
+      el.append(part.value);
+      continue;
+    }
+    const row = rows[i++];
+    if (row?.followed) el.appendChild(followCheck());
+    // A Latin name inside an Arabic list would otherwise reorder its neighbours.
+    el.appendChild(textEl('bdi', '', part.value));
+  }
 }
 
 function renderAudio() {
@@ -1391,6 +1524,11 @@ function renderAudio() {
 
 function renderSettings(locale) {
   const s = view.settings || {};
+  // Empty when Chrome found the combination taken and bound nothing.
+  for (const [id, keys] of [['settings-key-popup', view.popupShortcut], ['settings-key-audio', view.audioShortcut]]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = keys || t('settingsKeyNone');
+  }
   for (const input of document.querySelectorAll('#settings [data-setting]')) {
     const value = readPath(s, input.dataset.setting);
     if (input.type === 'checkbox') input.checked = !!value;
@@ -1522,6 +1660,17 @@ async function addChannel(input, dest = 'watchlist') {
 async function toggleFavorite(id, on) {
   await withBusy(async () => {
     const res = await send({ type: 'setFavorite', id, on });
+    if (res && res.ok === false) {
+      view.error = formatError(res.error);
+      return;
+    }
+    await refreshState();
+  });
+}
+
+async function toggleMuted(id, on) {
+  await withBusy(async () => {
+    const res = await send({ type: 'setMuted', id, on });
     if (res && res.ok === false) {
       view.error = formatError(res.error);
       return;
@@ -1666,6 +1815,17 @@ function bindFeeds() {
     view.feedOk = '';
     render();
   });
+  const more = document.getElementById('feed-more');
+  more.addEventListener('click', () => {
+    const first = feedLimit;
+    showMoreFeed();
+    // A keyboard press lands on the first new row, not back at the button.
+    document.getElementById('feed-list').children[first]?.focus();
+  });
+  // Scrolling near the end draws the next page without a click.
+  new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting) && !more.hidden) showMoreFeed();
+  }, { rootMargin: '300px' }).observe(more);
   filter.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     if (!filter.value) return;
@@ -1853,7 +2013,7 @@ async function refreshAudioState() {
   }
   view.activeTab = activeTab;
   const activePlayer = playerById.get(activeId);
-  view.activePageChannel = typeof activePlayer?.channel === 'string' ? activePlayer.channel : '';
+  view.activePage = activePlayer && activePlayer.ok ? activePlayer : null;
 
   view.audioKnown = true;
   view.audioTabs = decision.tabs;
@@ -1873,6 +2033,11 @@ async function refreshAudioState() {
 async function refreshPlayerCard() {
   if (!view.audioTargetId) return;
   const res = await sendToTab(view.audioTargetId, { type: 'audioMode.player' });
+  // A collab list or an owner link can arrive after the popup opened; the
+  // Follow card reads the same answer when it is about the focused tab.
+  if (res && view.activeTab && view.activeTab.id === view.audioTargetId) {
+    view.activePage = res.ok ? res : null;
+  }
   if (res == null) {
     view.audioTargetId = null;
     await refreshAudioState();
@@ -1919,6 +2084,7 @@ async function controlTarget(action, extra = {}) {
   } finally {
     if (action === 'speed') audioSpeedPending = false;
     if (action === 'volume') audioVolumePending = false;
+    if (action === 'sleep') audioSleepPending = false;
   }
 }
 
@@ -1938,8 +2104,10 @@ async function refreshAudioShortcut() {
     const res = await send({ type: 'audioMode.shortcut' });
     const raw = res && res.shortcut;
     view.audioShortcut = typeof raw === 'string' ? raw.trim() : '';
+    view.popupShortcut = typeof res?.popup === 'string' ? res.popup.trim() : '';
   } catch {
     view.audioShortcut = '';
+    view.popupShortcut = '';
   }
 }
 
@@ -1971,10 +2139,6 @@ function scheduleAudioDiscover() {
 }
 
 function bindAudio() {
-  document.getElementById('follow-card-btn')?.addEventListener('click', () => {
-    void followTab();
-  });
-
   const toggle = document.getElementById('audio-toggle');
   toggle?.addEventListener('change', () => {
     void toggleAudioMode();
@@ -1992,6 +2156,12 @@ function bindAudio() {
     if (el.id === 'audio-volume') {
       audioVolumePending = true;
       void controlTarget('volume', { volume: Number(el.value) });
+      return;
+    }
+    if (el.id === 'audio-sleep') {
+      if (el.value === 'left') return;
+      audioSleepPending = true;
+      void controlTarget('sleep', { minutes: Number(el.value) });
       return;
     }
     const path = el.dataset.setting;
@@ -2248,6 +2418,9 @@ function bindSupportSheet() {
   });
   document.getElementById('appbar-support')?.addEventListener('click', (event) => {
     openSupportSheet(event.currentTarget);
+  });
+  document.getElementById('settings-keys-change')?.addEventListener('click', () => {
+    openUrl('chrome://extensions/shortcuts');
   });
   document.getElementById('settings-support-open')?.addEventListener('click', (event) => {
     openSupportSheet(event.currentTarget);

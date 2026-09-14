@@ -253,11 +253,13 @@
     })();
   }
 
-  function whenFeedReady(done) {
+  // The popup draws only its open tab, Audio at first; a title there means the
+  // first draw is done and switching tabs will find data to draw.
+  function whenPopupReady(done) {
     var start = Date.now();
     (function tick() {
-      var list = document.getElementById('feed-list');
-      if ((list && list.children.length > 0) || Date.now() - start >= 3000) {
+      var title = document.getElementById('audio-title');
+      if ((title && title.textContent) || Date.now() - start >= 3000) {
         done();
         return;
       }
@@ -265,7 +267,7 @@
     })();
   }
 
-  whenFeedReady(function () {
+  whenPopupReady(function () {
     applyScene(scene);
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

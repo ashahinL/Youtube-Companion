@@ -22,6 +22,14 @@
   const MENU_WAIT_MS = 150;
   const DEFAULT_RESTORE = 'hd720';
   const DEFAULT_PRESET = 'midnight';
+  const CHANNEL_ID_RE = /^UC[\w-]{22}$/;
+  // Shape only: YouTube handles take letters from many scripts.
+  const HANDLE_RE = /^@[^\s\/?#@]{1,100}$/;
+  const MAX_COLLABORATORS = 10;
+  // A collab list that came back empty is asked for again after this long;
+  // one that arrived is kept for as long as the same video shows the same line.
+  const COLLAB_RETRY_MS = 5000;
+  const SLEEP_MINUTES = [15, 30, 60];
 
   const PRESETS = {
     midnight: { from: '#0f0f14', to: '#1e1e28' },
@@ -76,6 +84,11 @@
   let session = null;
   let gate = Promise.resolve();
   let bridgePromise = null;
+  let collabCache = null;
+  // The sleep timer lives in the tab, so it keeps counting after the popup
+  // closes. A hidden tab's timers can run up to a minute late.
+  let sleepTimer = null;
+  let sleepAt = 0;
   let nextCallId = 1;
   const pending = new Map();
 
@@ -553,7 +566,46 @@
     }
   }
 
-  function readChannelName() {
+  function collapse(text) {
+    return String(text || '').replace(/\s+/g, ' ').trim();
+  }
+
+  /*
+   * The owner line under the video. A normal video's is a link to the
+   * channel; a collab video's is one link with no address, "A and B", beside
+   * a stack of avatars. The avatar stack stays in the page after moving on to
+   * a normal video, so the missing address is what marks a collab. On an
+   * in-page move the address bar changes first and the line follows, on a
+   * slow page seconds later, together with ytd-watch-flexy's video-id
+   * (docs/youtube.md); until they match, the line belongs to the last video.
+   */
+  function readOwner(videoId) {
+    try {
+      const doc = root.document;
+      if (!doc || typeof doc.querySelector !== 'function') return null;
+      const flexy = doc.querySelector('ytd-watch-flexy');
+      const shown = flexy && typeof flexy.getAttribute === 'function' ? flexy.getAttribute('video-id') : null;
+      if (videoId && shown && shown !== videoId) return { stale: true, collab: false, text: '', href: '' };
+      const owner = doc.querySelector('ytd-watch-metadata ytd-video-owner-renderer');
+      if (!owner || typeof owner.querySelector !== 'function') return null;
+      const links = typeof owner.querySelectorAll === 'function' ? owner.querySelectorAll('a') : [];
+      let text = '';
+      let href = '';
+      for (let i = 0; i < links.length; i++) {
+        const link = links[i];
+        if (!text) text = collapse(link.textContent);
+        const target = typeof link.getAttribute === 'function' ? link.getAttribute('href') : '';
+        if (!href && target) href = String(target);
+      }
+      const collab = !href && !!owner.querySelector('yt-avatar-stack-view-model');
+      return { collab: collab, text: text, href: href };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function readChannelName(owner) {
+    if (owner && owner.stale) return '';
     try {
       const doc = root.document;
       if (!doc || typeof doc.querySelector !== 'function') return '';
@@ -571,7 +623,61 @@
     } catch (err) {
       return '';
     }
-    return '';
+    return owner ? owner.text : '';
+  }
+
+  /** A normal video's channel, from its owner link: `/@handle` or `/channel/UC…`. */
+  function ownerChannel(owner) {
+    if (!owner || owner.collab || !owner.href || !owner.text) return null;
+    try {
+      const parts = new URL(owner.href, PAGE_ORIGIN).pathname.split('/').filter(Boolean);
+      if (parts[0] === 'channel' && CHANNEL_ID_RE.test(parts[1] || '')) {
+        return { id: parts[1], handle: '', name: owner.text };
+      }
+      const head = decodeURIComponent(parts[0] || '');
+      if (HANDLE_RE.test(head)) return { id: '', handle: head, name: owner.text };
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+
+  /**
+   * The bridge's answer is page data, so it is checked here: real channel ids,
+   * short names, each name on the owner line. Right after an in-page move the
+   * renderer can still hold the previous video's list; the line on screen
+   * is what rules that out.
+   */
+  function cleanCollaborators(list, ownerText) {
+    if (!Array.isArray(list)) return [];
+    const line = collapse(ownerText);
+    const seen = Object.create(null);
+    const out = [];
+    for (let i = 0; i < list.length && out.length < MAX_COLLABORATORS; i++) {
+      const row = list[i];
+      if (!row || typeof row !== 'object') continue;
+      const id = typeof row.id === 'string' ? row.id : '';
+      const name = typeof row.name === 'string' ? collapse(row.name) : '';
+      if (!CHANNEL_ID_RE.test(id) || !name || name.length > 200 || seen[id]) continue;
+      if (line && line.indexOf(name) < 0) return [];
+      seen[id] = true;
+      const handle = typeof row.handle === 'string' && HANDLE_RE.test(row.handle) ? row.handle : '';
+      out.push({ id: id, handle: handle, name: name });
+    }
+    return out.length > 1 ? out : [];
+  }
+
+  async function readCollaborators(owner, videoId) {
+    const key = videoId + '\n' + owner.text;
+    const now = Date.now();
+    if (collabCache && collabCache.key === key
+      && (collabCache.list.length || now - collabCache.at < COLLAB_RETRY_MS)) {
+      return collabCache.list;
+    }
+    await ensureBridge();
+    const list = cleanCollaborators(await callPlayer('collaborators', []), owner.text);
+    collabCache = { key: key, list: list, at: now };
+    return list;
   }
 
   function readVideoId() {
@@ -596,9 +702,12 @@
     }
   }
 
-  function readPlayer() {
+  function readPlayer(owner) {
     const video = findVideo();
     if (!video || !videoHasMedia(video)) return { ok: false, on: !!session };
+    const videoId = readVideoId() || '';
+    if (owner === undefined) owner = readOwner(videoId);
+    const single = ownerChannel(owner);
     let title = '';
     try {
       title = Core.tabTitleToVideoTitle(root.document && root.document.title);
@@ -615,9 +724,35 @@
       volume: readVolumeNow(),
       muted: !!video.muted,
       title: title,
-      channel: readChannelName(),
-      videoId: readVideoId() || '',
+      channel: readChannelName(owner),
+      // The channels the page credits: a normal video's one channel, or,
+      // after readPlayerWithChannels, every channel of a collab video.
+      collab: !!(owner && owner.collab),
+      channels: single ? [single] : [],
+      videoId: videoId,
+      sleepAt: sleepAt,
     };
+  }
+
+  function setSleep(minutes) {
+    if (sleepTimer) clearTimeout(sleepTimer);
+    sleepTimer = null;
+    sleepAt = 0;
+    if (!minutes) return;
+    const ms = minutes * 60000;
+    sleepAt = Date.now() + ms;
+    sleepTimer = setTimeout(function () {
+      sleepTimer = null;
+      sleepAt = 0;
+      controlPlayer({ action: 'pause' }).catch(function () {});
+    }, ms);
+  }
+
+  async function readPlayerWithChannels() {
+    const owner = readOwner(readVideoId() || '');
+    const state = readPlayer(owner);
+    if (state.ok && state.collab) state.channels = await readCollaborators(owner, state.videoId);
+    return state;
   }
 
   function parseControl(msg) {
@@ -636,6 +771,10 @@
       if (!isVolumeLevel(msg.volume)) return null;
       return { action: 'volume', volume: msg.volume };
     }
+    if (action === 'sleep') {
+      if (msg.minutes !== 0 && SLEEP_MINUTES.indexOf(msg.minutes) < 0) return null;
+      return { action: 'sleep', minutes: msg.minutes };
+    }
     return null;
   }
 
@@ -643,6 +782,10 @@
     const parsed = parseControl(msg);
     if (!parsed) return { ok: false };
     if (!findMoviePlayer()) return { ok: false };
+    if (parsed.action === 'sleep') {
+      setSleep(parsed.minutes);
+      return { ok: true, sleepAt: sleepAt };
+    }
     await ensureBridge();
     if (parsed.action === 'play') {
       await callPlayer('playVideo');
@@ -1107,8 +1250,11 @@
           return;
         }
         if (msg.type === 'audioMode.player') {
-          sendResponse(readPlayer());
-          return;
+          readPlayerWithChannels().then(
+            function (res) { sendResponse(res); },
+            function () { sendResponse(readPlayer()); },
+          );
+          return true;
         }
         if (msg.type === 'audioMode.control') {
           controlPlayer(msg).then(
@@ -1152,6 +1298,8 @@
     restorableQuality,
     restoreFallbackFromSettings,
     readPlayer,
+    readPlayerWithChannels,
+    cleanCollaborators,
     parseControl,
     controlPlayer,
     enable,

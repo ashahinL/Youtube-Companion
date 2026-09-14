@@ -27,6 +27,7 @@ function channel(id, extra = {}) {
     title: extra.title ?? id,
     avatar: extra.avatar ?? 'https://yt3.ggpht.com/a',
     favorite: !!extra.favorite,
+    muted: !!extra.muted,
     addedAt: extra.addedAt ?? 1_700_000_000_000,
     lastFetchAt: extra.lastFetchAt ?? 99,
     lastVideoAt: extra.lastVideoAt ?? 50,
@@ -47,7 +48,7 @@ export default async function run(t) {
     feed: { ...DEFAULT_SETTINGS.feed, showShorts: true, maxItems: 200 },
   });
   const channels = [
-    channel(MKBHD, { title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, addedAt: 111 }),
+    channel(MKBHD, { title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, muted: true, addedAt: 111 }),
     channel(BEAST, { title: 'MrBeast', handle: '@MrBeast', favorite: false, addedAt: 222 }),
   ];
   const built = buildBackup({
@@ -73,6 +74,7 @@ export default async function run(t) {
 
   const row = built.channels[0];
   t.check('favorite survives', row.favorite === true, String(row.favorite));
+  t.check('muted survives', row.muted === true && built.channels[1].muted === false, JSON.stringify(built.channels));
   t.check('addedAt survives', row.addedAt === 111, String(row.addedAt));
   t.check('lastFetchAt is omitted', !('lastFetchAt' in row));
   t.check('lastError is omitted', !('lastError' in row));
@@ -224,6 +226,7 @@ export default async function run(t) {
   const gotMk = restored.channels.find((c) => c.id === MKBHD);
   const gotBeast = restored.channels.find((c) => c.id === BEAST);
   t.check('round trip keeps favourite', gotMk?.favorite === true, JSON.stringify(gotMk));
+  t.check('round trip keeps muted', gotMk?.muted === true, JSON.stringify(gotMk));
   t.check('round trip keeps addedAt', gotMk?.addedAt === 111, String(gotMk?.addedAt));
   t.check('round trip keeps second addedAt', gotBeast?.addedAt === 222, String(gotBeast?.addedAt));
   t.check('round trip keeps titles', gotMk?.title === 'Marques Brownlee' && gotBeast?.title === 'MrBeast');
