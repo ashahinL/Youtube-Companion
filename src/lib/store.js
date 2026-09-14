@@ -240,11 +240,26 @@ export function putVideoMeta(map, entries) {
   return out;
 }
 
-export function pendingLiveIds(map) {
+// A premiere next week does not need a player request on every check. Close
+// to its start it is looked at every time; further out, a few times a day,
+// which still notices a creator moving it earlier.
+const PREMIERE_NEAR_MS = 60 * 60_000;
+const PREMIERE_FAR_RECHECK_MS = 6 * 60 * 60_000;
+
+/**
+ * Live and premiere ids due for another look. `ck` is when a record was last
+ * classified; a record without one is due.
+ */
+export function pendingLiveIds(map, now = Date.now()) {
   const ids = [];
   if (!isPlainObject(map)) return ids;
   for (const [id, rec] of Object.entries(map)) {
-    if (rec && (rec.k === 'live' || rec.k === 'premiere')) ids.push(id);
+    if (!rec) continue;
+    if (rec.k === 'live') ids.push(id);
+    if (rec.k !== 'premiere') continue;
+    const startsIn = (Number(rec.st) || 0) - now;
+    const sinceCheck = now - (Number(rec.ck) || 0);
+    if (startsIn <= PREMIERE_NEAR_MS || sinceCheck >= PREMIERE_FAR_RECHECK_MS) ids.push(id);
   }
   return ids;
 }

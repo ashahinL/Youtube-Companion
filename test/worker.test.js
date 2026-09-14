@@ -540,6 +540,39 @@ export default async function run(t) {
       JSON.stringify(failFeed),
     );
 
+    t.section('far-off premieres are not rechecked every sweep');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const soon = Date.now();
+    await saveVideoMeta({
+      premfar0001: { k: 'premiere', d: 0, st: soon + 3 * 86_400_000, ck: soon, at: AT.older },
+      premnear001: { k: 'premiere', d: 0, st: soon + 20 * 60_000, ck: soon, at: AT.older },
+      premstale01: { k: 'premiere', d: 0, st: soon + 3 * 86_400_000, ck: soon - 7 * 3_600_000, at: AT.older },
+    });
+    const premFetch = installFetch({
+      players: {
+        premnear001: playerJson('premnear001', { isUpcoming: true, startTimestamp: new Date(soon + 20 * 60_000).toISOString() }),
+        premstale01: playerJson('premstale01', { isUpcoming: true, startTimestamp: new Date(soon + 3 * 86_400_000).toISOString() }),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    const premAsked = premFetch.calls
+      .filter((c) => c.url.includes('/youtubei/v1/player'))
+      .map((c) => bodyOf(c.opts).videoId)
+      .sort();
+    t.check(
+      'a premiere days away, checked recently, is skipped',
+      JSON.stringify(premAsked) === JSON.stringify(['premnear001', 'premstale01']),
+      JSON.stringify(premAsked),
+    );
+    const premMeta = await readVideoMeta();
+    t.check(
+      'a rechecked premiere records when it was checked',
+      premMeta.premstale01?.ck >= soon && premMeta.premfar0001?.ck === soon,
+      JSON.stringify(premMeta),
+    );
+
     t.section('YouTube pushback stops the sweep and waits');
 
     const LINUS = 'UCXuqSBlHAE6Xw-yeJA0Tunw';

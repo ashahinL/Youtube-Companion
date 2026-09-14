@@ -297,6 +297,7 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
       const rec = { k: cls.k, d: cls.d, st: cls.st };
       if (Number.isFinite(at)) rec.at = at;
       else if (Number.isFinite(meta[id]?.at)) rec.at = meta[id].at;
+      if (cls.k === 'live' || cls.k === 'premiere') rec.ck = Date.now();
       meta = putVideoMeta(meta, { [id]: rec });
     } catch (err) {
       // Leave it out of videoMeta so the next sweep retries this id.

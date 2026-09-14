@@ -258,6 +258,25 @@ export default async function run(t) {
         && !ids.includes('b') && !ids.includes('d'),
       JSON.stringify(ids));
 
+    const NOW = Date.parse('2026-09-14T12:00:00Z');
+    const HOUR = 3_600_000;
+    const due = pendingLiveIds({
+      live: { k: 'live', st: NOW - HOUR, ck: NOW },
+      nostart: { k: 'premiere', ck: NOW },
+      soon: { k: 'premiere', st: NOW + 30 * 60_000, ck: NOW },
+      late: { k: 'premiere', st: NOW - 10 * 60_000, ck: NOW },
+      far: { k: 'premiere', st: NOW + 3 * 24 * HOUR, ck: NOW - HOUR },
+      farstale: { k: 'premiere', st: NOW + 3 * 24 * HOUR, ck: NOW - 6 * HOUR },
+      farnever: { k: 'premiere', st: NOW + 3 * 24 * HOUR },
+    }, NOW).sort();
+    t.check('a live stream is always due', due.includes('live'));
+    t.check('a premiere with no start time is due', due.includes('nostart'));
+    t.check('a premiere within the hour is due', due.includes('soon'));
+    t.check('a premiere past its start is due', due.includes('late'));
+    t.check('a premiere days away, checked an hour ago, is not due', !due.includes('far'), JSON.stringify(due));
+    t.check('a premiere days away is due again after six hours', due.includes('farstale'));
+    t.check('a premiere never checked is due', due.includes('farnever'));
+
     t.section('pollState');
 
     const written = await writePollState({ lastPollAt: 5, lastSeenAt: 7 });

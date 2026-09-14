@@ -22,6 +22,7 @@ shipped yet waits under Unreleased. How a version ships:
 **Fixes**
 - The scrolling title in the Audio tab stays still, on two lines, when your
   system asks for reduced motion.
+- A premiere days away is looked at a few times a day, not on every check.
 - Requests to YouTube carry its current web client version.
 
 **For contributors**
