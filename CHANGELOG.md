@@ -22,6 +22,7 @@ shipped yet waits under Unreleased. How a version ships:
 **Fixes**
 - The scrolling title in the Audio tab stays still, on two lines, when your
   system asks for reduced motion.
+- Requests to YouTube carry its current web client version.
 
 **For contributors**
 - Tests run on every push (GitHub Actions). Node 22.2 or newer is needed.

@@ -2,7 +2,8 @@
 
 The endpoints and the player API this extension relies on, with the numbers
 they were measured at. The endpoints were measured with `curl` on 2026-09-11
-(and the Origin rule on 2026-09-12); the saved responses are
+(and the Origin rule on 2026-09-12); facts added later carry their own date.
+The saved responses are
 `test/fixtures/`. When something stops working, compare a live response
 against these before changing a parser. The rules that follow from each fact
 sit as comments in `src/lib/yt.js` and `src/content/`.
@@ -36,9 +37,15 @@ GET https://www.youtube.com/feeds/videos.xml?channel_id=UC...
 
 ```
 POST https://www.youtube.com/youtubei/v1/navigation/resolve_url
-{"context":{"client":{"clientName":"WEB","clientVersion":"2.20240304.00.00","hl":"en","gl":"US"}},
+{"context":{"client":{"clientName":"WEB","clientVersion":"2.20260911.01.00","hl":"en","gl":"US"}},
  "url":"https://www.youtube.com/@mkbhd"}
 ```
+
+- `clientVersion` is what youtube.com itself sends: the homepage HTML carried
+  `"INNERTUBE_CONTEXT_CLIENT_VERSION":"2.20260911.01.00"` on 2026-09-14. The
+  version used before, `2.20240304.00.00`, still answered that day with the
+  same results from `resolve_url` (1,170 bytes), `browse` and `player`, and
+  every parser read both answers the same.
 
 - `200`, **1,170 bytes**. The id is `endpoint.browseEndpoint.browseId`.
 - `endpoint.commandMetadata.resolveUrlCommandMetadata.isVanityUrl` tells a

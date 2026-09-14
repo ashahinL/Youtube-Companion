@@ -7,11 +7,13 @@
 const YT_ORIGIN = 'https://www.youtube.com';
 const INNERTUBE = `${YT_ORIGIN}/youtubei/v1`;
 
+// The version youtube.com itself sent on 2026-09-14 (docs/youtube.md). An old
+// one still answers today, but it is the first thing YouTube can stop serving.
 const INNERTUBE_CONTEXT = {
   context: {
     client: {
       clientName: 'WEB',
-      clientVersion: '2.20240304.00.00',
+      clientVersion: '2.20260911.01.00',
       hl: 'en',
       gl: 'US',
     },
