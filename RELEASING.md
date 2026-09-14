@@ -1,26 +1,35 @@
 # Releasing
 
-How a version of Companion for YouTube gets from `main` to the stores.
+How a version of Companion for YouTube gets from `dev` to `main` and the stores.
 
 ## The rule
 
 **A version number is what users get from the stores.** Nothing else gets
 one.
 
-- Work lands on `main` all the time. Each store reviews one version at a
-  time, and a review can take days, so the stores are usually behind `main`.
+- Work lands on `dev` all the time. Each store reviews one version at a
+  time, and a review can take days, so the stores are usually behind `dev`.
   That is normal.
 - A version, its tag, its GitHub release and its store upload all happen on
   the same day. There is no tag that never shipped, and no store version
   without a tag.
 - Planned groups of work (Safety basics, Steadier checks, …) are not
-  versions. On ship day, everything finished on `main` goes out together.
+  versions. On ship day, everything finished on `dev` goes out together.
+
+## Branches
+
+- **`main` holds only what has shipped.** Every commit on it is a released
+  version, or a note about one (a store link, the store table). GitHub shows
+  `main`, so its README matches what people can install.
+- **`dev` is where work happens.** `npm run check` and `npm test` pass at
+  every commit, and nothing half-built lands. A feature that takes many
+  commits lives on its own branch off `dev` and merges into `dev` when it is
+  finished.
+- A note that goes straight to `main` is merged into `dev` right after, so
+  `main` never has a commit `dev` lacks.
 
 ## Between ships
 
-- **`main` is always ready to ship.** `npm run check` and `npm test` pass at
-  every commit, and nothing half-built lands. A feature that takes many
-  commits lives on its own branch and merges when it is finished.
 - Every change adds its line under `## Unreleased` at the top of
   `CHANGELOG.md`, in the groups New, Safer, Fixes, For contributors.
 - The version in `manifest.json` and `package.json` changes only on ship day.
@@ -44,8 +53,9 @@ and wait in line again. Do that only for a fix that cannot wait.
 
 ## Ship day
 
-1. **Check `main`.** Clean `git status`, `npm run check` and `npm test` green,
-   and the last GitHub Actions run green.
+1. **Check `dev`.** Clean `git status`, `npm run check` and `npm test` green,
+   and the last GitHub Actions run on `dev` green. Steps 2 to 6 happen on
+   `dev`.
 2. **Test by hand on youtube.com.** Reload the extension first (reloading
    YouTube is not enough; check `data-am-beacon` on `<html>`). Then:
    - audio mode on and off
@@ -60,13 +70,18 @@ and wait in line again. Do that only for a fix that cannot wait.
    and start a new empty `## Unreleased` above it.
 6. **Update where things stand.** The "Where things stand" section of
    `CLAUDE.md`, and the store table in `store/LISTING.md`.
-7. **Commit and tag.**
+7. **Commit, move `main` up to it, and tag.**
    ```bash
    git commit -am "Version X.Y.Z"
+   git switch main
+   git merge --ff-only dev
    git tag -a vX.Y.Z -m "Companion for YouTube X.Y.Z"
-   git push origin main vX.Y.Z
+   git push origin main dev vX.Y.Z
+   git switch dev
    ```
-8. **Pack and release.** `npm run pack` from that clean tree, then make the
+   If `--ff-only` refuses, `main` has a commit `dev` lacks: merge `main` into
+   `dev`, run the gates again, and repeat this step.
+8. **Pack and release.** `npm run pack` from `main` at the tag, then make the
    GitHub release `vX.Y.Z`, titled "Companion for YouTube X.Y.Z", with that
    version's changelog section as the notes and
    `dist/companion-for-youtube-X.Y.Z.zip` attached.
@@ -78,7 +93,9 @@ and wait in line again. Do that only for a fix that cannot wait.
 
 ## After review
 
-- **Approved:** update the store table in `store/LISTING.md`. The first time a
-  listing goes live, put its link in the README's install section.
-- **Rejected:** write the reason in `store/LISTING.md`, fix it on `main`, and
-  ship the fix as the next patch version.
+- **Approved:** update the store table in `store/LISTING.md` on `main`. The
+  first time a listing goes live, put its link in the README's install
+  section. Merge `main` into `dev`.
+- **Rejected:** write the reason in `store/LISTING.md`, fix it on a branch
+  from `main`, ship the fix alone as the next patch version, and merge `main`
+  into `dev`.

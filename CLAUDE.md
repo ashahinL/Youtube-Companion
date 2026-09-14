@@ -33,7 +33,7 @@ that file; no browser automation reaches it.
 When a listing goes live, its link goes in the README's install section.
 Release notes are `CHANGELOG.md`.
 
-**The next update is 1.1.0.** Its work is finished on `main` and waits
+**The next update is 1.1.0.** Its work is finished and waits
 under `## Unreleased` in the CHANGELOG until both stores are done reviewing
 1.0.0 and the owner says ship. The version files already read 1.1.0.
 
@@ -144,9 +144,9 @@ touch the network.
 - ES modules, 2-space indent, single quotes, semicolons, a short block comment
   at the top of each file saying what it is for.
 - No dependencies, ever. Node's own APIs only in tests.
-- **Commit only when asked.** `main` is the working branch, and it is always
-  ready to ship: a feature that takes many commits lives on its own branch
-  until it is finished.
+- **Commit only when asked.** Work goes on `dev`; `main` gets only what
+  ships, on ship day (`RELEASING.md` → Branches). A feature that takes many
+  commits lives on its own branch off `dev` until it is finished.
 - Write down what you changed **and what you learned** in the same change.
   Measured facts about YouTube go into `docs/youtube.md` with the numbers and
   the date attached. A tripwire goes in a comment at the line it protects, or
