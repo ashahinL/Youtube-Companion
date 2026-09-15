@@ -33,9 +33,11 @@ that file; no browser automation reaches it.
 When a listing goes live, its link goes in the README's install section.
 Release notes are `CHANGELOG.md`.
 
-**The next update is 1.1.0.** Its work is finished and waits
-under `## Unreleased` in the CHANGELOG until both stores are done reviewing
-1.0.0 and the owner says ship. The version files already read 1.1.0.
+**The next store version is 2.0.0.** On 2026-09-15 the owner decided that
+nothing more ships until every planned group up to 2.0 is finished and
+tested. Finished work waits under `## Unreleased` in the CHANGELOG. The
+version files still read 1.1.0 from before that decision; they change on the
+2.0.0 ship day, not earlier.
 
 **How versions work: `RELEASING.md`.** A version number is what users get
 from the stores. The version, its tag, its GitHub release and its store upload
@@ -63,8 +65,18 @@ asks.
   come with scrolling or **Show more**.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
-  tab. **No name search, no bulk paste, no file import.** Typing in either box
-  only filters.
+  tab. **No name search, no bulk paste.** Typing in either box only filters.
+- **Import from YouTube**: the one file import is Google Takeout's
+  `subscriptions.csv`, picked on the welcome page (the popup's Import from
+  YouTube buttons open it there). Only channel ids and titles are read, on the
+  device, and nothing signs in. Imported channels start unseeded, so their
+  first check is silent; pictures and handles fill in a few per check.
+- **Welcome page** opens once on a fresh install, never on an update: import
+  or follow channels, try audio mode, pin the icon.
+- **Uninstall page** is `site/uninstall.html` on GitHub Pages, published from
+  `main`. Its address carries only the language and version. Its tick boxes
+  fill in a GitHub issue that the person posts themselves; nothing is
+  collected.
 - **Follow card**: when the focused tab is a YouTube channel or video whose
   channel is not on the list, the top of the Audio tab names it with a Follow
   button. It is the same add; deciding whether to show it fetches nothing. A
@@ -94,7 +106,10 @@ asks.
   active tab only. The sleep timer (15, 30 or 60 minutes) sits in the player
   card and runs in the YouTube tab, not the popup or the worker.
 - **Backup** exports settings and channels (merge or replace on import), not
-  the feed.
+  the feed. **Clear watchlist** sits in the same group: an inline confirm
+  naming the count, then every channel and the whole feed go. Alert history
+  stays, so channels added back never alert twice. There is no undo; Export
+  is the way back.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
   popup header and a Support group at the bottom of Settings open one sheet
   (PayPal, InstaPay with address, Copy and QR); the README and store text
@@ -242,6 +257,16 @@ Most live as comments at the line they protect. These span files or tools:
   manual refresh included. A new request path in `src/lib/yt.js` must throw
   through `landedOnBlockPage`, or a block turns into captchas on the user's
   own YouTube.
+- **A list of hundreds of channels costs per check, not per add.** Each
+  channel brings 15 uploads; a check classifies only the ones new enough to
+  stay in the capped feed (`feedFloor`), and a channel's `lastVideoAt` never
+  goes down, because it is what keeps old rows quiet when a removed channel
+  makes room for them. A check also calls an extension API every 25 seconds:
+  Chrome stops a worker that only has fetches in flight.
+- **Installed copies link to `site/uninstall.html` forever.** The worker's
+  `UNINSTALL_PAGE` is set in every install, so renaming or moving that page,
+  or turning off GitHub Pages, breaks the link for everyone who already has
+  the extension.
 - **Compressed bytes differ between Node builds.** Homebrew's Node links system
   zlib and packs the same tree to a different zip hash than a Node with its own
   zlib. Compare files or pixels, never deflate output, across machines.

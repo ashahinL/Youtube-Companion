@@ -1,0 +1,165 @@
+/**
+ * Welcome page, opened once on a fresh install and again from the popup's
+ * Import from YouTube buttons: bring channels across from a Takeout file, try
+ * audio mode, pin the icon. Like the popup it never fetches; the worker reads
+ * the file and checks the channels.
+ */
+
+import {
+  resolveLocale,
+  loadMessages,
+  translate,
+  applyTo,
+  applyDirection,
+} from '../lib/i18n.js';
+import { takeoutSizeError, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
+
+// The toolbar menu tells a page nothing when the icon is pinned, so the page
+// asks again until it is.
+const PIN_CHECK_MS = 1500;
+
+const IMPORT_ERRORS = {
+  empty: 'welcomeImportEmpty',
+  size: 'welcomeImportTooBig',
+  count: 'welcomeImportTooMany',
+};
+
+let messages = {};
+let busy = false;
+// Kept as a key, not text, so a language change redraws it.
+let status = { key: '', subs: [], kind: '' };
+let shortcuts = { shortcut: '', popup: '' };
+
+const el = (id) => document.getElementById(id);
+
+function t(key, substitutions) {
+  return translate(messages, key, substitutions);
+}
+
+function send(message) {
+  return chrome.runtime.sendMessage(message);
+}
+
+// "Alt+Shift+A" inside an Arabic sentence reorders to "A+Shift+Alt" unless it
+// is isolated as its own left-to-right run.
+function isolate(text) {
+  return `${String.fromCodePoint(0x2068)}${text}${String.fromCodePoint(0x2069)}`;
+}
+
+function render() {
+  const statusEl = el('welcome-import-status');
+  statusEl.textContent = status.key ? t(status.key, status.subs) : '';
+  statusEl.className = status.kind ? `status status--${status.kind}` : 'status';
+
+  el('welcome-import').disabled = busy;
+  el('welcome-import-spinner').hidden = !busy;
+
+  for (const [id, key, keys] of [
+    ['welcome-audio-key', 'welcomeAudioKey', shortcuts.shortcut],
+    ['welcome-popup-key', 'welcomePopupKey', shortcuts.popup],
+  ]) {
+    // Chrome binds nothing when the suggested keys were taken.
+    el(id).hidden = !keys;
+    el(id).textContent = keys ? t(key, [isolate(keys)]) : '';
+  }
+}
+
+async function applyLanguage(setting) {
+  const locale = resolveLocale(setting, navigator.language);
+  messages = await loadMessages(locale);
+  applyDirection(document, locale);
+  applyTo(document, messages);
+  el('welcome-locale').value = setting;
+  render();
+}
+
+function setStatus(key, subs = [], kind = '') {
+  status = { key, subs, kind };
+  render();
+}
+
+async function importFile(file) {
+  // Checked before reading, so a wrong pick of a large download is refused
+  // without holding the page.
+  if (takeoutSizeError(file.size)) {
+    setStatus('welcomeImportTooBig', [], 'error');
+    return;
+  }
+  busy = true;
+  setStatus('welcomeImportBusy');
+  try {
+    const res = await send({ type: 'importTakeout', data: await file.text() });
+    if (!res || res.ok === false) {
+      const key = IMPORT_ERRORS[res?.error];
+      if (key) setStatus(key, [String(MAX_TAKEOUT_CHANNELS)], 'error');
+      else setStatus('welcomeImportFailed', [String(res?.error || '')], 'error');
+      return;
+    }
+    const added = Number(res.added) || 0;
+    const skipped = Number(res.skipped) || 0;
+    if (!added) {
+      setStatus('welcomeImportNothingNew', [String(skipped)], 'ok');
+      return;
+    }
+    setStatus(skipped ? 'welcomeImportAddedSkipped' : 'welcomeImportAdded', [String(added), String(skipped)], 'ok');
+    // Not awaited: a first check of hundreds of channels takes minutes, and
+    // the worker carries on if this page is closed.
+    send({ type: 'sweep', scope: 'all' }).catch(() => {});
+  } catch (err) {
+    setStatus('welcomeImportFailed', [String(err?.message || err)], 'error');
+  } finally {
+    busy = false;
+    render();
+  }
+}
+
+async function checkPinned() {
+  try {
+    const settings = await chrome.action.getUserSettings();
+    const pinned = !!settings?.isOnToolbar;
+    el('welcome-pinned').hidden = !pinned;
+    return pinned;
+  } catch {
+    return false;
+  }
+}
+
+function watchPinned() {
+  const timer = setInterval(async () => {
+    if (document.hidden) return;
+    if (await checkPinned()) clearInterval(timer);
+  }, PIN_CHECK_MS);
+}
+
+function bind() {
+  const fileInput = el('welcome-import-file');
+  el('welcome-import').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    fileInput.value = '';
+    if (file) void importFile(file);
+  });
+
+  el('welcome-locale').addEventListener('change', async (event) => {
+    const setting = event.target.value;
+    await send({ type: 'updateSettings', patch: { ui: { locale: setting } } }).catch(() => {});
+    await applyLanguage(setting);
+  });
+}
+
+bind();
+
+void (async () => {
+  let setting = 'auto';
+  try {
+    const state = await send({ type: 'getState' });
+    setting = state?.settings?.ui?.locale || 'auto';
+    const keys = await send({ type: 'audioMode.shortcut' });
+    if (keys?.ok) shortcuts = { shortcut: keys.shortcut || '', popup: keys.popup || '' };
+  } catch {
+    // The page still reads in the browser's language without the worker.
+  }
+  await applyLanguage(setting);
+  if (location.hash === '#import') el('welcome-import').focus();
+  if (typeof chrome.action?.getUserSettings === 'function' && !(await checkPinned())) watchPinned();
+})();

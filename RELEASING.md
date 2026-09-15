@@ -81,6 +81,13 @@ and wait in line again. Do that only for a fix that cannot wait.
    ```
    If `--ff-only` refuses, `main` has a commit `dev` lacks: merge `main` into
    `dev`, run the gates again, and repeat this step.
+
+   If `site/` changed, the push publishes it to GitHub Pages
+   (`.github/workflows/pages.yml`). Check that run is green and that
+   <https://ashahinl.github.io/Youtube-Companion/uninstall.html> opens: every
+   installed copy sends people there when they remove the extension. Pages
+   must be on in the repository settings (Source: GitHub Actions) before the
+   first such push.
 8. **Pack and release.** `npm run pack` from `main` at the tag, then make the
    GitHub release `vX.Y.Z`, titled "Companion for YouTube X.Y.Z", with that
    version's changelog section as the notes and

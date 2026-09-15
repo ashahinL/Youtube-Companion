@@ -20,6 +20,18 @@ shipped yet waits under Unreleased. How a version ships:
   and opens the page to change them.
 - Mute alerts for one channel from its ⋯ menu. Its videos still show in
   Feeds, it can stay a favourite, and backups keep the setting.
+- Import your YouTube subscriptions. Download `subscriptions.csv` from Google
+  Takeout and pick it on the welcome page (or with **Import from YouTube** in
+  the popup). The file is read on your device, nothing signs in, and the
+  channels fill in without alerts. Their pictures arrive over the next few
+  checks.
+- **Clear watchlist** in Settings → Backup removes every channel and its
+  videos in one go, after asking. Handy after importing the wrong list, or
+  before restoring a backup.
+- A welcome page on first install, in three steps: bring your channels, try
+  audio mode, pin the icon. It never opens on an update.
+- Removing the extension opens a short page that asks why. Nothing is sent
+  unless you post the answers as a GitHub issue yourself.
 
 **Safer**
 - Only the popup can change your channels and settings. The script on YouTube
@@ -50,6 +62,19 @@ shipped yet waits under Unreleased. How a version ships:
 - On a video made by several channels, the Follow card showed no name. It now
   lists each channel.
 - A premiere days away is looked at a few times a day, not on every check.
+- A long list of channels no longer makes every check ask YouTube about
+  thousands of videos: only the ones new enough to stay in the feed are looked
+  up.
+- Removing a channel no longer lets older videos from your other channels
+  back into the feed as alerts.
+- A channel removed while a check is running no longer has its videos come
+  back into Feeds when the check ends.
+- Adding a channel names it: "Added Marques Brownlee to your watchlist."
+  instead of "Channel added successfully".
+- Removing a channel low in the Watchlist no longer jumps you to the top.
+  The Undo bar now sits at the bottom of the popup, where you are.
+- A check of hundreds of channels keeps going to the end instead of stopping
+  when the browser puts the extension to sleep.
 - Requests to YouTube carry its current web client version.
 
 **For contributors**

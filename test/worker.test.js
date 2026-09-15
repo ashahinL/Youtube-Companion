@@ -276,6 +276,8 @@ export default async function run(t) {
     refreshBadge,
     addChannelByInput,
     onNotificationClicked,
+    onInstalled,
+    syncUninstallUrl,
   } = worker;
   await ready;
 
@@ -1652,6 +1654,269 @@ export default async function run(t) {
     t.check('onMessage listener returns true', fromPopup.ret === true, String(fromPopup.ret));
     t.check('listener delivers getState', fromPopup.res.channels?.[0]?.id === MKBHD);
 
+    t.section('importing a Takeout subscriptions file');
+
+    const LINUS_ID = 'UCXuqSBlHAE6Xw-yeJA0Tunw';
+    const takeoutCsv = (ids) => ['Channel Id,Channel Url,Channel Title',
+      ...ids.map((id) => `${id},http://www.youtube.com/channel/${id},Name ${id.slice(-4)}`)].join('\n');
+    const headerHook = (browsed) => async (u, opts) => {
+      if (!u.includes('/youtubei/v1/browse')) return undefined;
+      const id = bodyOf(opts).browseId;
+      browsed.push(id);
+      return jsonRes(headerJson(id, `Current ${id.slice(-4)}`, `@h${id.slice(-4)}`, `https://yt3.ggpht.com/${id}`));
+    };
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    let takeoutWrites = 0;
+    let countTakeoutWrites = true;
+    globalThis.chrome.storage.onChanged.addListener((changes, area) => {
+      if (countTakeoutWrites && area === 'local' && changes.channels) takeoutWrites++;
+    });
+    const imported = await handleMessage({ type: 'importTakeout', data: takeoutCsv([MKBHD, BEAST, LINUS_ID]) });
+    countTakeoutWrites = false;
+    t.check(
+      'adds the channels not on the list and counts the rest',
+      imported.ok === true && imported.added === 2 && imported.skipped === 1,
+      JSON.stringify(imported),
+    );
+    t.check('in one write', takeoutWrites === 1, String(takeoutWrites));
+    const afterImport = await readChannels();
+    t.check(
+      'after the channels already there, in file order',
+      afterImport.map((ch) => ch.id).join() === [MKBHD, BEAST, LINUS_ID].join(),
+      JSON.stringify(afterImport.map((ch) => ch.id)),
+    );
+    t.check('an existing channel keeps its star', afterImport[0].favorite === true);
+    t.check(
+      'a new one has the file title, no picture, and waits for a silent first check',
+      afterImport[1].title === `Name ${BEAST.slice(-4)}` && afterImport[1].avatar === ''
+        && afterImport[1].seeded === false && afterImport[1].lastError === null,
+      JSON.stringify(afterImport[1]),
+    );
+    const importedAgain = await handleMessage({ type: 'importTakeout', data: takeoutCsv([BEAST, LINUS_ID]) });
+    t.check('the same file twice adds nothing', importedAgain.ok && importedAgain.added === 0 && importedAgain.skipped === 2, JSON.stringify(importedAgain));
+    const listBefore = await readChannels();
+    const nearlyFull = Array.from({ length: 1998 }, (_, i) => ({ ...listBefore[1], id: `UC${String(i).padStart(22, '0')}` }));
+    await globalThis.chrome.storage.local.set({ channels: nearlyFull });
+    const overLimit = await handleMessage({ type: 'importTakeout', data: takeoutCsv([MKBHD, BEAST, LINUS_ID]) });
+    t.check('an import that would take the list past 2,000 is refused', overLimit.ok === false && overLimit.error === 'count', JSON.stringify(overLimit));
+    t.check('and adds none of it', (await readChannels()).length === 1998);
+    await globalThis.chrome.storage.local.set({ channels: listBefore });
+    const notTakeout = await handleMessage({ type: 'importTakeout', data: '{"app":"youtube-companion"}' });
+    t.check('a file with no channel rows is refused with its reason', notTakeout.ok === false && notTakeout.error === 'empty', JSON.stringify(notTakeout));
+    t.check('and changes nothing', (await readChannels()).length === 3);
+
+    t.section('an imported list fills in quietly');
+
+    await wipe();
+    await handleMessage({ type: 'importTakeout', data: takeoutCsv([BEAST, LINUS_ID]) });
+    let browsed = [];
+    installFetch({
+      hook: headerHook(browsed),
+      feeds: {
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'importbst01', at: AT.newest }, { v: 'importbst02', at: AT.mid }]),
+        [LINUS_ID]: rssXml(LINUS_ID, 'Linus', [{ v: 'importlts01', at: AT.older }]),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    t.check('the first check brings their videos', (await readFeed()).length === 3, String((await readFeed()).length));
+    t.check('with no alert', mock.notifications.length === 0, JSON.stringify(mock.notifications));
+    const filled = await readChannels();
+    t.check('each channel without a picture has its header read once', browsed.sort().join() === [BEAST, LINUS_ID].sort().join(), JSON.stringify(browsed));
+    t.check(
+      'which brings its picture, handle and current name',
+      filled[0].avatar === `https://yt3.ggpht.com/${BEAST}` && filled[0].handle === `@h${BEAST.slice(-4)}`
+        && filled[0].title === `Current ${BEAST.slice(-4)}` && filled[0].seeded === true,
+      JSON.stringify(filled[0]),
+    );
+    browsed = [];
+    installFetch({ hook: headerHook(browsed) });
+    await runSweep({ scope: 'all' });
+    t.check('a channel with a picture is not read again', browsed.length === 0, JSON.stringify(browsed));
+
+    await wipe();
+    await handleMessage({ type: 'importTakeout', data: takeoutCsv([BEAST]) });
+    installFetch({ failBrowse: { [BEAST]: 'gone' } });
+    await runSweep({ scope: 'all' });
+    t.check('a header that fails is still stamped', (await readChannels())[0].headerAt > 0, JSON.stringify((await readChannels())[0]));
+    browsed = [];
+    installFetch({ hook: headerHook(browsed) });
+    await runSweep({ scope: 'all' });
+    t.check('and not asked again the same day', browsed.length === 0, JSON.stringify(browsed));
+
+    await wipe();
+    const manyImported = Array.from({ length: 21 }, (_, i) => `UC${String(i).padStart(2, '0').repeat(11)}`);
+    await handleMessage({ type: 'importTakeout', data: takeoutCsv(manyImported) });
+    browsed = [];
+    installFetch({ hook: headerHook(browsed) });
+    await runSweep({ scope: 'all' });
+    t.check('at most 20 headers are read in one check', browsed.length === 20, String(browsed.length));
+    browsed.length = 0;
+    await runSweep({ scope: 'all' });
+    t.check('the rest come with the next check', browsed.length === 1, String(browsed.length));
+
+    await wipe();
+    await handleMessage({ type: 'importTakeout', data: takeoutCsv([BEAST, LINUS_ID]) });
+    installFetch({ failBrowse: { [BEAST]: '429', [LINUS_ID]: '429' } });
+    const headerPush = await runSweep({ scope: 'all' });
+    t.check('a 429 on a header read is pushback too', headerPush.error === 'slow down', JSON.stringify(headerPush));
+    t.check('and the channels still count as filled in', (await readChannels()).every((ch) => ch.seeded === true));
+    await writePollState({ backoffUntil: 0, backoffLevel: 0 });
+
+    t.section('clearing the watchlist');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'clearmkb001', at: AT.newest }]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'clearbst001', at: AT.mid }]),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    await writePollState({ lastSeenAt: 0 });
+    await handleMessage({ type: 'removeChannel', id: BEAST });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    const notifiedBeforeClear = (await readPollState()).notified;
+    t.check('the list has channels and videos to clear', (await readFeed()).length === 1 && mock.session.lastRemovedChannel?.channel?.id === BEAST);
+    const clearReply = await handleMessage({ type: 'clearChannels' });
+    t.check('clearChannels reports how many channels it removed', clearReply.ok === true && clearReply.removed === 2, JSON.stringify(clearReply));
+    t.check('the list is empty', (await readChannels()).length === 0);
+    t.check('the feed is empty', (await readFeed()).length === 0);
+    t.check('the reply carries the empty list for the popup', clearReply.state?.channels?.length === 0 && clearReply.state?.feed?.length === 0);
+    t.check('the badge is cleared', mock.badgeText === '', mock.badgeText);
+    t.check('an Undo for an earlier removal is dropped', !('lastRemovedChannel' in mock.session));
+    t.check(
+      'alert history stays, so channels added back never alert twice',
+      JSON.stringify((await readPollState()).notified) === JSON.stringify(notifiedBeforeClear),
+    );
+    const clearedAgain = await handleMessage({ type: 'clearChannels' });
+    t.check('clearing an empty list is fine', clearedAgain.ok === true && clearedAgain.removed === 0, JSON.stringify(clearedAgain));
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    let clearedMidCheck = false;
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'midclear001', at: AT.newest }]) },
+      hook: async (url) => {
+        if (clearedMidCheck || !url.includes('/youtubei/v1/player')) return undefined;
+        clearedMidCheck = true;
+        await handleMessage({ type: 'clearChannels' });
+        return undefined;
+      },
+    });
+    await runSweep({ scope: 'all' });
+    t.check('a list cleared while a check runs', clearedMidCheck);
+    t.check('does not get its videos back when the check ends', (await readFeed()).length === 0, JSON.stringify(await readFeed()));
+    t.check('or its channels', (await readChannels()).length === 0);
+    t.check('or an alert', mock.notifications.length === 0, JSON.stringify(mock.notifications));
+
+    t.section('only videos that can stay in the feed are looked up');
+
+    await wipe();
+    await writeSettings({ feed: { maxItems: 50 } });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true, lastVideoAt: AT.newest });
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const beastRows = Array.from({ length: 50 }, (_, i) => ({
+      v: `beastfull${String(i).padStart(2, '0')}`, c: BEAST, t: 'Beast', at: AT.newest - i * 1000, d: 600, vw: 1, k: 'video', st: 0,
+    }));
+    await saveFeed(beastRows);
+    await saveVideoMeta(Object.fromEntries(beastRows.map((row) => [row.v, { k: 'video', d: 600, st: 0, at: row.at }])));
+    const oldUploads = Array.from({ length: 15 }, (_, i) => ({ v: `mkbhdold${String(i).padStart(3, '0')}`, t: `Old ${i}`, at: AT.older - i * 60_000 }));
+    const floorFeed = rssXml(MKBHD, 'Marques Brownlee', [{ v: 'mkbhdnew001', t: 'Fresh', at: AT.newest + 5000 }, ...oldUploads]);
+    let floorFetch = installFetch({ feeds: { [MKBHD]: floorFeed } });
+    await runSweep({ scope: 'all' });
+    const floorPlayers = floorFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).map((c) => bodyOf(c.opts).videoId);
+    t.check(
+      'a full feed asks only about the upload new enough to get in',
+      JSON.stringify(floorPlayers) === JSON.stringify(['mkbhdnew001']),
+      JSON.stringify(floorPlayers),
+    );
+    t.check('which lands on top and alerts', (await readFeed())[0]?.v === 'mkbhdnew001' && mock.notifications.length === 1, JSON.stringify(mock.notifications));
+    t.check(
+      "the channel's newest upload is recorded",
+      (await readChannels()).find((ch) => ch.id === MKBHD)?.lastVideoAt === AT.newest + 5000,
+    );
+
+    t.section('old videos let back into the feed stay quiet');
+
+    await handleMessage({ type: 'removeChannel', id: BEAST });
+    floorFetch = installFetch({ feeds: { [MKBHD]: floorFeed } });
+    await runSweep({ scope: 'all' });
+    t.check('with room again, the older uploads are looked up', floorFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 15);
+    t.check('and join the feed', (await readFeed()).length === 16, String((await readFeed()).length));
+    t.check('without an alert', mock.notifications.length === 1, JSON.stringify(mock.notifications.map((n) => n.message)));
+    await writeSettings({ feed: { maxItems: 500 } });
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.mid });
+    const retryFeed = rssXml(MKBHD, 'Marques Brownlee', [{ v: 'failfirst01', t: 'Try again', at: AT.newest }]);
+    installFetch({ feeds: { [MKBHD]: retryFeed }, playerStatus: 500 });
+    await runSweep({ scope: 'all' });
+    t.check(
+      'an upload that could not be looked up does not move the newest mark',
+      (await readChannels())[0].lastVideoAt === AT.mid,
+      String((await readChannels())[0].lastVideoAt),
+    );
+    installFetch({ feeds: { [MKBHD]: retryFeed } });
+    await runSweep({ scope: 'all' });
+    t.check('so it still alerts when the lookup works', mock.notifications.length === 1 && mock.notifications[0].message === 'Try again', JSON.stringify(mock.notifications));
+
+    t.section('a long check keeps the worker awake');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const realSetInterval = globalThis.setInterval;
+    const realClearInterval = globalThis.clearInterval;
+    const intervals = [];
+    const cleared = [];
+    globalThis.setInterval = (fn, ms) => {
+      intervals.push({ fn, ms });
+      return intervals.length;
+    };
+    globalThis.clearInterval = (handleId) => cleared.push(handleId);
+    try {
+      installFetch();
+      await runSweep({ scope: 'all' });
+    } finally {
+      globalThis.setInterval = realSetInterval;
+      globalThis.clearInterval = realClearInterval;
+    }
+    t.check('a check sets one timer under 30 seconds', intervals.length === 1 && intervals[0].ms < 30_000, JSON.stringify(intervals.map((i) => i.ms)));
+    const pingsBefore = mock.platformInfoCalls;
+    intervals[0]?.fn();
+    t.check('that calls an extension API', mock.platformInfoCalls === pingsBefore + 1);
+    t.check('and is cleared when the check ends', cleared.length === 1 && cleared[0] === 1, JSON.stringify(cleared));
+
+    t.section('install and uninstall pages');
+
+    await wipe();
+    await onInstalled({ reason: 'install' });
+    t.check(
+      'a fresh install opens the welcome page',
+      mock.tabsCreated.length === 1 && mock.tabsCreated[0].url === 'chrome-extension://youtube-companion/src/welcome/welcome.html',
+      JSON.stringify(mock.tabsCreated),
+    );
+    mock.tabsCreated.length = 0;
+    await onInstalled({ reason: 'update', previousVersion: '1.0.0' });
+    await onInstalled({ reason: 'chrome_update' });
+    t.check('an update opens nothing', mock.tabsCreated.length === 0, JSON.stringify(mock.tabsCreated));
+
+    await writeSettings({ ui: { locale: 'en' } });
+    await syncUninstallUrl();
+    t.check(
+      'the uninstall page gets the language and version only',
+      mock.uninstallUrl === 'https://ashahinl.github.io/Youtube-Companion/uninstall.html?lang=en&v=9.9.9',
+      mock.uninstallUrl,
+    );
+    await writeSettings({ ui: { locale: 'ar' } });
+    await wait(20);
+    t.check('and follows a language change', new URL(mock.uninstallUrl).searchParams.get('lang') === 'ar', mock.uninstallUrl);
+    await writeSettings({ ui: { locale: 'en' } });
+    await wait(20);
+
     t.section('who may send which message');
 
     const channelsBefore = JSON.stringify(await readChannels());
@@ -1668,8 +1933,12 @@ export default async function run(t) {
     t.check('and the listener answers synchronously', pageImport.ret === false, String(pageImport.ret));
     t.check('the channel list is untouched', JSON.stringify(await readChannels()) === channelsBefore);
 
+    const WELCOME_SENDER = { ...POPUP_SENDER, url: 'chrome-extension://youtube-companion/src/welcome/welcome.html' };
+    const fromWelcome = await viaListenerAs({ type: 'getState' }, WELCOME_SENDER);
+    t.check('the welcome page may send what the popup sends', Array.isArray(fromWelcome.res.channels), JSON.stringify(fromWelcome.res));
+
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
-      'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode', 'importBackup', 'undoRemove']) {
+      'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode', 'importBackup', 'importTakeout', 'undoRemove']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }

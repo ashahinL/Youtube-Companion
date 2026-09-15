@@ -4,7 +4,7 @@
  *   - manifest.json is valid JSON and is MV3
  *   - every file the manifest references actually exists
  *   - every source file parses
- *   - popup.html's css/js references resolve on disk
+ *   - the popup's and welcome page's css/js references resolve on disk
  *
  * Cheap to run and catches the class of mistake that otherwise only shows up
  * as a silent "failed to load extension" in Chrome.
@@ -112,7 +112,7 @@ function walk(dir) {
   return out;
 }
 
-for (const file of [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'test')), ...walk(path.join(ROOT, 'scripts'))]) {
+for (const file of ['src', 'test', 'scripts', 'site'].flatMap((dir) => walk(path.join(ROOT, dir)))) {
   const rel = path.relative(ROOT, file);
   try {
     execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
@@ -122,14 +122,17 @@ for (const file of [...walk(path.join(ROOT, 'src')), ...walk(path.join(ROOT, 'te
   }
 }
 
-/* ---- popup html references ------------------------------------------ */
-console.log('\npopup assets');
-const popupDir = path.join(ROOT, 'src/popup');
-const html = fs.readFileSync(path.join(popupDir, 'popup.html'), 'utf8');
-for (const ref of [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1])) {
-  if (/^https?:/.test(ref)) continue;
-  if (fs.existsSync(path.join(popupDir, ref))) ok(`popup.html -> ${ref}`);
-  else bad(`popup.html references missing ${ref}`);
+/* ---- extension page references ------------------------------------ */
+for (const page of ['src/popup/popup.html', 'src/welcome/welcome.html']) {
+  const name = path.basename(page);
+  console.log(`\n${name} assets`);
+  const dir = path.join(ROOT, path.dirname(page));
+  const html = fs.readFileSync(path.join(ROOT, page), 'utf8');
+  for (const ref of [...html.matchAll(/(?:href|src)="([^"]+)"/g)].map((m) => m[1])) {
+    if (/^https?:/.test(ref)) continue;
+    if (fs.existsSync(path.join(dir, ref))) ok(`${name} -> ${ref}`);
+    else bad(`${name} references missing ${ref}`);
+  }
 }
 
 console.log(`\n${failures ? `${failures} problem(s)` : 'all checks passed'}\n`);

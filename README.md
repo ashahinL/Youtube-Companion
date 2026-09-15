@@ -40,16 +40,16 @@
 - Control playback from the popup: seek, back and forward 10 seconds, play
   and pause, speed, and volume.
 - A ✔ before the channel name in the player means you follow it.
-  *(coming in 1.1.0)*
+  *(coming in 2.0)*
 - Sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the
-  popup closes. *(coming in 1.1.0)*
+  popup closes. *(coming in 2.0)*
 - With more than one YouTube tab open, pick which one to control.
 - See how much data you used and saved, and how long you listened, this
   month or all time.
 - Keyboard shortcut: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> turns audio
   mode on or off (change it at `chrome://extensions/shortcuts`).
 - <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd> opens the popup, and Settings
-  shows both keys with a button to change them. *(coming in 1.1.0)*
+  shows both keys with a button to change them. *(coming in 2.0)*
 
 **Feeds**
 - Every video from your channels in one list, newest first.
@@ -61,15 +61,18 @@
 **Watchlist**
 - Add a channel by pasting its URL or `@handle`, or press **Add** with an
   empty box to add the channel of the tab you are on.
+- Bring all your YouTube subscriptions at once: download `subscriptions.csv`
+  from Google Takeout and pick it in the extension. No sign-in, and the file
+  stays on your device. *(coming in 2.0)*
 - On a YouTube channel or video you don't follow yet, the Audio tab shows
   that channel with a **Follow** button. A video made by several channels
-  lists each one, with a ✔ on those you already follow. *(coming in 1.1.0)*
+  lists each one, with a ✔ on those you already follow. *(coming in 2.0)*
 - Star your favourites. They sit at the top and are checked more often.
 - Mute one channel's alerts from its ⋯ menu. Its videos still show in Feeds.
-  *(coming in 1.1.0)*
+  *(coming in 2.0)*
 - Click a channel to see its latest videos without leaving the popup.
 - If a channel's last check failed, it says why and offers **Retry**.
-  *(coming in 1.1.0)*
+  *(coming in 2.0)*
 
 **Alerts**
 - A desktop notification when a channel uploads. One alert per channel, even
@@ -83,6 +86,8 @@
 - English or Arabic, with a full right-to-left layout.
 - Export your channels and settings to a file, and import them back (merge or
   replace).
+- **Clear watchlist** removes every channel at once, after asking.
+  *(coming in 2.0)*
 
 ## Install
 
@@ -111,6 +116,8 @@ There is no build step. The folder is the extension.
 - Thumbnails and channel pictures load from YouTube's own image servers.
 - Your channels, feed, settings and stats stay in your browser's extension
   storage. Nothing is sent anywhere else. There are no analytics.
+- Removing the extension opens a short page on GitHub Pages that asks why.
+  It sends nothing unless you post your answers as a GitHub issue.
 
 The full policy is in [PRIVACY.md](PRIVACY.md). To report a security
 problem, see [SECURITY.md](SECURITY.md).
@@ -147,11 +154,13 @@ touch the network. `npm run shots` needs Chrome or Edge installed (or
 src/
   background/   service worker: scheduled checks, alerts, badge
   content/      audio mode on youtube.com pages
-  lib/          YouTube parsing, storage, settings, backup, i18n
+  lib/          YouTube parsing, storage, settings, backup, Takeout import, i18n
   popup/        the popup: Audio, Feeds, Watchlist, Settings
+  welcome/      the page opened on install
 _locales/       English and Arabic strings
 docs/           screenshots, and what YouTube serves (measured)
 scripts/        packaging, screenshots, and the icon drawn from geometry
+site/           the uninstall page, published to GitHub Pages
 store/          store listing copy and images
 test/           test suites and fixtures
 ```

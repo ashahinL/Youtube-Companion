@@ -353,9 +353,22 @@
       <button id="feed-more" class="btn feed-more" type="button" hidden></button>
       <div id="feed-empty-no-channels" class="empty" hidden>
         <p data-i18n="emptyFeeds">No channels yet</p>
-        <button id="feed-goto-watchlist" class="btn btn--primary" type="button" data-i18n="feedEmptyAdd">
-          Add a channel
-        </button>
+        <div class="empty__actions">
+          <button id="feed-goto-watchlist" class="btn btn--primary" type="button" data-i18n="feedEmptyAdd">
+            Add a channel
+          </button>
+          <button
+            id="feed-import-youtube"
+            class="btn"
+            type="button"
+            data-import-youtube
+            title="Bring your YouTube subscriptions across with a Google Takeout file. No sign-in."
+            data-i18n="importFromYouTube"
+            data-i18n-title="importFromYouTubeTitle"
+          >
+            Import from YouTube
+          </button>
+        </div>
       </div>
       <div id="feed-empty-no-items" class="empty" hidden>
         <p data-i18n="emptyFeedWaiting">Nothing has arrived yet</p>
@@ -403,13 +416,28 @@
       <p id="watchlist-count" class="footnote add-row__count" hidden></p>
       <p id="watchlist-ok" class="banner banner--ok" role="status" hidden></p>
       <p id="watchlist-error" class="banner banner--error" role="status" hidden></p>
+      <div id="watchlist-list" class="list"></div>
+      <div id="watchlist-empty" class="empty" hidden>
+        <p data-i18n="emptyWatchlist">Watchlist is empty</p>
+        <div class="empty__actions">
+          <button
+            id="watchlist-import-youtube"
+            class="btn"
+            type="button"
+            data-import-youtube
+            title="Bring your YouTube subscriptions across with a Google Takeout file. No sign-in."
+            data-i18n="importFromYouTube"
+            data-i18n-title="importFromYouTubeTitle"
+          >
+            Import from YouTube
+          </button>
+        </div>
+      </div>
+      <p id="watchlist-nomatch" class="empty" hidden></p>
       <div id="watchlist-undo" class="undo-row" hidden>
         <span id="watchlist-undo-text" class="undo-row__text" role="status"></span>
         <button id="watchlist-undo-btn" class="btn undo-row__btn" type="button" data-i18n="watchlistUndo">Undo</button>
       </div>
-      <div id="watchlist-list" class="list"></div>
-      <p id="watchlist-empty" class="empty" data-i18n="emptyWatchlist" hidden>Watchlist is empty</p>
-      <p id="watchlist-nomatch" class="empty" hidden></p>
     </section>
 
     <section id="settings" class="panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
@@ -685,6 +713,40 @@
               Import
             </button>
             <input id="settings-import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+          <div class="backup__row">
+            <button
+              id="settings-import-youtube"
+              class="btn"
+              type="button"
+              data-import-youtube
+              title="Bring your YouTube subscriptions across with a Google Takeout file. No sign-in."
+              data-i18n="importFromYouTube"
+              data-i18n-title="importFromYouTubeTitle"
+            >
+              Import from YouTube
+            </button>
+          </div>
+          <div class="backup__row">
+            <button
+              id="settings-clear"
+              class="btn"
+              type="button"
+              title="Remove every channel and its videos, for example before importing a backup."
+              data-i18n="settingsClear"
+              data-i18n-title="settingsClearTitle"
+            >
+              Clear watchlist
+            </button>
+          </div>
+          <div id="settings-clear-confirm" class="backup__confirm" hidden>
+            <span id="settings-clear-prompt" class="confirm-prompt"></span>
+            <button id="settings-clear-yes" class="btn btn--primary" type="button" data-i18n="settingsClearConfirm">
+              Remove all
+            </button>
+            <button id="settings-clear-cancel" class="btn" type="button" data-i18n="settingsClearCancel">
+              Cancel
+            </button>
           </div>
           <div id="settings-import-choice" class="backup__choice" hidden>
             <p data-i18n="settingsImportPrompt">How should this file be applied?</p>

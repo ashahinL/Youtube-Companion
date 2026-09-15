@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex" />
+    <title>Companion for YouTube was removed</title>
+    <!-- One page, no analytics, nothing loaded from anywhere else. -->
+    <style>
+      :root {
+        --bg: #0f0f14;
+        --surface: #17171f;
+        --border: rgba(255, 255, 255, 0.1);
+        --text: #f1f1f4;
+        --text-dim: rgba(241, 241, 244, 0.64);
+        --accent: #7c5cf0;
+        --accent-text: #a58cff;
+        --on-accent: #ffffff;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #ffffff;
+          --surface: #f6f6f8;
+          --border: rgba(0, 0, 0, 0.12);
+          --text: #16161a;
+          --text-dim: rgba(22, 22, 26, 0.66);
+          --accent: #6d4ae8;
+          --accent-text: #5534d6;
+          --on-accent: #ffffff;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 400 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+
+      a {
+        color: var(--accent-text);
+      }
+
+      main {
+        max-width: 560px;
+        margin-inline: auto;
+        padding-inline: 20px;
+        padding-block: 56px 64px;
+      }
+
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 16px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 24px;
+        font-weight: 650;
+        line-height: 1.25;
+        text-wrap: balance;
+      }
+
+      p {
+        margin: 0 0 16px;
+      }
+
+      .dim {
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+
+      fieldset {
+        margin: 24px 0 16px;
+        padding: 0;
+        border: 0;
+      }
+
+      legend {
+        margin-block-end: 8px;
+        font-weight: 600;
+      }
+
+      .reason {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding-block: 7px;
+        border-block-end: 1px solid var(--border);
+        cursor: pointer;
+      }
+
+      .reason input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+
+      label[for='details'] {
+        display: block;
+        margin-block: 20px 6px;
+        font-weight: 600;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 96px;
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
+        color: var(--text);
+        font: inherit;
+        resize: vertical;
+      }
+
+      button {
+        margin-block: 16px 10px;
+        padding-block: 10px;
+        padding-inline: 18px;
+        border: 0;
+        border-radius: 9px;
+        background: var(--accent);
+        color: var(--on-accent);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:focus-visible,
+      a:focus-visible,
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .again {
+        margin-block-start: 32px;
+        padding-block-start: 16px;
+        border-block-start: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="top">
+        <h1 data-text="title">Companion for YouTube was removed</h1>
+        <a id="switch-lang" href="?lang=ar" lang="ar">العربية</a>
+      </div>
+      <p class="dim" data-text="lede">Sorry to see it go. If you have a minute, tell us why, so the next version is better.</p>
+
+      <form id="why">
+        <fieldset>
+          <legend data-text="question">Why did you remove it?</legend>
+          <label class="reason"><input type="checkbox" name="reason" value="broken" /><span data-text="broken">Something did not work</span></label>
+          <label class="reason"><input type="checkbox" name="reason" value="audio" /><span data-text="audio">Audio mode did not work on a video</span></label>
+          <label class="reason"><input type="checkbox" name="reason" value="feed" /><span data-text="feed">New videos or alerts were missing or late</span></label>
+          <label class="reason"><input type="checkbox" name="reason" value="alerts" /><span data-text="alerts">Too many alerts</span></label>
+          <label class="reason"><input type="checkbox" name="reason" value="missing" /><span data-text="missing">It is missing something I need</span></label>
+          <label class="reason"><input type="checkbox" name="reason" value="other-tool" /><span data-text="otherTool">I use something else now</span></label>
+          <label class="reason"><input type="checkbox" name="reason" value="trying" /><span data-text="trying">I was only trying it</span></label>
+        </fieldset>
+
+        <label for="details" data-text="details">Anything else? (optional)</label>
+        <textarea id="details" maxlength="1500"></textarea>
+
+        <button type="submit" data-text="send">Send on GitHub</button>
+        <p class="dim" data-text="sendNote">
+          Nothing is sent from this page. The button opens a new GitHub issue with your answers filled in, and you post it yourself. That needs a GitHub account.
+        </p>
+      </form>
+
+      <p class="dim again">
+        <span data-text="again">Changed your mind?</span>
+        <a href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd" data-text="store">Get it again from the Chrome Web Store</a>
+      </p>
+    </main>
+    <script src="uninstall.js"></script>
+  </body>
+</html>

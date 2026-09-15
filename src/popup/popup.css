@@ -302,13 +302,36 @@ body {
   color: var(--ok);
 }
 
-.undo-row,
 .problem-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-block-end: 10px;
   font-size: 12px;
+}
+
+/* Pinned to the bottom of the popup rather than above the list. A remove
+   happens wherever its row was, and moving focus to an Undo at the top of a
+   long list scrolled the popup up to it. Below the ⋯ menus, so an open menu
+   on the last rows stays on top. */
+.undo-row {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 8px;
+  padding-inline: 16px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+/* Room for the pinned Undo, so it never covers the last row. */
+.panel:has(.undo-row:not([hidden])) {
+  padding-block-end: 64px;
 }
 
 .undo-row__text,
@@ -610,6 +633,18 @@ body {
 
 .empty .btn {
   margin-block-start: 12px;
+}
+
+.empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-block-start: 12px;
+}
+
+.empty .empty__actions .btn {
+  margin-block-start: 0;
 }
 
 .feed-fav-filter {

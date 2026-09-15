@@ -280,8 +280,14 @@
     }
   },
   "channelAdded": {
-    "message": "تمت إضافة القناة بنجاح",
-    "description": "Green status under the Add box on Feeds or Watchlist after a channel is added."
+    "message": "تمت إضافة $NAME$ إلى قائمة المتابعة.",
+    "description": "Green status under the Add box on Feeds or Watchlist after a channel is added. $NAME$ is the channel name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
   },
   "feedFavoritesOnly": {
     "message": "المفضلة فقط",
@@ -608,6 +614,42 @@
   "settingsImportReplaceCancel": {
     "message": "إلغاء",
     "description": "Cancels a Replace import and returns to Merge or Replace."
+  },
+  "settingsClear": {
+    "message": "مسح قائمة المتابعة",
+    "description": "Settings > Backup button that starts removing every channel."
+  },
+  "settingsClearTitle": {
+    "message": "إزالة كل القنوات وفيديوهاتها، مثلًا قبل استيراد نسخة احتياطية.",
+    "description": "Tooltip on the Clear watchlist button."
+  },
+  "settingsClearPrompt": {
+    "message": "إزالة كل القنوات ($COUNT$) وفيديوهاتها؟",
+    "description": "Inline confirmation before the watchlist is cleared. $COUNT$ is the number of channels.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "143"
+      }
+    }
+  },
+  "settingsClearConfirm": {
+    "message": "إزالة الكل",
+    "description": "Confirms clearing the watchlist."
+  },
+  "settingsClearCancel": {
+    "message": "إلغاء",
+    "description": "Cancels clearing the watchlist."
+  },
+  "settingsCleared": {
+    "message": "مُسحت قائمة المتابعة. عدد القنوات المُزالة: $COUNT$.",
+    "description": "Status after the watchlist is cleared. $COUNT$ is how many channels were removed.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "143"
+      }
+    }
   },
   "settingsImportAdded": {
     "message": "أُضيفت $ADDED$ قنوات، و$SKIPPED$ موجودة مسبقاً.",
@@ -1034,5 +1076,167 @@
   "settingsSupportText": {
     "message": "مجانية وبلا إعلانات. ساهم إن كانت تفيدك.",
     "description": "Short note under the Settings support heading."
+  },
+  "welcomeTitle": {
+    "message": "مرحبًا بك في رفيق ليوتيوب",
+    "description": "Browser tab title of the welcome page."
+  },
+  "welcomeLede": {
+    "message": "ثلاث خطوات وتكون جاهزًا. بلا تسجيل دخول أبدًا.",
+    "description": "Line under the name at the top of the welcome page."
+  },
+  "welcomeStepImportTitle": {
+    "message": "أحضر قنواتك",
+    "description": "Welcome page, step 1 heading."
+  },
+  "welcomeStepImportText": {
+    "message": "مشترك في قنوات على يوتيوب؟ انقل القائمة كلها دفعة واحدة.",
+    "description": "Welcome page, step 1 intro."
+  },
+  "welcomeTakeoutOpen": {
+    "message": "افتح Google Takeout:",
+    "description": "Takeout instructions, 1. A link to takeout.google.com follows."
+  },
+  "welcomeTakeoutSelect": {
+    "message": "ألغِ تحديد كل شيء، ثم اختر YouTube وYouTube Music فقط.",
+    "description": "Takeout instructions, 2."
+  },
+  "welcomeTakeoutData": {
+    "message": "من قائمة بيانات YouTube أبقِ الاشتراكات فقط، ثم أنشئ التصدير.",
+    "description": "Takeout instructions, 3."
+  },
+  "welcomeTakeoutDownload": {
+    "message": "نزّل الملف الذي يجهّزه Google وفُكّ ضغطه. قد يستغرق ذلك بضع دقائق.",
+    "description": "Takeout instructions, 4."
+  },
+  "welcomeTakeoutPick": {
+    "message": "اختر ملف subscriptions.csv من مجلد الاشتراكات فيه.",
+    "description": "Takeout instructions, 5."
+  },
+  "welcomeImportButton": {
+    "message": "اختر ملف subscriptions.csv",
+    "description": "Button that opens the file picker for the Takeout file."
+  },
+  "welcomeImportPrivacy": {
+    "message": "يُقرأ الملف على هذا الجهاز. تُحفظ معرّفات القنوات وأسماؤها فقط، ولا يُرسَل شيء إلى Google ولا إلى أي جهة أخرى.",
+    "description": "Privacy note under the import button."
+  },
+  "welcomeStepImportAlt": {
+    "message": "أو أضف القنوات واحدة تلو الأخرى: افتح قناة أو فيديو على يوتيوب، ثم افتح الإضافة واضغط «متابعة».",
+    "description": "Welcome page, step 1, the other way to add channels."
+  },
+  "welcomeImportBusy": {
+    "message": "جارٍ قراءة الملف…",
+    "description": "Status while the Takeout file is imported."
+  },
+  "welcomeImportAdded": {
+    "message": "تمت إضافة $COUNT$ من القنوات. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
+    "description": "Status after an import. $COUNT$ is the number of channels added.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportAddedSkipped": {
+    "message": "تمت إضافة $ADDED$ من القنوات، و$SKIPPED$ كانت في قائمتك من قبل. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
+    "description": "Status after an import. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
+  "welcomeImportNothingNew": {
+    "message": "كل القنوات في هذا الملف ($COUNT$) موجودة في قائمتك من قبل.",
+    "description": "Status after importing a file whose channels are all on the list already.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportEmpty": {
+    "message": "لا توجد قنوات في هذا الملف. اختر subscriptions.csv من مجلد الاشتراكات في ملف Takeout الذي نزّلته.",
+    "description": "Error when the picked file has no channel rows."
+  },
+  "welcomeImportTooBig": {
+    "message": "هذا الملف أكبر من أن يكون subscriptions.csv.",
+    "description": "Error when the picked file is too large."
+  },
+  "welcomeImportTooMany": {
+    "message": "سيصبح عدد القنوات أكثر من $MAX$، وهذا أكثر مما تستطيع الإضافة متابعته.",
+    "description": "Error when the file, with the channels already on the list, comes to more than the limit. $MAX$ is the limit.",
+    "placeholders": {
+      "max": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportFailed": {
+    "message": "تعذّر استيراد هذا الملف: $ERROR$",
+    "description": "Error for any other import failure. $ERROR$ is the technical reason.",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeStepAudioTitle": {
+    "message": "جرّب وضع الصوت",
+    "description": "Welcome page, step 2 heading."
+  },
+  "welcomeStepAudioText": {
+    "message": "افتح أي فيديو على يوتيوب، ثم افتح الإضافة وشغّل «وضع الصوت». تنخفض جودة الفيديو إلى 144p خلف غطاء: الصوت نفسه، مع بيانات أقل بنحو 8 أضعاف من 720p.",
+    "description": "Welcome page, step 2 text."
+  },
+  "welcomeAudioKey": {
+    "message": "اختصار: $KEYS$ يشغّل وضع الصوت أو يوقفه.",
+    "description": "Shown when the audio mode shortcut is set. $KEYS$ is the key combination.",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeStepPinTitle": {
+    "message": "ثبّت الأيقونة",
+    "description": "Welcome page, step 3 heading."
+  },
+  "welcomeStepPinText": {
+    "message": "اضغط على قطعة الأحجية بجانب شريط العنوان، ثم على الدبوس بجانب «رفيق ليوتيوب». تعرض الأيقونة عدد الفيديوهات الجديدة التي تنتظرك.",
+    "description": "Welcome page, step 3 text."
+  },
+  "welcomePinned": {
+    "message": "تم التثبيت. كل شيء جاهز.",
+    "description": "Shown once the icon is on the toolbar."
+  },
+  "welcomePopupKey": {
+    "message": "$KEYS$ يفتح الإضافة.",
+    "description": "Shown when the popup shortcut is set. $KEYS$ is the key combination.",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeFooter": {
+    "message": "مجانية ومفتوحة المصدر، بلا إعلانات ولا تتبّع.",
+    "description": "Footer of the welcome page."
+  },
+  "welcomeIssues": {
+    "message": "أبلغ عن خطأ أو اقترح فكرة",
+    "description": "Footer link to the GitHub issues page."
+  },
+  "importFromYouTube": {
+    "message": "استيراد من يوتيوب",
+    "description": "Popup button that opens the Takeout import on the welcome page."
+  },
+  "importFromYouTubeTitle": {
+    "message": "انقل اشتراكاتك على يوتيوب بملف من Google Takeout، دون تسجيل دخول.",
+    "description": "Tooltip of the Import from YouTube button."
   }
 }

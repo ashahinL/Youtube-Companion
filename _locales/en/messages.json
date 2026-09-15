@@ -280,8 +280,14 @@
     }
   },
   "channelAdded": {
-    "message": "Channel added successfully",
-    "description": "Green status under the Add box on Feeds or Watchlist after a channel is added."
+    "message": "Added $NAME$ to your watchlist.",
+    "description": "Green status under the Add box on Feeds or Watchlist after a channel is added. $NAME$ is the channel name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
   },
   "feedFavoritesOnly": {
     "message": "Favourites only",
@@ -608,6 +614,42 @@
   "settingsImportReplaceCancel": {
     "message": "Cancel",
     "description": "Cancels a Replace import and returns to Merge or Replace."
+  },
+  "settingsClear": {
+    "message": "Clear watchlist",
+    "description": "Settings > Backup button that starts removing every channel."
+  },
+  "settingsClearTitle": {
+    "message": "Remove every channel and its videos, for example before importing a backup.",
+    "description": "Tooltip on the Clear watchlist button."
+  },
+  "settingsClearPrompt": {
+    "message": "Remove all $COUNT$ channels and their videos?",
+    "description": "Inline confirmation before the watchlist is cleared. $COUNT$ is the number of channels.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "143"
+      }
+    }
+  },
+  "settingsClearConfirm": {
+    "message": "Remove all",
+    "description": "Confirms clearing the watchlist."
+  },
+  "settingsClearCancel": {
+    "message": "Cancel",
+    "description": "Cancels clearing the watchlist."
+  },
+  "settingsCleared": {
+    "message": "Watchlist cleared. $COUNT$ channels removed.",
+    "description": "Status after the watchlist is cleared. $COUNT$ is how many channels were removed.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "143"
+      }
+    }
   },
   "settingsImportAdded": {
     "message": "Added $ADDED$ channels, $SKIPPED$ already present.",
@@ -1034,5 +1076,167 @@
   "settingsSupportText": {
     "message": "Free, with no ads. Chip in if it helps you.",
     "description": "Short note under the Settings support heading."
+  },
+  "welcomeTitle": {
+    "message": "Welcome to Companion for YouTube",
+    "description": "Browser tab title of the welcome page."
+  },
+  "welcomeLede": {
+    "message": "Three steps and you're set. No sign-in, ever.",
+    "description": "Line under the name at the top of the welcome page."
+  },
+  "welcomeStepImportTitle": {
+    "message": "Bring your channels",
+    "description": "Welcome page, step 1 heading."
+  },
+  "welcomeStepImportText": {
+    "message": "Subscribed to channels on YouTube? Bring the whole list across at once.",
+    "description": "Welcome page, step 1 intro."
+  },
+  "welcomeTakeoutOpen": {
+    "message": "Open Google Takeout:",
+    "description": "Takeout instructions, 1. A link to takeout.google.com follows."
+  },
+  "welcomeTakeoutSelect": {
+    "message": "Deselect everything, then select only YouTube and YouTube Music.",
+    "description": "Takeout instructions, 2."
+  },
+  "welcomeTakeoutData": {
+    "message": "In its list of YouTube data, keep only subscriptions, then create the export.",
+    "description": "Takeout instructions, 3."
+  },
+  "welcomeTakeoutDownload": {
+    "message": "Download what Google prepares and unzip it. This can take a few minutes.",
+    "description": "Takeout instructions, 4."
+  },
+  "welcomeTakeoutPick": {
+    "message": "Pick subscriptions.csv from its subscriptions folder.",
+    "description": "Takeout instructions, 5."
+  },
+  "welcomeImportButton": {
+    "message": "Choose subscriptions.csv",
+    "description": "Button that opens the file picker for the Takeout file."
+  },
+  "welcomeImportPrivacy": {
+    "message": "The file is read on this computer. Only the channel ids and names are kept, and nothing is sent to Google or anyone else.",
+    "description": "Privacy note under the import button."
+  },
+  "welcomeStepImportAlt": {
+    "message": "Or add channels one at a time: open a channel or video on YouTube, open the extension, and press Follow.",
+    "description": "Welcome page, step 1, the other way to add channels."
+  },
+  "welcomeImportBusy": {
+    "message": "Reading the file…",
+    "description": "Status while the Takeout file is imported."
+  },
+  "welcomeImportAdded": {
+    "message": "Added $COUNT$ channels. Their latest videos arrive over the next few minutes, with no alerts.",
+    "description": "Status after an import. $COUNT$ is the number of channels added.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportAddedSkipped": {
+    "message": "Added $ADDED$ channels; $SKIPPED$ were already on your list. Their latest videos arrive over the next few minutes, with no alerts.",
+    "description": "Status after an import. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
+  "welcomeImportNothingNew": {
+    "message": "All $COUNT$ channels in that file are already on your list.",
+    "description": "Status after importing a file whose channels are all on the list already.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportEmpty": {
+    "message": "That file has no channels. Pick subscriptions.csv from the subscriptions folder of your Takeout download.",
+    "description": "Error when the picked file has no channel rows."
+  },
+  "welcomeImportTooBig": {
+    "message": "That file is too large to be subscriptions.csv.",
+    "description": "Error when the picked file is too large."
+  },
+  "welcomeImportTooMany": {
+    "message": "That would make more than $MAX$ channels, more than the extension can check.",
+    "description": "Error when the file, with the channels already on the list, comes to more than the limit. $MAX$ is the limit.",
+    "placeholders": {
+      "max": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportFailed": {
+    "message": "Could not import that file: $ERROR$",
+    "description": "Error for any other import failure. $ERROR$ is the technical reason.",
+    "placeholders": {
+      "error": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeStepAudioTitle": {
+    "message": "Try audio mode",
+    "description": "Welcome page, step 2 heading."
+  },
+  "welcomeStepAudioText": {
+    "message": "Open any YouTube video, open the extension and turn on Audio mode. The video drops to 144p behind a cover: the same sound, with about 8× less data than 720p.",
+    "description": "Welcome page, step 2 text."
+  },
+  "welcomeAudioKey": {
+    "message": "Shortcut: $KEYS$ turns audio mode on or off.",
+    "description": "Shown when the audio mode shortcut is set. $KEYS$ is the key combination.",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeStepPinTitle": {
+    "message": "Pin the icon",
+    "description": "Welcome page, step 3 heading."
+  },
+  "welcomeStepPinText": {
+    "message": "Click the puzzle piece next to the address bar, then the pin beside Companion for YouTube. The icon shows how many new videos are waiting.",
+    "description": "Welcome page, step 3 text."
+  },
+  "welcomePinned": {
+    "message": "Pinned. You're all set.",
+    "description": "Shown once the icon is on the toolbar."
+  },
+  "welcomePopupKey": {
+    "message": "$KEYS$ opens the extension.",
+    "description": "Shown when the popup shortcut is set. $KEYS$ is the key combination.",
+    "placeholders": {
+      "keys": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeFooter": {
+    "message": "Free and open source, with no ads and no tracking.",
+    "description": "Footer of the welcome page."
+  },
+  "welcomeIssues": {
+    "message": "Report a bug or suggest an idea",
+    "description": "Footer link to the GitHub issues page."
+  },
+  "importFromYouTube": {
+    "message": "Import from YouTube",
+    "description": "Popup button that opens the Takeout import on the welcome page."
+  },
+  "importFromYouTubeTitle": {
+    "message": "Bring your YouTube subscriptions across with a Google Takeout file. No sign-in.",
+    "description": "Tooltip of the Import from YouTube button."
   }
 }

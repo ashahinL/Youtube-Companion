@@ -127,6 +127,8 @@ export function installChromeMock(initial = {}) {
     activeTab: null,
     dnrRules: [],
     dnrUpdates: [],
+    uninstallUrl: '',
+    platformInfoCalls: 0,
     runtimeListeners: {
       onInstalled: [],
       onStartup: [],
@@ -299,6 +301,16 @@ export function installChromeMock(initial = {}) {
       lastError: undefined,
       getURL(path) {
         return 'chrome-extension://youtube-companion/' + String(path || '').replace(/^\//, '');
+      },
+      getManifest() {
+        return { version: '9.9.9' };
+      },
+      async setUninstallURL(url) {
+        handle.uninstallUrl = String(url);
+      },
+      async getPlatformInfo() {
+        handle.platformInfoCalls++;
+        return { os: 'test' };
       },
       onInstalled: {
         addListener(fn) {

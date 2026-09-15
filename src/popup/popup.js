@@ -62,6 +62,7 @@ const view = {
   importStage: 'idle',
   importBusy: false,
   pendingImportText: '',
+  clearOpen: false,
   sheetId: null,
   sheetError: '',
   // { id, title } of the last removed channel while Undo is on offer.
@@ -1568,14 +1569,22 @@ function renderSettings(locale) {
   const replaceBtn = document.getElementById('settings-import-replace');
   const confirmBtn = document.getElementById('settings-import-replace-confirm');
   const cancelBtn = document.getElementById('settings-import-replace-cancel');
-  for (const btn of [exportBtn, importBtn, mergeBtn, replaceBtn, confirmBtn, cancelBtn]) {
+  const clearYes = document.getElementById('settings-clear-yes');
+  const clearCancel = document.getElementById('settings-clear-cancel');
+  for (const btn of [exportBtn, importBtn, mergeBtn, replaceBtn, confirmBtn, cancelBtn, clearYes, clearCancel]) {
     if (btn) btn.disabled = locked;
   }
+  const clearBtn = document.getElementById('settings-clear');
+  if (clearBtn) clearBtn.disabled = locked || view.channels.length === 0;
 
   const choice = document.getElementById('settings-import-choice');
   const confirm = document.getElementById('settings-import-confirm');
   if (choice) choice.hidden = view.importStage !== 'choose';
   if (confirm) confirm.hidden = view.importStage !== 'confirm';
+  const clearRow = document.getElementById('settings-clear-confirm');
+  if (clearRow) clearRow.hidden = !view.clearOpen || view.channels.length === 0;
+  const clearPrompt = document.getElementById('settings-clear-prompt');
+  if (clearPrompt) clearPrompt.textContent = t('settingsClearPrompt', [String(view.channels.length)]);
 
   const status = document.getElementById('settings-backup-status');
   if (status) {
@@ -1653,7 +1662,8 @@ async function addChannel(input, dest = 'watchlist') {
     const box = document.getElementById(boxId);
     if (box) box.value = '';
     await refreshState();
-    view[okField] = t('channelAdded');
+    const ch = res.channel || {};
+    view[okField] = t('channelAdded', [isolate(ch.title || ch.handle || ch.id || '')]);
   }, errorField);
 }
 
@@ -1700,8 +1710,9 @@ async function removeChannel(id) {
     view.undo = { id, title };
     await refreshState();
   });
-  // Focus was on the menu item, which left with its row.
-  if (view.undo?.id === id) document.getElementById('watchlist-undo-btn')?.focus();
+  // Focus was on the menu item, which left with its row. Undo is pinned in
+  // view, and letting focus scroll would lose the reader's place in the list.
+  if (view.undo?.id === id) document.getElementById('watchlist-undo-btn')?.focus({ preventScroll: true });
 }
 
 async function undoRemove() {
@@ -1921,6 +1932,32 @@ async function importBackup(mode) {
     view.importBusy = false;
     render();
   }
+}
+
+async function clearWatchlist() {
+  if (view.importBusy) return;
+  view.importBusy = true;
+  view.backupNotice = null;
+  render();
+  try {
+    const res = await send({ type: 'clearChannels' });
+    if (!res || res.ok === false) {
+      view.backupNotice = { text: formatError(res?.error), error: true };
+    } else {
+      if (res.state) applySnapshot(res.state);
+      view.undo = null;
+      view.clearOpen = false;
+      view.backupNotice = { text: t('settingsCleared', [String(Number(res.removed) || 0)]), error: false };
+    }
+  } catch (err) {
+    view.backupNotice = { text: formatError(err?.message || err), error: true };
+  } finally {
+    view.importBusy = false;
+    render();
+  }
+  // The confirm row and the Clear button are gone or disabled now, and a
+  // backup import is the usual next step.
+  if (!view.clearOpen) document.getElementById('settings-import')?.focus();
 }
 
 async function frontTabId() {
@@ -2309,6 +2346,7 @@ function bindSettings() {
     try {
       view.pendingImportText = await file.text();
       view.importStage = 'choose';
+      view.clearOpen = false;
       view.backupNotice = null;
     } catch (err) {
       view.pendingImportText = '';
@@ -2332,6 +2370,23 @@ function bindSettings() {
   document.getElementById('settings-import-replace-cancel').addEventListener('click', () => {
     view.importStage = 'choose';
     render();
+  });
+
+  document.getElementById('settings-clear').addEventListener('click', () => {
+    view.clearOpen = true;
+    view.importStage = 'idle';
+    view.pendingImportText = '';
+    view.backupNotice = null;
+    render();
+    document.getElementById('settings-clear-cancel')?.focus();
+  });
+  document.getElementById('settings-clear-yes').addEventListener('click', () => {
+    void clearWatchlist();
+  });
+  document.getElementById('settings-clear-cancel').addEventListener('click', () => {
+    view.clearOpen = false;
+    render();
+    document.getElementById('settings-clear')?.focus();
   });
 }
 
@@ -2427,8 +2482,19 @@ function bindSupportSheet() {
   });
 }
 
+// The Takeout import lives on the welcome page, which has room for the steps
+// to get the file from Google and is where a new user starts.
+function bindImportFromYouTube() {
+  for (const btn of document.querySelectorAll('[data-import-youtube]')) {
+    btn.addEventListener('click', () => {
+      openUrl(chrome.runtime.getURL('src/welcome/welcome.html#import'));
+    });
+  }
+}
+
 document.addEventListener('click', closeAllMenus);
 
+bindImportFromYouTube();
 bindWatchlist();
 bindFeeds();
 bindAudio();

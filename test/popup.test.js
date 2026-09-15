@@ -135,6 +135,19 @@ export default async function run(t) {
   t.check('has a clear control', /id="watchlist-clear"/.test(w));
   t.check('has a local-filter count', /id="watchlist-count"/.test(w));
   t.check(
+    'Undo comes after the list, where it shows',
+    w.indexOf('id="watchlist-list"') >= 0 && w.indexOf('id="watchlist-undo"') > w.indexOf('id="watchlist-list"'),
+  );
+  t.check(
+    'Undo is pinned to the bottom of the popup',
+    /\.undo-row\s*\{[^}]*position:\s*fixed[^}]*inset-block-end:\s*0/.test(css),
+  );
+  t.check('the pinned Undo leaves room under the last row', /\.panel:has\(\.undo-row:not\(\[hidden\]\)\)\s*\{[^}]*padding-block-end/.test(css));
+  t.check(
+    'focusing Undo after a remove does not scroll the list away',
+    /watchlist-undo-btn'\)\?\.focus\(\{ preventScroll: true \}\)/.test(js),
+  );
+  t.check(
     'a favourite row is marked, not left to sort order alone',
     /ch\.favorite/.test(js) && /channel-row__fav/.test(js) && /channel-row__fav\s*\{/.test(css),
   );
@@ -258,6 +271,10 @@ export default async function run(t) {
   );
   t.check('Feeds Add sends addChannel', /type:\s*'addChannel'/.test(js));
   t.check('a successful add shows channelAdded', /channelAdded/.test(js) && /banner--ok/.test(html));
+  t.check(
+    'and names the channel it added',
+    /t\('channelAdded', \[isolate\(ch\.title \|\| ch\.handle \|\| ch\.id \|\| ''\)\]\)/.test(js) && /\$NAME\$/.test(en.channelAdded.message),
+  );
   t.check(
     'reload hides while its spinner runs',
     /refreshBtn\.hidden = sweeping/.test(js) && /refreshBtn\.hidden = locked/.test(js),
@@ -433,6 +450,22 @@ export default async function run(t) {
     /id="settings-import-merge"/.test(s)
       && /id="settings-import-replace"/.test(s)
       && /id="settings-import-replace-confirm"/.test(s),
+  );
+
+  t.check('backup group has a Clear watchlist button', /id="settings-clear"[^>]*data-i18n="settingsClear"/.test(s));
+  const clearRow = s.match(/<div id="settings-clear-confirm"[^>]*>[\s\S]*?<\/div>/);
+  t.check('clearing asks first, inline and hidden until asked', !!clearRow && /\bhidden\b/.test(clearRow[0].split('>')[0]));
+  t.check(
+    'the confirm row has Remove all and Cancel',
+    !!clearRow && /id="settings-clear-yes"/.test(clearRow[0]) && /id="settings-clear-cancel"/.test(clearRow[0]),
+  );
+  t.check('the prompt names how many channels go', /t\('settingsClearPrompt', \[String\(view\.channels\.length\)\]\)/.test(js));
+  t.check('Clear is disabled with nothing to clear', /clearBtn\.disabled = locked \|\| view\.channels\.length === 0/.test(js));
+  t.check(
+    'only Remove all sends clearChannels',
+    /settings-clear-yes'\)\.addEventListener\('click', \(\) => \{\s*void clearWatchlist\(\);/.test(js)
+      && (js.match(/type: 'clearChannels'/g) || []).length === 1
+      && /async function clearWatchlist\(\) \{[\s\S]{0,200}type: 'clearChannels'/.test(js),
   );
 
   t.section('i18n');

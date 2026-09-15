@@ -19,6 +19,11 @@ Everything stays in your browser's extension storage, on your device:
 Nothing is copied off your device. Removing the extension deletes all of it.
 **Export** in Settings writes a file to your computer; nothing else sees it.
 
+**Import from YouTube** reads a `subscriptions.csv` file that you download
+from Google Takeout yourself. The extension reads it on your device and keeps
+only each channel's id and name. It does not sign in to Google, and the file
+is not sent anywhere.
+
 ## What it requests from the internet
 
 - **`www.youtube.com`** — public channel feeds and public video details, the
@@ -33,6 +38,12 @@ Nothing is copied off your device. Removing the extension deletes all of it.
 
 It sends nothing to any other server, and it never sends your channel list,
 settings or listening totals anywhere.
+
+**When you remove the extension**, your browser opens a short page at
+`ashahinl.github.io`, hosted by GitHub, that asks why. Its address carries
+only the extension's language and version. The page sends nothing: its
+button opens a GitHub issue with your answers filled in, which is posted only
+if you post it. GitHub, like any website, can see that the page was visited.
 
 ## On YouTube pages
 

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="welcomeTitle">Welcome to Companion for YouTube</title>
+    <link rel="icon" href="../../icons/icon32.png" />
+    <link rel="stylesheet" href="welcome.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <img class="hero__icon" src="../../icons/icon128.png" width="56" height="56" alt="" />
+        <div class="hero__text">
+          <h1 class="hero__name" data-i18n="extName">Companion for YouTube</h1>
+          <p class="hero__lede" data-i18n="welcomeLede">Three steps and you're set. No sign-in, ever.</p>
+        </div>
+        <label class="hero__lang">
+          <span class="sr-only" data-i18n="settingsLanguage">Language</span>
+          <select id="welcome-locale" class="select">
+            <option value="auto" data-i18n="settingsLocaleAuto">Auto</option>
+            <option value="en" data-i18n="settingsLocaleEn">English</option>
+            <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
+          </select>
+        </label>
+      </header>
+
+      <ol class="steps">
+        <li class="step" id="import">
+          <h2 class="step__title" data-i18n="welcomeStepImportTitle">Bring your channels</h2>
+          <p data-i18n="welcomeStepImportText">Subscribed to channels on YouTube? Bring the whole list across at once.</p>
+          <ol class="howto">
+            <li>
+              <span data-i18n="welcomeTakeoutOpen">Open Google Takeout:</span>
+              <a href="https://takeout.google.com/" target="_blank" rel="noopener noreferrer" dir="ltr">takeout.google.com</a>
+            </li>
+            <li data-i18n="welcomeTakeoutSelect">Deselect everything, then select only YouTube and YouTube Music.</li>
+            <li data-i18n="welcomeTakeoutData">In its list of YouTube data, keep only subscriptions, then create the export.</li>
+            <li data-i18n="welcomeTakeoutDownload">Download what Google prepares and unzip it. This can take a few minutes.</li>
+            <li data-i18n="welcomeTakeoutPick">Pick subscriptions.csv from its subscriptions folder.</li>
+          </ol>
+          <div class="pick">
+            <button id="welcome-import" class="btn btn--primary" type="button" data-i18n="welcomeImportButton">
+              Choose subscriptions.csv
+            </button>
+            <input id="welcome-import-file" type="file" accept=".csv,text/csv" hidden />
+            <span id="welcome-import-spinner" class="spinner" hidden></span>
+          </div>
+          <p id="welcome-import-status" class="status" role="status"></p>
+          <p class="note" data-i18n="welcomeImportPrivacy">
+            The file is read on this computer. Only the channel ids and names are kept, and nothing is sent to Google or anyone else.
+          </p>
+          <p class="step__alt" data-i18n="welcomeStepImportAlt">
+            Or add channels one at a time: open a channel or video on YouTube, open the extension, and press Follow.
+          </p>
+        </li>
+
+        <li class="step">
+          <h2 class="step__title" data-i18n="welcomeStepAudioTitle">Try audio mode</h2>
+          <p data-i18n="welcomeStepAudioText">
+            Open any YouTube video, open the extension and turn on Audio mode. The video drops to 144p behind a cover: the same sound, with about 8× less data than 720p.
+          </p>
+          <p id="welcome-audio-key" class="note" hidden></p>
+        </li>
+
+        <li class="step">
+          <h2 class="step__title" data-i18n="welcomeStepPinTitle">Pin the icon</h2>
+          <p data-i18n="welcomeStepPinText">
+            Click the puzzle piece next to the address bar, then the pin beside Companion for YouTube. The icon shows how many new videos are waiting.
+          </p>
+          <p id="welcome-pinned" class="status status--ok" hidden data-i18n="welcomePinned">Pinned. You're all set.</p>
+          <p id="welcome-popup-key" class="note" hidden></p>
+        </li>
+      </ol>
+
+      <footer class="foot">
+        <p data-i18n="welcomeFooter">Free and open source, with no ads and no tracking.</p>
+        <a
+          href="https://github.com/ashahinL/Youtube-Companion/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-i18n="welcomeIssues"
+        >Report a bug or suggest an idea</a>
+      </footer>
+    </main>
+
+    <script type="module" src="welcome.js"></script>
+  </body>
+</html>

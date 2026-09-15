@@ -14,9 +14,11 @@ import {
   fetchChannelHeader,
   classifyVideo,
   isPushback,
+  isAvatarUrl,
 } from '../lib/yt.js';
 import { readSettings, writeSettings, onSettingsChanged } from '../lib/settings.js';
 import { parseBackup, mergeBackup } from '../lib/backup.js';
+import { parseTakeoutCsv, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
 import { resolveLocale, loadMessages, translate } from '../lib/i18n.js';
 import {
   readChannels,
@@ -59,6 +61,20 @@ const YT_ORIGIN_RULE_ID = 1;
 // between channel fetches in each lane, is a choice, not a measured ceiling.
 const LANES = 3;
 const CHANNEL_FETCH_DELAY_MS = 250;
+
+// A channel imported from a file has a name but no picture or handle, and
+// filling one in is a Videos-tab browse of about 35 KB. A few per check keeps
+// an import of hundreds from doubling the requests of the checks after it.
+const HEADER_FILLS_PER_SWEEP = 20;
+const HEADER_RETRY_MS = 24 * 60 * 60_000;
+
+// Chrome stops a worker after 30 seconds without an event or an extension
+// API call, and a fetch in flight is neither. A check of hundreds of channels
+// runs for minutes, so it makes a trivial API call more often than that.
+const KEEPALIVE_MS = 25_000;
+
+const WELCOME_PAGE = 'src/welcome/welcome.html';
+const UNINSTALL_PAGE = 'https://ashahinl.github.io/Youtube-Companion/uninstall.html';
 
 // The content script shares a renderer with youtube.com, so it is the sender
 // a compromised page would speak as. It needs these two and nothing else;
@@ -338,6 +354,58 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
   return { meta, pushedBack };
 }
 
+/**
+ * The upload time a video needs to stay in a feed capped at `maxItems`,
+ * counting the rows already in it and every upload time just fetched, or
+ * -Infinity while there is room. An older video would be cut the moment it
+ * went in. Each channel brings 15 uploads, so 300 channels bring 4,500 to a
+ * feed of 500, and more than the 3,000 records videoMeta keeps: without this
+ * floor the overflow was asked about again on every check.
+ */
+function feedFloor(feed, atById, maxItems) {
+  const cap = Number(maxItems);
+  const times = new Map();
+  for (const row of feed || []) {
+    const at = Number(row?.at);
+    if (row?.v && Number.isFinite(at)) times.set(row.v, at);
+  }
+  for (const [v, at] of atById) times.set(v, at);
+  if (!(cap > 0) || times.size <= cap) return -Infinity;
+  return [...times.values()].sort((a, b) => b - a)[cap - 1];
+}
+
+/**
+ * Picture, handle and current name for channels that have no picture, a few
+ * per check. Returns true when YouTube pushed back.
+ */
+async function fillHeaders(channels, patchChannel, fetchImpl) {
+  const now = Date.now();
+  const due = channels
+    .filter((ch) => !ch.avatar && now - (Number(ch.headerAt) || 0) >= HEADER_RETRY_MS)
+    .slice(0, HEADER_FILLS_PER_SWEEP);
+  let pushedBack = false;
+  await inLanes(due, LANES, CHANNEL_FETCH_DELAY_MS, async (ch) => {
+    try {
+      const header = await fetchChannelHeader(ch.id, { fetch: fetchImpl });
+      patchChannel(ch.id, {
+        headerAt: Date.now(),
+        title: header.title || ch.title,
+        handle: header.handle || ch.handle,
+        avatar: isAvatarUrl(header.avatar) ? header.avatar : '',
+      });
+    } catch (err) {
+      if (isPushback(err)) {
+        pushedBack = true;
+        return true;
+      }
+      // Tried again tomorrow; a picture is not worth a request every check.
+      patchChannel(ch.id, { headerAt: Date.now() });
+    }
+    return false;
+  });
+  return pushedBack;
+}
+
 function itemFromEntry(entry, channelId, rec) {
   return {
     v: entry.v,
@@ -466,12 +534,20 @@ async function performSweep({ scope, onlyId }) {
 
   let videoMeta = await readVideoMeta();
   const atById = new Map();
-  const toClassify = new Set();
   for (const { entries } of succeeded) {
     for (const entry of entries) {
-      if (!entry?.v) continue;
-      if (Number.isFinite(entry.at)) atById.set(entry.v, entry.at);
-      if (!videoMeta[entry.v]) toClassify.add(entry.v);
+      if (entry?.v && Number.isFinite(entry.at)) atById.set(entry.v, entry.at);
+    }
+  }
+  const floor = feedFloor(await readFeed(), atById, settings.feed.maxItems);
+  const toClassify = new Set();
+  const tooOld = new Set();
+  for (const { entries } of succeeded) {
+    for (const entry of entries) {
+      if (!entry?.v || videoMeta[entry.v]) continue;
+      // A Videos-tab row has no time until the player gives it one.
+      if (atById.get(entry.v) < floor) tooOld.add(entry.v);
+      else toClassify.add(entry.v);
     }
   }
   for (const id of pendingLiveIds(videoMeta)) toClassify.add(id);
@@ -488,19 +564,29 @@ async function performSweep({ scope, onlyId }) {
   const incomingIds = new Set();
   const quiet = new Set();
 
-  for (const { channel, entries, via } of succeeded) {
-    // The Videos tab leaves out shorts, so on a channel that posts them it
-    // reaches back past the feed's window, to videos that are old news.
+  // Each channel's newest upload this check, including ones too old for the
+  // feed. An upload that failed to classify is left out: counted now, it
+  // would arrive next check as old news and never alert.
+  const newestSeen = new Map();
+  for (const { channel, entries } of succeeded) {
+    // An upload no newer than one already seen from this channel is not new.
+    // It is a row the feed's cap pushed out, back because a removed channel
+    // made room, or a Videos-tab row reaching past the feed's window because
+    // that tab leaves out shorts. Either would alert for old videos.
     const newestBefore = Math.max(Number(channel.lastVideoAt) || 0, newestAt(feedNow, channel.id));
+    let newest = 0;
     for (const entry of entries) {
+      if (tooOld.has(entry.v)) newest = Math.max(newest, atById.get(entry.v));
       const rec = videoMeta[entry.v];
       if (!rec || !rec.k) continue;
       const at = Number.isFinite(entry.at) ? entry.at : Number(rec.at);
       if (!(at > 0)) continue;
-      if (via === 'videos' && at <= newestBefore) quiet.add(entry.v);
+      newest = Math.max(newest, at);
+      if (at <= newestBefore) quiet.add(entry.v);
       incoming.push(itemFromEntry({ ...entry, at }, channel.id, rec));
       incomingIds.add(entry.v);
     }
+    newestSeen.set(channel.id, newest);
   }
 
   // Live/premiere rows that settled this pass but dropped off the RSS
@@ -514,15 +600,32 @@ async function performSweep({ scope, onlyId }) {
     incoming.push({ ...existing, k: rec.k, d: rec.d, st: rec.st });
   }
 
-  const { feed, added } = await applyFeedMerge(incoming, settings.feed.maxItems);
+  // A check takes minutes on a long list, and the list can change meanwhile.
+  // Rows from a channel removed, or a list cleared, mid-check would come back
+  // into the feed with no channel behind them.
+  const listed = new Set((await readChannels()).map((ch) => ch.id));
+  const { feed, added } = await applyFeedMerge(
+    incoming.filter((item) => listed.has(item.c)),
+    settings.feed.maxItems,
+  );
 
   for (const { channel } of succeeded) {
-    const fields = { lastVideoAt: newestAt(feed, channel.id) };
+    // Never lowered: a channel whose rows the cap pushed out still knows its
+    // newest upload, and that is what keeps those rows quiet if they return.
+    const lastVideoAt = Math.max(
+      Number(channel.lastVideoAt) || 0,
+      newestAt(feed, channel.id),
+      newestSeen.get(channel.id) || 0,
+    );
+    const fields = { lastVideoAt };
     // A pushback can stop classification before a new channel's backfill is
     // all in. Left unseeded, the rest arrives silently next time instead of
     // as a burst of alerts for old videos.
     if (unseeded.has(channel.id) && !pushedBack) fields.seeded = true;
     patchChannel(channel.id, fields);
+  }
+  if (!pushedBack) {
+    pushedBack = await fillHeaders(succeeded.map((s) => s.channel), patchChannel, fetchImpl);
   }
   const channels = await updateChannels(patches);
 
@@ -567,9 +670,13 @@ export async function runSweep({ scope = 'all', onlyId = null } = {}) {
     // Persist running the moment it changes. Batching it with a later write
     // is how a kill leaves the flag stuck on.
     await writePollState({ running: true });
+    const keepAlive = setInterval(() => {
+      chromeApi().runtime.getPlatformInfo?.().catch?.(() => {});
+    }, KEEPALIVE_MS);
     try {
       return await performSweep({ scope, onlyId });
     } finally {
+      clearInterval(keepAlive);
       await writePollState({ running: false });
     }
   } finally {
@@ -598,6 +705,41 @@ export async function addChannelByInput(input) {
   }
   const channel = (await readChannels()).find((ch) => ch.id === id);
   return { ok: true, channel };
+}
+
+/**
+ * Adds the channels of a Takeout subscriptions.csv that are not on the list
+ * yet, in one write, as long as the list stays within MAX_TAKEOUT_CHANNELS. They start unseeded, so their first check fills the feed
+ * without alerts; the page that sent the file asks for that check.
+ */
+export async function importTakeout(text) {
+  const parsed = parseTakeoutCsv(text);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  const channels = await readChannels();
+  const have = new Set(channels.map((ch) => ch.id));
+  const now = Date.now();
+  const fresh = [];
+  for (const { id, title } of parsed.channels) {
+    if (have.has(id)) continue;
+    fresh.push({
+      id,
+      handle: '',
+      title,
+      avatar: '',
+      favorite: false,
+      muted: false,
+      addedAt: now,
+      lastFetchAt: 0,
+      lastVideoAt: 0,
+      lastError: null,
+      seeded: false,
+    });
+  }
+  // The limit is on the list, not the file: every channel is a request on
+  // every check.
+  if (channels.length + fresh.length > MAX_TAKEOUT_CHANNELS) return { ok: false, error: 'count' };
+  if (fresh.length) await writeChannels([...channels, ...fresh]);
+  return { ok: true, added: fresh.length, skipped: parsed.channels.length - fresh.length };
 }
 
 /*
@@ -644,6 +786,20 @@ export async function undoRemove(id) {
 }
 
 /**
+ * Empties the list and the feed. Alert history stays, so a channel added back
+ * never alerts again for a video it already alerted for.
+ */
+export async function clearChannels() {
+  const removed = (await readChannels()).length;
+  await writeChannels([]);
+  await saveFeed([]);
+  await chromeApi().storage.session.remove(LAST_REMOVED_KEY);
+  await syncAlarms();
+  await refreshBadge();
+  return { ok: true, removed, state: await collectState() };
+}
+
+/**
  * Chrome fills `sender` in the browser process, so a page cannot claim an
  * extension URL. The popup's sender.url is chrome-extension://<id>/…; a
  * content script's is the youtube.com page it runs in.
@@ -676,6 +832,8 @@ export async function handleMessage(msg, sender) {
         });
       case 'addChannel':
         return await addChannelByInput(msg.input);
+      case 'importTakeout':
+        return await importTakeout(msg.data);
       case 'removeChannel': {
         await rememberRemoved(msg.id);
         await removeChannel(msg.id);
@@ -684,6 +842,8 @@ export async function handleMessage(msg, sender) {
       }
       case 'undoRemove':
         return await undoRemove(msg.id);
+      case 'clearChannels':
+        return await clearChannels();
       case 'setFavorite': {
         await setFavorite(msg.id, msg.on);
         await syncAlarms();
@@ -803,12 +963,38 @@ function onAlarm(alarm) {
   if (alarm?.name === ALARM_FAV) return runSweep({ scope: 'favorites' }).catch(() => {});
 }
 
+/**
+ * The page a browser opens after the extension is removed. It carries the
+ * language, so the page can ask in the words the user read, and the version;
+ * nothing that tells one user from another.
+ */
+export async function syncUninstallUrl() {
+  const runtime = chromeApi().runtime;
+  if (typeof runtime.setUninstallURL !== 'function') return;
+  const settings = await readSettings();
+  const url = new URL(UNINSTALL_PAGE);
+  url.searchParams.set('lang', resolveLocale(settings.ui.locale, globalThis.navigator?.language));
+  const version = runtime.getManifest?.()?.version;
+  if (version) url.searchParams.set('v', version);
+  await runtime.setUninstallURL(url.href);
+}
+
 function onBoot() {
   ensureYtOriginRule().catch(() => {});
   syncAlarms().catch(() => {});
+  syncUninstallUrl().catch(() => {});
 }
 
-chromeApi().runtime.onInstalled.addListener(onBoot);
+/** The welcome page opens on a fresh install only, never on an update. */
+export async function onInstalled(details) {
+  onBoot();
+  if (details?.reason !== 'install') return;
+  await chromeApi().tabs.create({ url: chromeApi().runtime.getURL(WELCOME_PAGE), active: true });
+}
+
+chromeApi().runtime.onInstalled.addListener((details) => {
+  onInstalled(details).catch(() => {});
+});
 chromeApi().runtime.onStartup.addListener(onBoot);
 chromeApi().alarms.onAlarm.addListener(onAlarm);
 chromeApi().notifications.onClicked.addListener((id) => {
@@ -828,6 +1014,7 @@ chromeApi().runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 onSettingsChanged(() => {
   syncAlarms().catch(() => {});
+  syncUninstallUrl().catch(() => {});
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 
