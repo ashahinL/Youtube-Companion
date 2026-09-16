@@ -67,7 +67,15 @@ export default async function run(t) {
     'welcomeImportSlowDown' in en && 'welcomeImportSlowDown' in ar
       && 'welcomeImportSlowDownSkipped' in en && 'welcomeImportSlowDownSkipped' in ar,
   );
-  t.check('the shortcut lines hide when Chrome bound nothing', /\.hidden = !keys/.test(js));
+  t.check(
+    'no bound key uses the same empty-shortcut words as the popup',
+    /audioShortcutNone/.test(js) && 'audioShortcutNone' in en && 'audioShortcutNone' in ar,
+  );
+  t.check('the shortcut lines stay visible when Chrome bound nothing', /\.hidden = false/.test(js) && !/\.hidden = !keys/.test(js));
+  t.check(
+    'only the over-limit import error names the cap',
+    /error === 'count'/.test(js) && /MAX_TAKEOUT_CHANNELS/.test(js),
+  );
   t.check('pinning is detected from the toolbar setting', /getUserSettings\(\)/.test(js) && /isOnToolbar/.test(js));
 
   t.section('looks');

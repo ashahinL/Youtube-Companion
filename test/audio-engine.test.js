@@ -20,6 +20,8 @@ const contentSrc = read('src/content/content.js');
 const overlayCss = read('src/content/overlay.css');
 
 const PAGE = 'https://www.youtube.com';
+const TOKEN = 'ab'.repeat(32);
+const OTHER_TOKEN = 'cd'.repeat(32);
 
 function loadBridge(player, opts) {
   const posts = [];
@@ -49,12 +51,34 @@ function loadBridge(player, opts) {
   // original object, so event.source must be the same reference it closed over.
   const win = vm.runInContext('globalThis', sandbox);
   function fire(event) {
+    let stopped = false;
+    const ev = event || {};
+    const orig = ev.stopImmediatePropagation;
+    ev.stopImmediatePropagation = function () {
+      stopped = true;
+      if (typeof orig === 'function') orig.call(ev);
+    };
     const list = sandbox._listeners || win._listeners || [];
     for (const { type, fn } of list) {
-      if (type === 'message') fn(event);
+      if (stopped) break;
+      if (type === 'message') fn(ev);
     }
   }
-  return { sandbox, win, fire, posts, bridge: sandbox.AudioModeBridge };
+  function adopt(token) {
+    fire({
+      source: win,
+      origin: PAGE,
+      data: { type: token || TOKEN, dir: 'adopt' },
+    });
+  }
+  return { sandbox, win, fire, posts, adopt, bridge: sandbox.AudioModeBridge };
+}
+
+function loadAdoptedBridge(player, opts) {
+  const loaded = loadBridge(player, opts);
+  loaded.adopt(TOKEN);
+  loaded.posts.length = 0;
+  return loaded;
 }
 
 function loadEngine(chrome, opts) {
@@ -75,7 +99,7 @@ function req(over) {
     source: null,
     origin: PAGE,
     data: {
-      type: 'ytc-audio-bridge',
+      type: TOKEN,
       dir: 'request',
       id: 1,
       method: 'getPlaybackQuality',
@@ -151,6 +175,7 @@ async function loadSession(opts) {
     __ytcHarness: true,
     URL,
     chrome,
+    crypto: globalThis.crypto,
     AbortController,
     setTimeout,
     clearTimeout,
@@ -180,6 +205,15 @@ async function loadSession(opts) {
       if (type === 'message') box.listeners.push(fn);
     },
     postMessage(data) {
+      if (data && data.dir === 'adopt') {
+        const event = {
+          source: box.win,
+          origin: PAGE,
+          data: { type: data.type, dir: 'ready' },
+        };
+        for (let i = 0; i < box.listeners.length; i++) box.listeners[i](event);
+        return;
+      }
       if (!data || data.dir !== 'request') return;
       calls.push([data.method].concat(Array.isArray(data.args) ? data.args : []));
       let result;
@@ -260,10 +294,11 @@ export default async function run(t) {
     },
     addEventListener() {},
   };
-  const { fire, posts, sandbox, win, bridge } = loadBridge(player);
+  const { fire, posts, sandbox, win, bridge, adopt } = loadAdoptedBridge(player);
 
   t.check('inject.js attaches AudioModeBridge', !!bridge);
-  t.check('bridge type is namespaced', bridge.BRIDGE_TYPE === 'ytc-audio-bridge', String(bridge.BRIDGE_TYPE));
+  t.check('adopted token is 64 hex chars', bridge.TOKEN_RE.test(bridge.getToken()), String(bridge.getToken()));
+  t.check('bridge has no fixed type name', !Object.prototype.hasOwnProperty.call(bridge, 'BRIDGE_TYPE'));
 
   function reset() {
     calls.length = 0;
@@ -273,7 +308,7 @@ export default async function run(t) {
   reset();
   fire(req({ source: win }));
   t.check('valid getPlaybackQuality calls the player', calls.length === 1 && calls[0][0] === 'getPlaybackQuality', JSON.stringify(calls));
-  t.check('valid request posts a namespaced response', posts[0]?.data?.type === 'ytc-audio-bridge' && posts[0]?.data?.dir === 'response', JSON.stringify(posts[0]));
+  t.check('valid request posts a namespaced response', posts[0]?.data?.type === TOKEN && posts[0]?.data?.dir === 'response', JSON.stringify(posts[0]));
   t.check('valid request is ok with the player result', posts[0]?.data?.ok === true && posts[0]?.data?.result === 'hd720', JSON.stringify(posts[0]?.data));
   t.check('response is targeted at youtube.com', posts[0]?.origin === PAGE, String(posts[0]?.origin));
 
@@ -291,7 +326,7 @@ export default async function run(t) {
   t.check('wrong type does not call the player', calls.length === 0, JSON.stringify(calls));
 
   reset();
-  fire(req({ source: win, data: { type: 'ytc-audio-bridge', dir: 'response', id: 1, method: 'getPlaybackQuality', args: [] } }));
+  fire(req({ source: win, data: { type: TOKEN, dir: 'response', id: 1, method: 'getPlaybackQuality', args: [] } }));
   t.check('response-shaped messages are not treated as requests', calls.length === 0, JSON.stringify(calls));
 
   reset();
@@ -305,28 +340,28 @@ export default async function run(t) {
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'eval', args: ['1+1'] },
+    data: { type: TOKEN, dir: 'request', id: 1, method: 'eval', args: ['1+1'] },
   }));
   t.check('unknown method does not call the player', calls.length === 0, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'stopVideo', args: [] },
+    data: { type: TOKEN, dir: 'request', id: 1, method: 'stopVideo', args: [] },
   }));
   t.check('non-allowlisted player method is rejected', calls.length === 0, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'setPlaybackQuality', args: ['tiny'] },
+    data: { type: TOKEN, dir: 'request', id: 1, method: 'setPlaybackQuality', args: ['tiny'] },
   }));
   t.check('valid setPlaybackQuality is forwarded', calls.length === 1 && calls[0][1] === 'tiny', JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 2, method: 'setPlaybackQualityRange', args: ['tiny', 'tiny'] },
+    data: { type: TOKEN, dir: 'request', id: 2, method: 'setPlaybackQualityRange', args: ['tiny', 'tiny'] },
   }));
   t.check(
     'valid setPlaybackQualityRange is forwarded in order',
@@ -337,28 +372,28 @@ export default async function run(t) {
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 3, method: 'setPlaybackQualityRange', args: ['tiny'] },
+    data: { type: TOKEN, dir: 'request', id: 3, method: 'setPlaybackQualityRange', args: ['tiny'] },
   }));
   t.check('wrong arity is rejected', calls.length === 0, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 4, method: 'setPlaybackQuality', args: ['not-a-quality'] },
+    data: { type: TOKEN, dir: 'request', id: 4, method: 'setPlaybackQuality', args: ['not-a-quality'] },
   }));
   t.check('unknown quality string is rejected', calls.length === 0, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 5, method: 'getPlaybackQuality' },
+    data: { type: TOKEN, dir: 'request', id: 5, method: 'getPlaybackQuality' },
   }));
   t.check('missing args array is rejected', calls.length === 0, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: '1', method: 'getPlaybackQuality', args: [] },
+    data: { type: TOKEN, dir: 'request', id: '1', method: 'getPlaybackQuality', args: [] },
   }));
   t.check('non-number id is rejected', calls.length === 0, JSON.stringify(calls));
 
@@ -368,7 +403,7 @@ export default async function run(t) {
     getPlaybackQuality() { throw new Error('boom'); },
     addEventListener() {},
   };
-  const boom = loadBridge(throwing);
+  const boom = loadAdoptedBridge(throwing);
   try {
     boom.fire(req({ source: boom.win }));
   } catch (err) {
@@ -382,7 +417,7 @@ export default async function run(t) {
   );
 
   reset();
-  const missing = loadBridge(null);
+  const missing = loadAdoptedBridge(null);
   missing.fire(req({ source: missing.win }));
   t.check(
     'missing player posts ok: false and does not throw',
@@ -394,6 +429,54 @@ export default async function run(t) {
   t.check('isAllowedCall rejects a third arg', bridge.isAllowedCall('setPlaybackQualityRange', ['tiny', 'tiny', 'tiny']) === false);
   t.check('isAllowedCall rejects auto as a get arg', bridge.isAllowedCall('getPlaybackQuality', ['auto']) === false);
   t.check('readRequest returns null for a foreign origin', bridge.readRequest(req({ source: sandbox, origin: 'https://evil.com' }), sandbox) === null);
+
+  t.section('bridge token adoption');
+
+  const fresh = loadBridge(player);
+  t.check('no token before adopt', fresh.bridge.getToken() === '', String(fresh.bridge.getToken()));
+  calls.length = 0;
+  fresh.fire(req({ source: fresh.win }));
+  t.check('request without a token is ignored', calls.length === 0 && fresh.posts.length === 0, JSON.stringify({ calls, posts: fresh.posts }));
+
+  fresh.adopt(TOKEN);
+  t.check('first adopt wins', fresh.bridge.getToken() === TOKEN, String(fresh.bridge.getToken()));
+  t.check(
+    'first adopt replies ready',
+    fresh.posts.length === 1 && fresh.posts[0].data.dir === 'ready' && fresh.posts[0].data.type === TOKEN,
+    JSON.stringify(fresh.posts[0]),
+  );
+
+  const readyCount = fresh.posts.length;
+  fresh.adopt(OTHER_TOKEN);
+  t.check('later adopt is ignored', fresh.bridge.getToken() === TOKEN, String(fresh.bridge.getToken()));
+  t.check('later adopt does not reply', fresh.posts.length === readyCount, String(fresh.posts.length));
+
+  calls.length = 0;
+  fresh.posts.length = 0;
+  fresh.fire(req({ source: fresh.win, data: { type: OTHER_TOKEN, dir: 'request', id: 1, method: 'getPlaybackQuality', args: [] } }));
+  t.check('messages with a later token are ignored', calls.length === 0 && fresh.posts.length === 0, JSON.stringify({ calls, posts: fresh.posts }));
+
+  fresh.fire(req({ source: fresh.win, data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'getPlaybackQuality', args: [] } }));
+  t.check('messages with a fixed name are ignored', calls.length === 0, JSON.stringify(calls));
+
+  fresh.fire(req({ source: fresh.win }));
+  t.check('first token still calls the player', calls.length === 1 && calls[0][0] === 'getPlaybackQuality', JSON.stringify(calls));
+
+  fresh.adopt('short');
+  t.check('short adopt is ignored', fresh.bridge.getToken() === TOKEN);
+  const uppercase = loadBridge(player);
+  uppercase.adopt('AB'.repeat(32));
+  t.check('uppercase adopt is ignored', uppercase.bridge.getToken() === '');
+
+  const retry = loadBridge(player);
+  retry.adopt(TOKEN);
+  retry.posts.length = 0;
+  retry.adopt(TOKEN);
+  t.check(
+    'same token adopt re-acks ready',
+    retry.posts.length === 1 && retry.posts[0].data.dir === 'ready',
+    JSON.stringify(retry.posts[0]),
+  );
 
   t.section('collab channels on the bridge');
 
@@ -430,7 +513,7 @@ export default async function run(t) {
       },
     },
   };
-  const collabBridge = loadBridge(null, { owner: collabOwner });
+  const collabBridge = loadAdoptedBridge(null, { owner: collabOwner });
   t.check(
     'collaborators reads each id, name and handle',
     JSON.stringify(collabBridge.bridge.readCollaborators()) === JSON.stringify([
@@ -439,7 +522,7 @@ export default async function run(t) {
     ]),
     JSON.stringify(collabBridge.bridge.readCollaborators()),
   );
-  collabBridge.fire(req({ source: collabBridge.win, data: { type: 'ytc-audio-bridge', dir: 'request', id: 7, method: 'collaborators', args: [] } }));
+  collabBridge.fire(req({ source: collabBridge.win, data: { type: TOKEN, dir: 'request', id: 7, method: 'collaborators', args: [] } }));
   t.check(
     'a collaborators request is answered with no player on the page',
     collabBridge.posts[0]?.data?.ok === true && collabBridge.posts[0]?.data?.result?.length === 2,
@@ -508,42 +591,42 @@ export default async function run(t) {
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 8, method: 'playVideo', args: [] },
+    data: { type: TOKEN, dir: 'request', id: 8, method: 'playVideo', args: [] },
   }));
   t.check('valid playVideo is forwarded', calls.length === 1 && calls[0][0] === 'playVideo', JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 9, method: 'setVolume', args: [50] },
+    data: { type: TOKEN, dir: 'request', id: 9, method: 'setVolume', args: [50] },
   }));
   t.check('valid setVolume is forwarded', calls.length === 1 && calls[0][0] === 'setVolume' && calls[0][1] === 50, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 10, method: 'mute', args: [] },
+    data: { type: TOKEN, dir: 'request', id: 10, method: 'mute', args: [] },
   }));
   t.check('valid mute is forwarded', calls.length === 1 && calls[0][0] === 'mute', JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 11, method: 'unMute', args: [] },
+    data: { type: TOKEN, dir: 'request', id: 11, method: 'unMute', args: [] },
   }));
   t.check('valid unMute is forwarded', calls.length === 1 && calls[0][0] === 'unMute', JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 12, method: 'mute', args: [0] },
+    data: { type: TOKEN, dir: 'request', id: 12, method: 'mute', args: [0] },
   }));
   t.check('mute with an arg is not forwarded', calls.length === 0, JSON.stringify(calls));
 
   reset();
   fire(req({
     source: win,
-    data: { type: 'ytc-audio-bridge', dir: 'request', id: 13, method: 'unMute', args: [1] },
+    data: { type: TOKEN, dir: 'request', id: 13, method: 'unMute', args: [1] },
   }));
   t.check('unMute with an arg is not forwarded', calls.length === 0, JSON.stringify(calls));
 
@@ -709,14 +792,49 @@ export default async function run(t) {
     'slate preset is honoured',
     engine.overlayLookFromSettings({ audio: { preset: 'slate' } }).preset === 'slate',
   );
-  const img = engine.overlayLookFromSettings({
+  const img = engine.overlayLookFromSettings(
+    { audio: { backgroundType: 'image' } },
+    'data:image/jpeg;base64,aaa',
+  );
+  t.check(
+    'a data:image cover is accepted',
+    img.kind === 'image' && img.url === 'data:image/jpeg;base64,aaa',
+    JSON.stringify(img),
+  );
+  const httpsImg = engine.overlayLookFromSettings(
+    { audio: { backgroundType: 'image' } },
+    'https://example.com/bg.jpg',
+  );
+  t.check('an https cover falls back to a preset', httpsImg.kind === 'preset', JSON.stringify(httpsImg));
+  const leftover = engine.overlayLookFromSettings({
     audio: { backgroundType: 'image', imageUrl: 'https://example.com/bg.jpg' },
   });
-  t.check('https image URL is accepted', img.kind === 'image' && img.url === 'https://example.com/bg.jpg', JSON.stringify(img));
-  const badImg = engine.overlayLookFromSettings({
-    audio: { backgroundType: 'image', imageUrl: 'javascript:alert(1)' },
-  });
-  t.check('javascript image URL falls back to a preset', badImg.kind === 'preset', JSON.stringify(badImg));
+  t.check(
+    'a leftover settings imageUrl is not painted',
+    leftover.kind === 'preset',
+    JSON.stringify(leftover),
+  );
+  const noCover = engine.overlayLookFromSettings({ audio: { backgroundType: 'image' } }, '');
+  t.check('Image with no stored cover uses a preset', noCover.kind === 'preset', JSON.stringify(noCover));
+
+  const painted = makeEl('div');
+  engine.applyLook(painted, { kind: 'image', url: 'data:image/jpeg;base64,aaa', preset: 'midnight' });
+  t.check(
+    'applyLook paints a data:image cover',
+    painted.style.backgroundImage === 'url("data:image/jpeg;base64,aaa")',
+    painted.style.backgroundImage,
+  );
+  const blocked = makeEl('div');
+  engine.applyLook(blocked, { kind: 'image', url: 'https://example.com/bg.jpg', preset: 'midnight' });
+  t.check(
+    'applyLook does not paint an https cover',
+    blocked.style.backgroundImage === '' && blocked.dataset.kind === 'preset',
+    `${blocked.style.backgroundImage} ${blocked.dataset.kind}`,
+  );
+  t.check(
+    'the content script watches audioCover',
+    /audioCover/.test(contentSrc) && /changes\.audioCover/.test(contentSrc),
+  );
   const custom = engine.overlayLookFromSettings({
     audio: { preset: 'custom', customColor: '#112233' },
   });
@@ -728,6 +846,16 @@ export default async function run(t) {
 
   const enMessages = JSON.parse(read('_locales/en/messages.json'));
   const arMessages = JSON.parse(read('_locales/ar/messages.json'));
+  const enPack = {
+    overlayTitle: enMessages.overlayTitle.message,
+    overlayExit: enMessages.overlayExit.message,
+    overlayExitShortcut: 'Press $1 to exit',
+  };
+  const arPack = {
+    overlayTitle: arMessages.overlayTitle.message,
+    overlayExit: arMessages.overlayExit.message,
+    overlayExitShortcut: 'اضغط $1 للخروج',
+  };
 
   const localeCases = [
     ['en', 'ar'],
@@ -767,7 +895,7 @@ export default async function run(t) {
       && engine.localeFromSettings(null, 'en-GB') === 'en',
   );
 
-  const enUnbound = engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, '', 'en');
+  const enUnbound = engine.overlayCopy({ ui: { locale: 'en' } }, enPack, '', 'en');
   t.check('en title is Audio-only playback', enUnbound.title === 'Audio-only playback', enUnbound.title);
   t.check('en unbound exit is Exit audio mode', enUnbound.exit === 'Exit audio mode', enUnbound.exit);
   t.check('en unbound is ltr', enUnbound.dir === 'ltr' && enUnbound.locale === 'en');
@@ -782,7 +910,7 @@ export default async function run(t) {
     enUnbound.exit,
   );
 
-  const enBound = engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, 'Ctrl+Shift+Y', 'en');
+  const enBound = engine.overlayCopy({ ui: { locale: 'en' } }, enPack, 'Ctrl+Shift+Y', 'en');
   t.check(
     'en bound exit names the real shortcut',
     enBound.exit === 'Press Ctrl+Shift+Y to exit',
@@ -794,7 +922,7 @@ export default async function run(t) {
     enBound.exit,
   );
 
-  const enWhitespace = engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, '   ', 'en');
+  const enWhitespace = engine.overlayCopy({ ui: { locale: 'en' } }, enPack, '   ', 'en');
   t.check(
     'whitespace shortcut is treated as unbound',
     enWhitespace.exit === 'Exit audio mode',
@@ -802,14 +930,14 @@ export default async function run(t) {
   );
   t.check(
     'null shortcut is treated as unbound',
-    engine.overlayCopy({ ui: { locale: 'en' } }, enMessages, null, 'en').exit === 'Exit audio mode',
+    engine.overlayCopy({ ui: { locale: 'en' } }, enPack, null, 'en').exit === 'Exit audio mode',
   );
   t.check(
     'missing shortcut property is treated as unbound',
-    engine.boundShortcut(undefined) === '' && engine.exitLabel(enMessages, undefined) === 'Exit audio mode',
+    engine.boundShortcut(undefined) === '' && engine.exitLabel(enPack, undefined) === 'Exit audio mode',
   );
 
-  const arUnbound = engine.overlayCopy({ ui: { locale: 'ar' } }, arMessages, '', 'en-US');
+  const arUnbound = engine.overlayCopy({ ui: { locale: 'ar' } }, arPack, '', 'en-US');
   t.check(
     'explicit ar is rtl even if the browser is en',
     arUnbound.dir === 'rtl' && arUnbound.locale === 'ar',
@@ -818,7 +946,7 @@ export default async function run(t) {
   t.check('ar title is تشغيل الصوت فقط', arUnbound.title === 'تشغيل الصوت فقط', arUnbound.title);
   t.check('ar unbound exit is خروج من وضع الصوت', arUnbound.exit === 'خروج من وضع الصوت', arUnbound.exit);
 
-  const arBound = engine.overlayCopy({ ui: { locale: 'ar' } }, arMessages, 'Alt+Shift+A', 'en');
+  const arBound = engine.overlayCopy({ ui: { locale: 'ar' } }, arPack, 'Alt+Shift+A', 'en');
   t.check(
     'ar bound exit includes the real shortcut',
     arBound.exit === 'اضغط Alt+Shift+A للخروج',
@@ -826,8 +954,8 @@ export default async function run(t) {
   );
   t.check(
     'auto + ar-EG uses Arabic copy',
-    engine.overlayCopy({ ui: { locale: 'auto' } }, arMessages, '', 'ar-EG').locale === 'ar'
-      && engine.overlayCopy({ ui: { locale: 'auto' } }, arMessages, '', 'ar-EG').dir === 'rtl',
+    engine.overlayCopy({ ui: { locale: 'auto' } }, arPack, '', 'ar-EG').locale === 'ar'
+      && engine.overlayCopy({ ui: { locale: 'auto' } }, arPack, '', 'ar-EG').dir === 'rtl',
   );
 
   t.section('audioStats');
@@ -924,9 +1052,13 @@ export default async function run(t) {
   t.check('persist skips a zero delta', skipped === null);
 
   t.check(
-    'engine and bridge share a message type',
-    engine.BRIDGE_TYPE === bridge.BRIDGE_TYPE,
-    `${engine.BRIDGE_TYPE} vs ${bridge.BRIDGE_TYPE}`,
+    'engine has no fixed bridge type name',
+    !Object.prototype.hasOwnProperty.call(engine, 'BRIDGE_TYPE'),
+  );
+  t.check(
+    'content.js token pattern matches the bridge',
+    String(engine.TOKEN_RE) === String(bridge.TOKEN_RE),
+    `${engine.TOKEN_RE} vs ${bridge.TOKEN_RE}`,
   );
 
   mock.restore();
@@ -1055,14 +1187,24 @@ export default async function run(t) {
 
   const quietBridge = loadBridge(player, { harness: false });
   t.check('inject.js does not attach AudioModeBridge without the harness', quietBridge.bridge === undefined);
-  t.check('double-install guard is set without the API object', quietBridge.sandbox.__ytcAudioBridgeInstalled === true);
+  t.check(
+    'inject.js does not set a window install flag',
+    quietBridge.sandbox.__ytcAudioBridgeInstalled === undefined,
+  );
   const listenersOnce = (quietBridge.sandbox._listeners || quietBridge.win._listeners || []).length;
   vm.runInContext(injectSrc, quietBridge.sandbox, { filename: 'src/content/inject.js' });
   const listenersTwice = (quietBridge.sandbox._listeners || quietBridge.win._listeners || []).length;
   t.check(
-    'second inject.js is a no-op when the API object is absent',
-    listenersTwice === listenersOnce && listenersOnce === 1,
+    'second inject.js adds its own listener when the API object is absent',
+    listenersTwice === 2 && listenersOnce === 1,
     String(listenersTwice),
+  );
+  quietBridge.posts.length = 0;
+  quietBridge.adopt(TOKEN);
+  t.check(
+    'two copies still produce one ready (first adopt wins)',
+    quietBridge.posts.filter((p) => p.data && p.data.dir === 'ready').length === 1,
+    JSON.stringify(quietBridge.posts),
   );
 
   const quietEngine = loadEngine(undefined, { harness: false });
@@ -1098,7 +1240,7 @@ export default async function run(t) {
     overlayBox.AudioModeContent.findOverlayParent() === moviePlayer,
   );
 
-  t.section('boot beacon, no bridge');
+  t.section('boot writes no page mark');
 
   const html = { dataset: {} };
   const injected = [];
@@ -1136,8 +1278,8 @@ export default async function run(t) {
   vm.createContext(bootBox);
   vm.runInContext(coreSrc, bootBox, { filename: 'src/content/core.js' });
   vm.runInContext(contentSrc, bootBox, { filename: 'src/content/content.js' });
-  t.check('boot sets the DOM beacon', html.dataset.amBeacon === 'loaded', String(html.dataset.amBeacon));
-  t.check('boot does not inject the MAIN-world bridge', injected.length === 0, String(injected.length));
+  t.check('boot does not set a DOM beacon', html.dataset.amBeacon === undefined, String(html.dataset.amBeacon));
+  t.check('boot does not inject a script element', injected.length === 0, String(injected.length));
 
   t.section('audioMode.state');
 
@@ -1205,6 +1347,7 @@ export default async function run(t) {
     const injected = [];
     const calls = [];
     const sent = [];
+    const posts = [];
     const video = opts.noVideo
       ? null
       : {
@@ -1277,6 +1420,7 @@ export default async function run(t) {
       clearTimeout: opts.clearTimeout || clearTimeout,
       setInterval,
       clearInterval,
+      crypto: globalThis.crypto,
       location: { href: opts.href || 'https://www.youtube.com/watch?v=aaaaaaaaaaa' },
       navigator: { language: 'en' },
       chrome: {
@@ -1325,6 +1469,16 @@ export default async function run(t) {
         if (type === 'message') box.listeners.push(fn);
       },
       postMessage(data) {
+        posts.push(data);
+        if (data && data.dir === 'adopt') {
+          const event = {
+            source: box.win,
+            origin: PAGE,
+            data: { type: data.type, dir: 'ready' },
+          };
+          for (let i = 0; i < box.listeners.length; i++) box.listeners[i](event);
+          return;
+        }
         if (!data || data.dir !== 'request') return;
         calls.push([data.method].concat(Array.isArray(data.args) ? data.args : []));
         const result = data.method === 'collaborators' ? opts.collaborators : true;
@@ -1356,6 +1510,7 @@ export default async function run(t) {
       listeners,
       injected,
       calls,
+      posts,
       video,
       ask,
       sent,
@@ -1499,8 +1654,13 @@ export default async function run(t) {
   t.check('the line itself stands in as the channel name', collabRead.channel === doacLine, collabRead.channel);
   t.check(
     'the bridge is asked once, with no arguments',
-    collab.injected.length === 1 && JSON.stringify(collab.calls) === JSON.stringify([['collaborators']]),
-    JSON.stringify(collab.calls),
+    collab.injected.length === 0 && JSON.stringify(collab.calls) === JSON.stringify([['collaborators']]),
+    JSON.stringify({ injected: collab.injected.length, calls: collab.calls }),
+  );
+  t.check(
+    'collaborators handshake posted an adopt token',
+    collab.posts.some((p) => p && p.dir === 'adopt' && /^[0-9a-f]{64}$/.test(p.type)),
+    JSON.stringify(collab.posts.filter((p) => p && p.dir === 'adopt')),
   );
   await collab.ask({ type: 'audioMode.player' });
   t.check('the list is kept while the same line shows', collab.calls.length === 1, String(collab.calls.length));
@@ -1702,7 +1862,12 @@ export default async function run(t) {
     live.calls.some((c) => c[0] === 'playVideo'),
     JSON.stringify(live.calls),
   );
-  t.check('the first write injects the bridge', live.injected.length > 0, String(live.injected.length));
+  t.check('the first write does not inject a script', live.injected.length === 0, String(live.injected.length));
+  t.check(
+    'the first write adopts a bridge token',
+    live.posts.some((p) => p && p.dir === 'adopt' && /^[0-9a-f]{64}$/.test(p.type)),
+    JSON.stringify(live.posts.filter((p) => p && p.dir === 'adopt')),
+  );
 
   const pause = await live.ask({ type: 'audioMode.control', action: 'pause' });
   t.check('pause is ok', pause && pause.ok === true);
@@ -1888,13 +2053,78 @@ export default async function run(t) {
   );
 
   t.check(
-    'boot with throwing sendMessage still sets the beacon',
-    throwsPage.beacon === 'loaded',
+    'boot with throwing sendMessage still sets no beacon',
+    throwsPage.beacon === undefined,
     String(throwsPage.beacon),
   );
   t.check(
-    'boot with rejecting sendMessage still sets the beacon',
-    rejectsPage.beacon === 'loaded',
+    'boot with rejecting sendMessage still sets no beacon',
+    rejectsPage.beacon === undefined,
     String(rejectsPage.beacon),
+  );
+
+  t.section('ensureBridge handshake, overlay from boot, no page mark in src');
+
+  const handshake = bootPage();
+  await handshake.sandbox.AudioModeContent.ensureBridge();
+  t.check('ensureBridge creates no script element', handshake.injected.length === 0, String(handshake.injected.length));
+  const adoptPost = handshake.posts.find((p) => p && p.dir === 'adopt');
+  t.check(
+    'ensureBridge posts a 64-hex adopt token',
+    !!(adoptPost && handshake.sandbox.AudioModeContent.TOKEN_RE.test(adoptPost.type)),
+    JSON.stringify(adoptPost),
+  );
+  t.check(
+    'ensureBridge does not use a fixed type name',
+    !handshake.posts.some((p) => p && p.type === 'ytc-audio-bridge'),
+    JSON.stringify(handshake.posts),
+  );
+
+  const overlayBoot = bootPage({
+    bootReply: {
+      ok: true,
+      locale: 'en',
+      overlay: enPack,
+      overlays: { en: enPack, ar: arPack },
+    },
+  });
+  await wait(20);
+  const fromBoot = await overlayBoot.sandbox.AudioModeContent.overlayPackFor('en');
+  t.check(
+    'overlay strings come from the boot reply',
+    fromBoot && fromBoot.overlayTitle === 'Audio-only playback' && fromBoot.overlayExit === 'Exit audio mode',
+    JSON.stringify(fromBoot),
+  );
+  const arFromBoot = await overlayBoot.sandbox.AudioModeContent.overlayPackFor('ar');
+  t.check(
+    'boot reply also carries Arabic overlay copy',
+    arFromBoot && arFromBoot.overlayTitle === 'تشغيل الصوت فقط',
+    JSON.stringify(arFromBoot),
+  );
+
+  function walkSrc(dir) {
+    const out = [];
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) out.push(...walkSrc(full));
+      else out.push(full);
+    }
+    return out;
+  }
+  for (const full of walkSrc(path.join(ROOT, 'src'))) {
+    const rel = path.relative(ROOT, full);
+    t.check(`${rel} has no amBeacon`, !/amBeacon|am-beacon/.test(fs.readFileSync(full, 'utf8')));
+  }
+  t.check(
+    'content.js does not fetch locale files',
+    !contentSrc.includes('messages.json') && !contentSrc.includes('_locales/'),
+  );
+  t.check(
+    'content.js does not inject a script element for the bridge',
+    !/createElement\(\s*['"]script['"]\s*\)/.test(contentSrc),
+  );
+  t.check(
+    'inject.js has no fixed bridge type name',
+    !injectSrc.includes('ytc-audio-bridge') && !injectSrc.includes('__ytcAudioBridgeInstalled'),
   );
 }

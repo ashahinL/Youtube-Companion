@@ -10,7 +10,6 @@
   const Core = root.AudioModeCore;
   if (!Core) return;
 
-  const BRIDGE_TYPE = 'ytc-audio-bridge';
   const PAGE_ORIGIN = 'https://www.youtube.com';
   const OVERLAY_ID = 'ytc-audio-overlay';
   const AUDIO_STATS_KEY = 'audioStats';
@@ -18,6 +17,11 @@
   const SAMPLE_MS = 5000;
   const FLUSH_MS = 30000;
   const CALL_TIMEOUT_MS = 1500;
+  const BRIDGE_READY_MS = 1500;
+  const BRIDGE_RETRY_MS = 50;
+  // 32 random bytes, hex. A page can still watch postMessage; there is no
+  // fixed name to search for. That is not secrecy.
+  const TOKEN_RE = /^[0-9a-f]{64}$/;
   const PIN_SETTLE_MS = 250;
   const MENU_WAIT_MS = 150;
   const DEFAULT_RESTORE = 'hd720';
@@ -84,6 +88,9 @@
   let session = null;
   let gate = Promise.resolve();
   let bridgePromise = null;
+  let bridgeToken = '';
+  let bootOnce = null;
+  const overlayByLocale = Object.create(null);
   let collabCache = null;
   // The sleep timer lives in the tab, so it keeps counting after the popup
   // closes. A hidden tab's timers can run up to a minute late.
@@ -133,7 +140,18 @@
     return null;
   }
 
-  function overlayLookFromSettings(settings) {
+  // Only a data URL is painted. An https cover would make youtube.com
+  // fetch a third-party host whenever audio mode is on.
+  function coverDataUrl(value) {
+    if (typeof value !== 'string') return null;
+    const v = value.trim();
+    if (!v) return null;
+    if (/["\\\r\n]/.test(v)) return null;
+    if (!/^data:image\//i.test(v)) return null;
+    return v;
+  }
+
+  function overlayLookFromSettings(settings, cover) {
     const audio = settings && typeof settings === 'object' ? settings.audio : null;
     const group = audio && typeof audio === 'object' ? audio : {};
     const type = typeof group.backgroundType === 'string'
@@ -141,7 +159,7 @@
       : 'color';
 
     if (type === 'image') {
-      const url = Core.sanitizeImageUrl(group.imageUrl);
+      const url = coverDataUrl(cover);
       if (url) return { kind: 'image', url: url, preset: DEFAULT_PRESET };
     }
 
@@ -152,10 +170,6 @@
 
     const preset = lookupPreset(group.preset);
     return { kind: 'preset', preset: preset.name, from: preset.from, to: preset.to };
-  }
-
-  function escapeRe(s) {
-    return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   // Same rule as lib/i18n.js resolveLocale. Copied because content scripts
@@ -181,21 +195,12 @@
     }
   }
 
-  function messageOf(json, key, substitutions) {
-    if (!json || typeof json !== 'object') return '';
-    const entry = json[key];
-    if (!entry || typeof entry.message !== 'string') return '';
-    let msg = entry.message;
-    const placeholders = entry.placeholders;
-    if (placeholders && typeof placeholders === 'object') {
-      for (const name of Object.keys(placeholders)) {
-        const spec = placeholders[name];
-        const content = spec && spec.content != null ? String(spec.content) : '';
-        msg = msg.replace(new RegExp('\\$' + escapeRe(name) + '\\$', 'gi'), content);
-      }
-    }
+  function messageOf(pack, key, substitutions) {
+    if (!pack || typeof pack !== 'object') return '';
+    const text = pack[key];
+    if (typeof text !== 'string' || !text) return '';
     const subs = substitutions == null ? [] : [].concat(substitutions);
-    return msg
+    return text
       .replace(/\$(\d+)\$/g, function (_, n) {
         const idx = Number(n) - 1;
         return idx >= 0 && idx < subs.length ? String(subs[idx]) : '';
@@ -210,49 +215,54 @@
     return typeof value === 'string' ? value.trim() : '';
   }
 
-  function exitLabel(messages, shortcut) {
+  function exitLabel(pack, shortcut) {
     const bound = boundShortcut(shortcut);
-    if (bound) return messageOf(messages, 'overlayExitShortcut', [bound]);
-    return messageOf(messages, 'overlayExit');
+    if (bound) return messageOf(pack, 'overlayExitShortcut', [bound]);
+    return messageOf(pack, 'overlayExit');
   }
 
-  function overlayCopy(settings, messages, shortcut, navigatorLanguageValue) {
+  function overlayCopy(settings, pack, shortcut, navigatorLanguageValue) {
     const locale = localeFromSettings(settings, navigatorLanguageValue);
     return {
       locale: locale,
       dir: locale === 'ar' ? 'rtl' : 'ltr',
-      title: messageOf(messages, 'overlayTitle'),
-      exit: exitLabel(messages, shortcut),
+      title: messageOf(pack, 'overlayTitle'),
+      exit: exitLabel(pack, shortcut),
     };
   }
 
-  const overlayMessages = new Map();
-  let shortcutOnce = null;
-
-  async function loadOverlayMessages(locale) {
-    const loc = locale === 'ar' ? 'ar' : 'en';
-    if (overlayMessages.has(loc)) return overlayMessages.get(loc);
-    const pending = (async function () {
-      const ch = root.chrome;
-      if (!ch || !ch.runtime || typeof ch.runtime.getURL !== 'function') return null;
-      const url = ch.runtime.getURL('_locales/' + loc + '/messages.json');
-      const res = await fetch(url);
-      return await res.json();
-    })();
-    overlayMessages.set(loc, pending);
-    try {
-      const json = await pending;
-      if (!json || typeof json !== 'object') {
-        overlayMessages.delete(loc);
-        return null;
-      }
-      overlayMessages.set(loc, json);
-      return json;
-    } catch (err) {
-      overlayMessages.delete(loc);
-      return null;
+  function rememberOverlayReply(reply) {
+    if (!reply || typeof reply !== 'object') return;
+    const overlays = reply.overlays;
+    if (overlays && typeof overlays === 'object') {
+      if (overlays.en && typeof overlays.en === 'object') overlayByLocale.en = overlays.en;
+      if (overlays.ar && typeof overlays.ar === 'object') overlayByLocale.ar = overlays.ar;
+    }
+    if (reply.overlay && typeof reply.overlay === 'object') {
+      const loc = reply.locale === 'ar' ? 'ar' : 'en';
+      overlayByLocale[loc] = reply.overlay;
     }
   }
+
+  async function overlayPackFor(locale) {
+    const loc = locale === 'ar' ? 'ar' : 'en';
+    if (overlayByLocale[loc]) return overlayByLocale[loc];
+    await requestAudioModeBoot();
+    if (overlayByLocale[loc]) return overlayByLocale[loc];
+    try {
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') {
+        return overlayByLocale[loc] || null;
+      }
+      const reply = await ch.runtime.sendMessage({ type: 'audioMode.boot' });
+      rememberOverlayReply(reply);
+      return overlayByLocale[loc] || null;
+    } catch (err) {
+      return overlayByLocale[loc] || null;
+    }
+  }
+
+  let shortcutOnce = null;
 
   // Once per page: the binding does not change while this script lives, and
   // suggested_key is not a substitute for what Chrome actually registered.
@@ -324,12 +334,12 @@
     } catch (err) {
       // swallow
     }
-    const messages = await loadOverlayMessages(locale);
+    const pack = await overlayPackFor(locale);
     const shortcut = await requestAudioModeShortcut();
     let node = null;
     try { node = document.getElementById(OVERLAY_ID); } catch (err) { node = null; }
     if (!node || node !== el) return;
-    const copy = overlayCopy(settings, messages, shortcut, nav);
+    const copy = overlayCopy(settings, pack, shortcut, nav);
     try {
       node.setAttribute('dir', copy.dir);
       node.setAttribute('lang', copy.locale);
@@ -343,11 +353,11 @@
   }
 
   function scheduleOverlayPaint(el) {
-    readStoredSettings().then(function (settings) {
+    readStoredLook().then(function (stored) {
       const node = document.getElementById(OVERLAY_ID);
       if (!node) return;
-      applyLook(node, overlayLookFromSettings(settings));
-      paintFace(node, settings);
+      applyLook(node, overlayLookFromSettings(stored.settings, stored.cover));
+      paintFace(node, stored.settings);
     });
   }
 
@@ -441,8 +451,14 @@
       }, CALL_TIMEOUT_MS);
       pending.set(id, { resolve: resolve, timer: timer });
       try {
+        if (!bridgeToken) {
+          pending.delete(id);
+          clearTimeout(timer);
+          resolve(undefined);
+          return;
+        }
         win.postMessage({
-          type: BRIDGE_TYPE,
+          type: bridgeToken,
           dir: 'request',
           id: id,
           method: method,
@@ -463,7 +479,7 @@
       if (event.origin !== PAGE_ORIGIN) return;
       const data = event.data;
       if (!data || typeof data !== 'object') return;
-      if (data.type !== BRIDGE_TYPE) return;
+      if (!bridgeToken || data.type !== bridgeToken) return;
       if (data.dir === 'response') {
         const waitOn = pending.get(data.id);
         if (!waitOn) return;
@@ -854,10 +870,13 @@
     el.style.backgroundImage = '';
     el.style.removeProperty('--ytc-audio-custom-color');
     if (look.kind === 'image') {
-      el.dataset.kind = 'image';
-      el.dataset.preset = look.preset || DEFAULT_PRESET;
-      el.style.backgroundImage = 'url("' + look.url + '")';
-      return;
+      const url = coverDataUrl(look.url);
+      if (url) {
+        el.dataset.kind = 'image';
+        el.dataset.preset = look.preset || DEFAULT_PRESET;
+        el.style.backgroundImage = 'url("' + url + '")';
+        return;
+      }
     }
     if (look.kind === 'color') {
       el.dataset.kind = 'color';
@@ -877,6 +896,20 @@
       return got && got.settings ? got.settings : null;
     } catch (err) {
       return null;
+    }
+  }
+
+  async function readStoredLook() {
+    try {
+      const ch = root.chrome;
+      if (!ch || !ch.storage || !ch.storage.local) return { settings: null, cover: '' };
+      const got = await ch.storage.local.get(['settings', 'audioCover']);
+      return {
+        settings: got && got.settings ? got.settings : null,
+        cover: got ? got.audioCover : '',
+      };
+    } catch (err) {
+      return { settings: null, cover: '' };
     }
   }
 
@@ -1023,11 +1056,16 @@
     const ch = root.chrome;
     if (!ch || !ch.storage || !ch.storage.onChanged) return;
     function onChange(changes, area) {
-      if (area !== 'local' || !changes || !changes.settings) return;
+      if (area !== 'local' || !changes) return;
+      if (!changes.settings && !changes.audioCover) return;
       const el = document.getElementById(OVERLAY_ID);
       if (!el) return;
-      applyLook(el, overlayLookFromSettings(changes.settings.newValue));
-      paintFace(el, changes.settings.newValue);
+      readStoredLook().then(function (stored) {
+        const node = document.getElementById(OVERLAY_ID);
+        if (!node) return;
+        applyLook(node, overlayLookFromSettings(stored.settings, stored.cover));
+        if (changes.settings) paintFace(node, stored.settings);
+      });
     }
     try {
       ch.storage.onChanged.addListener(onChange);
@@ -1110,29 +1148,72 @@
     });
   }
 
+  function randomToken() {
+    const cryptoObj = root.crypto;
+    if (!cryptoObj || typeof cryptoObj.getRandomValues !== 'function') return '';
+    const bytes = new Uint8Array(32);
+    cryptoObj.getRandomValues(bytes);
+    let hex = '';
+    for (let i = 0; i < bytes.length; i++) {
+      const h = bytes[i].toString(16);
+      hex += h.length === 1 ? '0' + h : h;
+    }
+    return TOKEN_RE.test(hex) ? hex : '';
+  }
+
+  function postAdopt(token) {
+    const win = root.window || root;
+    try {
+      win.postMessage({ type: token, dir: 'adopt' }, PAGE_ORIGIN);
+    } catch (err) {
+      // swallow
+    }
+  }
+
   function ensureBridge() {
     if (bridgePromise) return bridgePromise;
     bridgePromise = new Promise(function (resolve) {
-      try {
-        const ch = root.chrome;
-        if (!ch || !ch.runtime || typeof ch.runtime.getURL !== 'function' || typeof document === 'undefined') {
-          resolve();
-          return;
-        }
-        const s = document.createElement('script');
-        s.src = ch.runtime.getURL('src/content/inject.js');
-        s.onload = function () {
-          if (s.parentNode) s.parentNode.removeChild(s);
-          resolve();
-        };
-        s.onerror = function () {
-          if (s.parentNode) s.parentNode.removeChild(s);
-          resolve();
-        };
-        (document.head || document.documentElement).appendChild(s);
-      } catch (err) {
+      const token = randomToken();
+      if (!token) {
+        resolve();
+        return;
+      }
+      bridgeToken = token;
+      const win = root.window || root;
+      if (!win || typeof win.postMessage !== 'function' || typeof win.addEventListener !== 'function') {
+        resolve();
+        return;
+      }
+      let settled = false;
+      let retryId = null;
+      let timeoutId = null;
+      function done() {
+        if (settled) return;
+        settled = true;
+        try { win.removeEventListener('message', onReady, false); } catch (err) { /* swallow */ }
+        if (retryId) clearInterval(retryId);
+        if (timeoutId) clearTimeout(timeoutId);
         resolve();
       }
+      function onReady(event) {
+        try {
+          if (event.source !== win) return;
+          if (event.origin !== PAGE_ORIGIN) return;
+          const data = event.data;
+          if (!data || typeof data !== 'object') return;
+          if (data.type !== token || data.dir !== 'ready') return;
+          done();
+        } catch (err) {
+          // swallow
+        }
+      }
+      try { win.addEventListener('message', onReady, false); } catch (err) { /* swallow */ }
+      retryId = setInterval(function () {
+        if (settled) return;
+        postAdopt(token);
+      }, BRIDGE_RETRY_MS);
+      timeoutId = setTimeout(done, BRIDGE_READY_MS);
+      postAdopt(token);
     });
     return bridgePromise;
   }
@@ -1220,18 +1301,22 @@
   }
 
   function requestAudioModeBoot() {
-    try {
-      const ch = root.chrome;
-      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
-      const result = ch.runtime.sendMessage({ type: 'audioMode.boot' });
-      if (result && typeof result.then === 'function') {
-        result.then(function (reply) {
-          if (reply && reply.openInAudioMode === true) enableWhenPlayerReady();
-        }, function () {});
+    if (bootOnce) return bootOnce;
+    bootOnce = (async function () {
+      try {
+        const ch = root.chrome;
+        if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return null;
+        const reply = await ch.runtime.sendMessage({ type: 'audioMode.boot' });
+        rememberOverlayReply(reply);
+        return reply;
+      } catch (err) {
+        return null;
       }
-    } catch (err) {
-      // swallow
-    }
+    })();
+    bootOnce.then(function (reply) {
+      if (reply && reply.openInAudioMode === true) enableWhenPlayerReady();
+    }, function () {});
+    return bootOnce;
   }
 
   function shouldBoot() {
@@ -1245,13 +1330,6 @@
   }
 
   function boot() {
-    // Isolated-world console is not the page console. This attribute is
-    // how you prove which content-script revision is live after a reload.
-    try {
-      document.documentElement.dataset.amBeacon = 'loaded';
-    } catch (err) {
-      // swallow
-    }
     try {
       const win = root.window || root;
       if (win && win.addEventListener) win.addEventListener('message', onBridgeMessage, false);
@@ -1293,7 +1371,7 @@
   }
 
   const api = {
-    BRIDGE_TYPE,
+    TOKEN_RE,
     AUDIO_STATS_KEY,
     AUDIO_STATS_RETENTION_DAYS,
     PRESETS,
@@ -1312,6 +1390,8 @@
     boundShortcut,
     exitLabel,
     overlayCopy,
+    overlayPackFor,
+    ensureBridge,
     restorableQuality,
     restoreFallbackFromSettings,
     readPlayer,

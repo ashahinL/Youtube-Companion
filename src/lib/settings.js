@@ -3,6 +3,8 @@
  * Settings sit on their own key so a reset cannot wipe channels or the feed.
  */
 
+import { AUDIO_COVER_KEY, planAudioCoverMigration } from './cover.js';
+
 export const DEFAULT_SETTINGS = {
   poll: {
     enabled: true,
@@ -38,7 +40,6 @@ export const DEFAULT_SETTINGS = {
     preset: 'midnight',
     backgroundType: 'color',
     customColor: '#0f0f14',
-    imageUrl: '',
   },
 };
 
@@ -69,26 +70,6 @@ const AUDIO_PRESETS = new Set([
 ]);
 
 const AUDIO_BG_TYPES = new Set(['color', 'image']);
-
-// Same rule as AudioModeCore.sanitizeImageUrl. The value is interpolated
-// into `background: url("...")`, so quotes and backslashes must not
-// survive, and only https/data image sources are allowed. A URL the
-// engine will refuse must not be storable as if it were fine.
-function sanitizeImageUrl(value) {
-  if (typeof value !== 'string') return null;
-  const v = value.trim();
-  if (!v) return null;
-  if (/["\\\r\n]/.test(v)) return null;
-  let u;
-  try {
-    u = new URL(v);
-  } catch {
-    return null;
-  }
-  if (u.protocol === 'https:') return v;
-  if (u.protocol === 'data:' && /^data:image\//i.test(v)) return v;
-  return null;
-}
 
 function clampHexColor(value, fallback) {
   if (typeof value !== 'string') return fallback;
@@ -188,7 +169,6 @@ export function clampSettings(s) {
         ? audio.backgroundType
         : d.audio.backgroundType,
       customColor: clampHexColor(audio.customColor, d.audio.customColor),
-      imageUrl: sanitizeImageUrl(audio.imageUrl) || d.audio.imageUrl,
     },
   };
 }
@@ -198,7 +178,25 @@ export async function readSettings() {
   return clampSettings(merge(DEFAULT_SETTINGS, settings));
 }
 
+/**
+ * Move a leftover settings.audio.imageUrl onto audioCover (data URLs only)
+ * and drop the field. An https leftover is discarded on purpose so the
+ * YouTube page never fetches a third-party picture.
+ */
+export async function migrateAudioCover() {
+  const got = await globalThis.chrome.storage.local.get(['settings', AUDIO_COVER_KEY]);
+  const plan = planAudioCoverMigration(got.settings, got[AUDIO_COVER_KEY]);
+  const writes = {};
+  if (plan.writeCover) writes[AUDIO_COVER_KEY] = plan.cover;
+  if (plan.stripImageUrl) {
+    writes.settings = clampSettings(merge(DEFAULT_SETTINGS, got.settings));
+  }
+  if (Object.keys(writes).length) await globalThis.chrome.storage.local.set(writes);
+  return plan;
+}
+
 export async function writeSettings(patch) {
+  await migrateAudioCover();
   const current = await readSettings();
   const next = clampSettings(merge(current, patch));
   await globalThis.chrome.storage.local.set({ settings: next });

@@ -105,6 +105,10 @@ export function installChromeMock(initial = {}) {
       message: '$COUNT$ new videos',
       placeholders: { count: { content: '$1' } },
     },
+    nNewVideosOne: {
+      message: '$COUNT$ new video',
+      placeholders: { count: { content: '$1' } },
+    },
   };
 
   const handle = {

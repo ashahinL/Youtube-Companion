@@ -216,6 +216,9 @@ function installFetch(spec = {}) {
       if (spec.failFeeds && spec.failFeeds[id] === '429') {
         return textRes('Too Many Requests', { status: 429 });
       }
+      if (spec.failFeeds && spec.failFeeds[id] === '403') {
+        return textRes('Forbidden', { status: 403 });
+      }
       if (spec.failFeeds && spec.failFeeds[id] === 'sorry') {
         return {
           ...textRes('<html>unusual traffic</html>'),
@@ -1035,6 +1038,11 @@ export default async function run(t) {
       premnear001: { k: 'premiere', d: 0, st: soon + 20 * 60_000, ck: soon, at: AT.older },
       premstale01: { k: 'premiere', d: 0, st: soon + 3 * 86_400_000, ck: soon - 7 * 3_600_000, at: AT.older },
     });
+    await saveFeed([
+      { v: 'premfar0001', c: MKBHD, t: 'Far', at: AT.older, d: 0, vw: 0, k: 'premiere', st: soon + 3 * 86_400_000 },
+      { v: 'premnear001', c: MKBHD, t: 'Near', at: AT.older, d: 0, vw: 0, k: 'premiere', st: soon + 20 * 60_000 },
+      { v: 'premstale01', c: MKBHD, t: 'Stale', at: AT.older, d: 0, vw: 0, k: 'premiere', st: soon + 3 * 86_400_000 },
+    ]);
     const premFetch = installFetch({
       players: {
         premnear001: playerJson('premnear001', { isUpcoming: true, startTimestamp: new Date(soon + 20 * 60_000).toISOString() }),
@@ -1056,6 +1064,38 @@ export default async function run(t) {
       'a rechecked premiere records when it was checked',
       premMeta.premstale01?.ck >= soon && premMeta.premfar0001?.ck === soon,
       JSON.stringify(premMeta),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await saveVideoMeta({
+      leftoverlive: { k: 'live', d: 0, st: Date.now(), at: AT.older },
+      stilllive001: { k: 'live', d: 0, st: Date.now(), at: AT.older },
+    });
+    await saveFeed([
+      { v: 'stilllive001', c: MKBHD, t: 'Still live', at: AT.older, d: 0, vw: 0, k: 'live', st: Date.now() },
+    ]);
+    const leftFetch = installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', []) },
+      players: {
+        stilllive001: playerJson('stilllive001', { isLive: true, lengthSeconds: 0 }),
+        leftoverlive: playerJson('leftoverlive', { isLive: true, lengthSeconds: 0 }),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    const liveAsked = leftFetch.calls
+      .filter((c) => c.url.includes('/youtubei/v1/player'))
+      .map((c) => bodyOf(c.opts).videoId)
+      .sort();
+    t.check(
+      'a live still in the feed is rechecked',
+      liveAsked.includes('stilllive001'),
+      JSON.stringify(liveAsked),
+    );
+    t.check(
+      'a live that left the feed is not asked about',
+      !liveAsked.includes('leftoverlive'),
+      JSON.stringify(liveAsked),
     );
 
     t.section('YouTube pushback stops the sweep and waits');
@@ -1180,6 +1220,83 @@ export default async function run(t) {
     t.check('the backfill finishes on the next sweep', (await readFeed()).length === 5, String((await readFeed()).length));
     t.check('and is still silent', mock.notifications.length === 0, JSON.stringify(mock.notifications));
     t.check('the channel is seeded afterwards', (await readChannels())[0].seeded === true);
+
+    t.section('Innertube 403');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    const one403 = installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'forb0010001', t: 'One 403', at: AT.newest }]) },
+      playerStatus: 403,
+    });
+    const dnrAtOne = mock.dnrUpdates.length;
+    const oneForbidden = await runSweep({ scope: 'all' });
+    t.check('a single player 403 is not pushback', oneForbidden.ok === true, JSON.stringify(oneForbidden));
+    t.check('the Origin rule is not reinstalled for one 403', mock.dnrUpdates.length === dnrAtOne, String(mock.dnrUpdates.length));
+    t.check('the 403 video is left out of the feed', (await readFeed()).length === 0, JSON.stringify(await readFeed()));
+    t.check(
+      'one 403 is one player call',
+      one403.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 1,
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    const threeEntries = ['a', 'b', 'c'].map((n, i) => (
+      { v: `forb003000${n}`, t: `Three ${n}`, at: AT.newest + i }
+    ));
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', threeEntries) },
+      playerStatus: 403,
+    });
+    const dnrAtThree = mock.dnrUpdates.length;
+    const threeForbidden = await runSweep({ scope: 'all' });
+    t.check('three player 403s still finish the sweep', threeForbidden.ok === true, JSON.stringify(threeForbidden));
+    t.check(
+      'three 403s reinstall the Origin rule once',
+      mock.dnrUpdates.length === dnrAtThree + 1,
+      String(mock.dnrUpdates.length - dnrAtThree),
+    );
+    t.check('three 403s do not set a wait', (await readPollState()).backoffUntil === 0);
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    const fourEntries = ['a', 'b', 'c', 'd'].map((n, i) => (
+      { v: `forb004000${n}`, t: `Four ${n}`, at: AT.newest + i }
+    ));
+    const four403 = installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', fourEntries) },
+      playerStatus: 403,
+    });
+    const fourStart = Date.now();
+    const fourForbidden = await runSweep({ scope: 'all' });
+    t.check('a fourth player 403 is pushback', fourForbidden.ok === false && fourForbidden.error === 'slow down', JSON.stringify(fourForbidden));
+    t.check(
+      'the wait is set after stacked 403s',
+      (await readPollState()).backoffUntil >= fourStart + QUARTER_HOUR,
+      String((await readPollState()).backoffUntil),
+    );
+    t.check(
+      'classification stops after the fourth 403',
+      four403.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 4,
+      String(four403.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length),
+    );
+
+    await wipe();
+    await writePollState({ backoffUntil: 0, backoffLevel: 0 });
+    const rss403Ids = ['a', 'b', 'c', 'd'].map((ch) => `UC${ch.repeat(22)}`);
+    for (const id of rss403Ids) await putChannel({ id, title: id, seeded: true });
+    const rss403 = Object.fromEntries(rss403Ids.map((id) => [id, '403']));
+    const browseFail = Object.fromEntries(rss403Ids.map((id) => [id, 500]));
+    installFetch({ failFeeds: rss403, failBrowse: browseFail });
+    const dnrAtRss = mock.dnrUpdates.length;
+    const rssForbidden = await runSweep({ scope: 'all' });
+    t.check('RSS 403s are per-channel errors, not pushback', rssForbidden.ok === true, JSON.stringify(rssForbidden));
+    t.check('RSS 403s do not reinstall the Origin rule', mock.dnrUpdates.length === dnrAtRss);
+    t.check(
+      'each RSS 403 is stored on the channel',
+      (await readChannels()).every((ch) => ch.lastError?.status === 403),
+    );
+    t.check('RSS 403s do not set a wait', (await readPollState()).backoffUntil === 0);
 
     t.section('silent seed');
 
@@ -1712,6 +1829,66 @@ export default async function run(t) {
     await openInFlight;
     mock.sessionSetHold = null;
 
+    t.section('audioMode.boot overlay strings');
+
+    installFetch();
+    await wipe();
+    await writeSettings({ ui: { locale: 'en' } });
+    const bootEn = await handleMessage({ type: 'audioMode.boot' }, { tab: { id: 21 } });
+    t.check(
+      'en boot overlay title',
+      bootEn.ok === true && bootEn.locale === 'en' && bootEn.overlay?.overlayTitle === 'Audio-only playback',
+      JSON.stringify(bootEn.overlay),
+    );
+    t.check(
+      'en boot overlay exit',
+      bootEn.overlay?.overlayExit === 'Exit audio mode',
+      JSON.stringify(bootEn.overlay),
+    );
+    t.check(
+      'en boot overlay shortcut template',
+      bootEn.overlay?.overlayExitShortcut === 'Press $1 to exit',
+      JSON.stringify(bootEn.overlay),
+    );
+    t.check(
+      'en boot overlay has only the overlay keys',
+      JSON.stringify(Object.keys(bootEn.overlay || {}).sort()) === JSON.stringify(['overlayExit', 'overlayExitShortcut', 'overlayTitle']),
+      JSON.stringify(Object.keys(bootEn.overlay || {})),
+    );
+    t.check(
+      'en boot also carries Arabic overlay copy',
+      bootEn.overlays?.ar?.overlayTitle === 'تشغيل الصوت فقط',
+      JSON.stringify(bootEn.overlays?.ar),
+    );
+    t.check(
+      'en boot still reports openInAudioMode',
+      bootEn.openInAudioMode === false,
+      JSON.stringify(bootEn),
+    );
+
+    await writeSettings({ ui: { locale: 'ar' } });
+    const bootAr = await handleMessage({ type: 'audioMode.boot' }, { tab: { id: 22 } });
+    t.check(
+      'ar boot overlay title',
+      bootAr.ok === true && bootAr.locale === 'ar' && bootAr.overlay?.overlayTitle === 'تشغيل الصوت فقط',
+      JSON.stringify(bootAr.overlay),
+    );
+    t.check(
+      'ar boot overlay exit',
+      bootAr.overlay?.overlayExit === 'خروج من وضع الصوت',
+      JSON.stringify(bootAr.overlay),
+    );
+    t.check(
+      'ar boot overlay shortcut template',
+      bootAr.overlay?.overlayExitShortcut === 'اضغط $1 للخروج',
+      JSON.stringify(bootAr.overlay),
+    );
+    t.check(
+      'ar boot also carries English overlay copy',
+      bootAr.overlays?.en?.overlayTitle === 'Audio-only playback',
+      JSON.stringify(bootAr.overlays?.en),
+    );
+
     t.section('live item re-classified');
 
     await wipe();
@@ -1853,6 +2030,25 @@ export default async function run(t) {
       'addChannel seed landed the item',
       (await readFeed()).some((row) => row.v === 'beastseed01'),
     );
+    t.check(
+      'a YouTube picture is kept',
+      added.channel?.avatar === 'https://yt3.ggpht.com/beast',
+      added.channel?.avatar,
+    );
+
+    const BADPIC = 'UC0000000000000000000002';
+    installFetch({
+      resolveId: BADPIC,
+      browse: headerJson(BADPIC, 'Bad Pic', '@badpic', 'https://evil.example/avatar.png'),
+      feeds: { [BADPIC]: rssXml(BADPIC, 'Bad Pic', []) },
+    });
+    const badPic = await addChannelByInput('@badpic');
+    t.check(
+      'a non-YouTube picture is stored empty',
+      badPic.ok === true && badPic.channel?.id === BADPIC && badPic.channel?.avatar === '',
+      JSON.stringify(badPic.channel),
+    );
+    await waitForIdle();
 
     const LTT = 'UCXuqSBlHAE6Xw-yeJA0Tunw';
     installFetch({
@@ -2823,6 +3019,43 @@ export default async function run(t) {
     t.check('with room again, the older uploads are looked up', floorFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 15);
     t.check('and join the feed', (await readFeed()).length === 16, String((await readFeed()).length));
     t.check('without an alert', mock.notifications.length === 1, JSON.stringify(mock.notifications.map((n) => n.message)));
+    await writeSettings({ feed: { maxItems: 500 } });
+
+    t.section('items the cap drops do not alert');
+
+    await wipe();
+    await writeSettings({ feed: { maxItems: 50 }, ui: { locale: 'en' } });
+    const capCh = [
+      [MKBHD, 'Marques Brownlee', 'aaa'],
+      [BEAST, 'MrBeast', 'bbb'],
+      [LINUS, 'Linus Tech Tips', 'ccc'],
+      [FOURTH, 'Fourth', 'ddd'],
+    ];
+    const capMeta = {};
+    const capFeeds = {};
+    for (const [id, title, prefix] of capCh) {
+      await putChannel({ id, title, seeded: true, lastVideoAt: AT.older });
+      const entries = Array.from({ length: 15 }, (_, i) => {
+        const v = `${prefix}${String(i).padStart(8, '0')}`;
+        capMeta[v] = { k: 'video', d: 600, st: 0, at: AT.newest };
+        return { v, t: `${title} ${i}`, at: AT.newest };
+      });
+      capFeeds[id] = rssXml(id, title, entries);
+    }
+    await saveVideoMeta(capMeta);
+    installFetch({ feeds: capFeeds });
+    await runSweep({ scope: 'all' });
+    const cappedFeed = await readFeed();
+    t.check('the feed kept the cap', cappedFeed.length === 50, String(cappedFeed.length));
+    const noted = mock.notifications.reduce((n, note) => {
+      const m = String(note.message).match(/^(\d+) new videos$/);
+      return n + (m ? Number(m[1]) : 1);
+    }, 0);
+    t.check(
+      'dropped rows do not alert',
+      noted === 50,
+      JSON.stringify({ noted, messages: mock.notifications.map((n) => n.message) }),
+    );
     await writeSettings({ feed: { maxItems: 500 } });
 
     await wipe();

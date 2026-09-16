@@ -291,6 +291,19 @@
           <div class="audio-stat__label" data-i18n="audioStatsActive">Time active</div>
         </div>
       </div>
+      <div id="audio-rate-note" class="audio-rate" role="status" hidden>
+        <p class="audio-rate__text" data-i18n="audioRateNote">
+          You've saved over 1 GB with audio mode. A rating helps other people find the extension.
+        </p>
+        <div class="audio-rate__actions">
+          <button id="audio-rate-yes" class="btn btn--primary" type="button" data-i18n="audioRateYes">
+            Rate it
+          </button>
+          <button id="audio-rate-no" class="btn" type="button" data-i18n="audioRateNo">
+            Not now
+          </button>
+        </div>
+      </div>
     </section>
 
     <section id="feeds" class="panel" role="tabpanel" aria-labelledby="tab-feeds" hidden>
@@ -563,7 +576,7 @@
         </label>
         <label
           class="row row--inline"
-          title="Colour paints a gradient or a custom colour. Image uses the URL below."
+          title="Colour paints a gradient or a custom colour. Image uses a picture you choose."
           data-i18n-title="settingsAudioBgTypeTitle"
         >
           <span data-i18n="settingsAudioBgType">Background type</span>
@@ -662,31 +675,38 @@
           </div>
         </div>
         <div id="settings-audio-image" hidden>
-          <form
-            id="audio-image-form"
+          <div
             class="row row--inline"
-            title="Paste a direct link to an image. Only https and data:image URLs are kept."
-            data-i18n-title="settingsAudioImageUrlTitle"
+            title="Pick a PNG, JPEG, WebP or GIF. It stays on this device and is not in backups."
+            data-i18n-title="settingsAudioCoverTitle"
           >
-            <span data-i18n="settingsAudioImageUrl">Image URL</span>
             <input
-              id="audio-image-url"
-              class="settings-text"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              dir="ltr"
-              placeholder="https://example.com/image.jpg"
-              data-i18n-label="settingsAudioImageUrl"
-              aria-label="Image URL"
+              id="audio-cover-file"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              hidden
+              data-i18n-label="settingsAudioChooseImage"
+              aria-label="Choose image"
             />
-            <button id="audio-image-apply" class="btn" type="submit" data-i18n="settingsAudioImageApply">
-              Apply
+            <button id="audio-cover-choose" class="btn" type="button" data-i18n="settingsAudioChooseImage">
+              Choose image
             </button>
-          </form>
-          <p class="settings-note" data-i18n="settingsAudioImageHint">
-            Paste a direct link to an image.
+            <button id="audio-cover-remove" class="btn" type="button" data-i18n="settingsAudioCoverRemove">
+              Remove
+            </button>
+          </div>
+          <canvas
+            id="audio-cover-preview"
+            class="audio-cover-preview"
+            width="96"
+            height="54"
+            hidden
+            aria-hidden="true"
+          ></canvas>
+          <p id="audio-cover-hint" class="footnote" data-i18n="settingsAudioCoverHint">
+            Choose a picture to cover the video. It stays on this device.
           </p>
+          <p id="audio-cover-error" class="banner banner--error" role="status" hidden></p>
         </div>
       </fieldset>
 

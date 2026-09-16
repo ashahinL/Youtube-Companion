@@ -37,7 +37,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "minimum_chrome_version": "111",
   "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["src/content/inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": ["https://www.youtube.com/*"],
       "js": ["src/content/core.js", "src/content/content.js"],
@@ -57,15 +64,5 @@
       },
       "description": "__MSG_cmdToggleAudioMode__"
     }
-  },
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "src/content/inject.js",
-        "_locales/en/messages.json",
-        "_locales/ar/messages.json"
-      ],
-      "matches": ["https://www.youtube.com/*"]
-    }
-  ]
+  }
 }

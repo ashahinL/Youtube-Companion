@@ -122,6 +122,18 @@ function normalizeChannel(raw, now) {
   };
 }
 
+function exportSettings(settings) {
+  const cloned = isPlainObject(settings) ? cloneData(settings) : {};
+  // The cover lives on its own storage key and is never in this file. A
+  // leftover imageUrl from 1.x would re-introduce a third-party fetch.
+  if (isPlainObject(cloned.audio) && 'imageUrl' in cloned.audio) {
+    delete cloned.audio.imageUrl;
+  }
+  delete cloned.audioCover;
+  delete cloned.rateNoteDone;
+  return cloned;
+}
+
 export function buildBackup({ settings, channels } = {}) {
   const list = Array.isArray(channels) ? channels : [];
   const exported = [];
@@ -133,7 +145,7 @@ export function buildBackup({ settings, channels } = {}) {
     app: APP,
     version: VERSION,
     exportedAt: new Date().toISOString(),
-    settings: isPlainObject(settings) ? cloneData(settings) : {},
+    settings: exportSettings(settings),
     channels: exported,
   };
 }

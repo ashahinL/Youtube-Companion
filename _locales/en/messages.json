@@ -49,6 +49,16 @@
       }
     }
   },
+  "nNewVideosOne": {
+    "message": "$COUNT$ new video",
+    "description": "Desktop notification body when a channel uploaded one video since the last check. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "watchlistAdd": {
     "message": "Add",
     "description": "Button that adds a channel from the Watchlist input by URL or handle."
@@ -397,6 +407,16 @@
       }
     }
   },
+  "feedViewsOne": {
+    "message": "$COUNT$ view",
+    "description": "View count on a feed row when the count is 1. $COUNT$ is the compact number.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "feedOpenVideo": {
     "message": "Open $TITLE$",
     "description": "Accessible name of a feed row. $TITLE$ is the video title.",
@@ -637,6 +657,16 @@
       }
     }
   },
+  "settingsClearPromptOne": {
+    "message": "Remove $COUNT$ channel and its videos?",
+    "description": "Inline confirmation before the watchlist is cleared when it has one channel. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsClearConfirm": {
     "message": "Remove all",
     "description": "Confirms clearing the watchlist."
@@ -655,6 +685,16 @@
       }
     }
   },
+  "settingsClearedOne": {
+    "message": "Watchlist cleared. $COUNT$ channel removed.",
+    "description": "Status after the watchlist is cleared when one channel was removed. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsImportAdded": {
     "message": "Added $ADDED$ channels, $SKIPPED$ already present.",
     "description": "Status after a Merge import. $ADDED$ is new channels; $SKIPPED$ were already in the list.",
@@ -669,6 +709,20 @@
       }
     }
   },
+  "settingsImportAddedOne": {
+    "message": "Added $ADDED$ channel, $SKIPPED$ already present.",
+    "description": "Status after a Merge import when one channel was added. $ADDED$ is 1; $SKIPPED$ were already in the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "1"
+      },
+      "skipped": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
   "settingsImportReplaced": {
     "message": "Replaced with $ADDED$ channels.",
     "description": "Status after a Replace import. $ADDED$ is how many channels the file contained.",
@@ -676,6 +730,16 @@
       "added": {
         "content": "$1",
         "example": "12"
+      }
+    }
+  },
+  "settingsImportReplacedOne": {
+    "message": "Replaced with $ADDED$ channel.",
+    "description": "Status after a Replace import when the file contained one channel. $ADDED$ is 1.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "1"
       }
     }
   },
@@ -699,6 +763,16 @@
       }
     }
   },
+  "settingsExportDoneOne": {
+    "message": "Exported $COUNT$ channel.",
+    "description": "Status after a backup file is downloaded when it wrote one channel. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsFooterChannels": {
     "message": "$COUNT$ channels",
     "description": "Settings footer line with the number of watched channels. $COUNT$ is the count.",
@@ -709,6 +783,16 @@
       }
     }
   },
+  "settingsFooterChannelsOne": {
+    "message": "$COUNT$ channel",
+    "description": "Settings footer line when one channel is watched. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsFooterFeed": {
     "message": "$COUNT$ videos",
     "description": "Settings footer line with the number of feed items. $COUNT$ is the count.",
@@ -716,6 +800,16 @@
       "count": {
         "content": "$1",
         "example": "40"
+      }
+    }
+  },
+  "settingsFooterFeedOne": {
+    "message": "$COUNT$ video",
+    "description": "Settings footer line when the feed has one item. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
       }
     }
   },
@@ -984,7 +1078,7 @@
     "description": "Label of the Colour / Image select for the audio-mode overlay."
   },
   "settingsAudioBgTypeTitle": {
-    "message": "Colour paints a gradient or a custom colour. Image uses the URL below.",
+    "message": "Colour paints a gradient or a custom colour. Image uses a picture you choose.",
     "description": "Tooltip on the overlay background-type select."
   },
   "settingsAudioBgColor": {
@@ -993,7 +1087,7 @@
   },
   "settingsAudioBgImage": {
     "message": "Image",
-    "description": "Background-type option that uses an image URL."
+    "description": "Background-type option that uses a picture you choose on this device."
   },
   "settingsAudioPresets": {
     "message": "Presets",
@@ -1031,21 +1125,45 @@
     "message": "Custom",
     "description": "Accessible name of the custom overlay colour picker."
   },
-  "settingsAudioImageUrl": {
-    "message": "Image URL",
-    "description": "Label of the overlay background image URL field."
+  "settingsAudioChooseImage": {
+    "message": "Choose image",
+    "description": "Button and file-input label that opens a picker for the audio-mode overlay cover."
   },
-  "settingsAudioImageUrlTitle": {
-    "message": "Paste a direct link to an image. Only https and data:image URLs are kept.",
-    "description": "Tooltip on the overlay image URL field."
+  "settingsAudioCoverRemove": {
+    "message": "Remove",
+    "description": "Button that clears the stored audio-mode overlay cover."
   },
-  "settingsAudioImageApply": {
-    "message": "Apply",
-    "description": "Button that saves the overlay image URL."
+  "settingsAudioCoverTitle": {
+    "message": "Pick a PNG, JPEG, WebP or GIF. It stays on this device and is not in backups.",
+    "description": "Tooltip on the overlay cover picker."
   },
-  "settingsAudioImageHint": {
-    "message": "Paste a direct link to an image.",
-    "description": "Hint under the overlay image URL field."
+  "settingsAudioCoverHint": {
+    "message": "Choose a picture to cover the video. It stays on this device.",
+    "description": "Prompt shown when Image is selected and no cover has been stored yet."
+  },
+  "settingsAudioCoverTooLarge": {
+    "message": "That picture is over 10 MB.",
+    "description": "Error when the chosen overlay cover file is larger than 10 MB before shrinking."
+  },
+  "settingsAudioCoverTooHeavy": {
+    "message": "That picture is still too large after shrinking.",
+    "description": "Error when the overlay cover cannot be encoded under 600 KB."
+  },
+  "settingsAudioCoverBad": {
+    "message": "That file is not a picture we can use.",
+    "description": "Error when the chosen overlay cover cannot be decoded or encoded."
+  },
+  "audioRateNote": {
+    "message": "You've saved over 1 GB with audio mode. A rating helps other people find the extension.",
+    "description": "Thank-you on the Audio tab the first time all-time data saved reaches 1 GB."
+  },
+  "audioRateYes": {
+    "message": "Rate it",
+    "description": "Button that opens this browser's store listing so the user can leave a rating."
+  },
+  "audioRateNo": {
+    "message": "Not now",
+    "description": "Button that hides the 1 GB rating thank-you without opening the store."
   },
   "supportOpen": {
     "message": "Support this project",
@@ -1170,9 +1288,30 @@
       }
     }
   },
+  "welcomeImportAddedOne": {
+    "message": "Added $COUNT$ channel. Their latest videos arrive over the next few minutes, with no alerts.",
+    "description": "Status after an import when one channel was added. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "welcomeImportAddedSkipped": {
     "message": "Added $ADDED$ channels; $SKIPPED$ were already on your list. Their latest videos arrive over the next few minutes, with no alerts.",
     "description": "Status after an import. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
+  "welcomeImportAddedSkippedOne": {
+    "message": "Added $ADDED$ channel; $SKIPPED$ were already on your list. Their latest videos arrive over the next few minutes, with no alerts.",
+    "description": "Status after an import when one channel was added and some were already on the list. $ADDED$ is 1; $SKIPPED$ were already on the list.",
     "placeholders": {
       "added": {
         "content": "$1"
@@ -1191,6 +1330,15 @@
       }
     }
   },
+  "welcomeImportSlowDownOne": {
+    "message": "Added $COUNT$ channel. YouTube asked us to slow down, so their latest videos arrive after the pause, with no alerts.",
+    "description": "Status after an import of one channel when a check could not start because YouTube asked us to slow down. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "welcomeImportSlowDownSkipped": {
     "message": "Added $ADDED$ channels; $SKIPPED$ were already on your list. YouTube asked us to slow down, so their latest videos arrive after the pause, with no alerts.",
     "description": "Status after an import, with some channels already on the list, when a check could not start because YouTube asked us to slow down. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
@@ -1203,9 +1351,30 @@
       }
     }
   },
+  "welcomeImportSlowDownSkippedOne": {
+    "message": "Added $ADDED$ channel; $SKIPPED$ were already on your list. YouTube asked us to slow down, so their latest videos arrive after the pause, with no alerts.",
+    "description": "Status after an import of one new channel, with some already on the list, when a check could not start because YouTube asked us to slow down. $ADDED$ is 1; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
   "welcomeImportNothingNew": {
     "message": "All $COUNT$ channels in that file are already on your list.",
     "description": "Status after importing a file whose channels are all on the list already.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportNothingNewOne": {
+    "message": "The $COUNT$ channel in that file is already on your list.",
+    "description": "Status after importing a file whose only channel is already on the list. $COUNT$ is 1.",
     "placeholders": {
       "count": {
         "content": "$1"

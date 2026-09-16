@@ -265,6 +265,7 @@ body {
 .audio-shortcut:focus-visible,
 .audio-picker__tab:focus-visible,
 .audio-stats__filter:focus-visible,
+.audio-rate__actions .btn:focus-visible,
 .audio-seek:focus-visible,
 .switch:has(input:focus-visible) {
   outline: 2px solid var(--accent);
@@ -1572,6 +1573,38 @@ body {
 .audio-stat__label {
   color: var(--text-dim);
   font-size: 11px;
+}
+
+.audio-rate {
+  margin-block-start: 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.audio-rate__text {
+  margin: 0;
+  margin-block-end: 8px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.audio-rate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.audio-cover-preview {
+  display: block;
+  width: 96px;
+  height: 54px;
+  margin-block: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .swatches {

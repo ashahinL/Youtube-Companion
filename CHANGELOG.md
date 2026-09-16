@@ -7,6 +7,10 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- Audio mode's cover is a picture you choose on your device, not a web
+  address. It stays on the device and is not in backups.
+- After audio mode has saved over 1 GB, the Audio tab asks once for a
+  rating. Either button hides that for good.
 - A clearer name in the stores: **Companion for YouTube: Audio Only & Feeds**.
 - Undo after removing a channel. The channel comes back with its star, its
   place in the list and its videos.
@@ -39,6 +43,8 @@ shipped yet waits under Unreleased. How a version ships:
   answers as a GitHub issue yourself.
 
 **Safer**
+- YouTube pages can no longer tell the extension is installed by loading its
+  files or reading a mark on the page.
 - Only the popup can change your channels and settings. The script on YouTube
   pages can only ask the two audio-mode questions it needs.
 - Backup files are checked: real channel ids only, channel pictures only from
@@ -53,6 +59,11 @@ shipped yet waits under Unreleased. How a version ships:
   image servers, runs no plugins, and cannot be pointed at another base
   address.
 - Channel pictures and handles fill in 10 per check instead of 20.
+- Adding a channel only keeps a picture from YouTube's image servers, same
+  as a backup.
+- If YouTube refuses several player requests in one check, checking stops
+  and waits — the same pause as for "too many requests" — instead of
+  leaving the feed looking stuck.
 
 **Fixes**
 - The scrolling title in the Audio tab stays still, on two lines, when your
@@ -97,6 +108,12 @@ shipped yet waits under Unreleased. How a version ships:
 - The seek slider and Follow list are named for screen readers. The ⋯ menu
   works with the arrow keys and Escape. Feed rows no longer nest buttons
   inside a focusable row.
+- English no longer says "1 channels" or "1 videos".
+- A live stream or premiere that has already left the feed is not looked
+  up again every check.
+- A new video that does not fit in the feed no longer raises an alert.
+- The welcome page says when no keyboard shortcut is assigned, instead of
+  hiding the line.
 
 **For contributors**
 - Tests run on every push (GitHub Actions). Node 22.2 or newer is needed.

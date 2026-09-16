@@ -40,12 +40,22 @@
     "description": "Empty state on the Watchlist tab when no channels have been added."
   },
   "nNewVideos": {
-    "message": "$COUNT$ فيديوهات جديدة",
+    "message": "فيديوهات جديدة: $COUNT$",
     "description": "Desktop notification body when a channel uploaded more than one video since the last check. $COUNT$ is the number of new videos.",
     "placeholders": {
       "count": {
         "content": "$1",
         "example": "3"
+      }
+    }
+  },
+  "nNewVideosOne": {
+    "message": "فيديوهات جديدة: $COUNT$",
+    "description": "Desktop notification body when a channel uploaded one video since the last check. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
       }
     }
   },
@@ -397,6 +407,16 @@
       }
     }
   },
+  "feedViewsOne": {
+    "message": "$COUNT$ مشاهدة",
+    "description": "View count on a feed row when the count is 1. $COUNT$ is the compact number.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "feedOpenVideo": {
     "message": "فتح $TITLE$",
     "description": "Accessible name of a feed row. $TITLE$ is the video title.",
@@ -637,6 +657,16 @@
       }
     }
   },
+  "settingsClearPromptOne": {
+    "message": "إزالة كل القنوات ($COUNT$) وفيديوهاتها؟",
+    "description": "Inline confirmation before the watchlist is cleared when it has one channel. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsClearConfirm": {
     "message": "إزالة الكل",
     "description": "Confirms clearing the watchlist."
@@ -655,8 +685,18 @@
       }
     }
   },
+  "settingsClearedOne": {
+    "message": "مُسحت قائمة المتابعة. عدد القنوات المُزالة: $COUNT$.",
+    "description": "Status after the watchlist is cleared when one channel was removed. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsImportAdded": {
-    "message": "أُضيفت $ADDED$ قنوات، و$SKIPPED$ موجودة مسبقاً.",
+    "message": "عدد القنوات المضافة: $ADDED$، والموجودة مسبقاً: $SKIPPED$.",
     "description": "Status after a Merge import. $ADDED$ is new channels; $SKIPPED$ were already in the list.",
     "placeholders": {
       "added": {
@@ -669,13 +709,37 @@
       }
     }
   },
+  "settingsImportAddedOne": {
+    "message": "عدد القنوات المضافة: $ADDED$، والموجودة مسبقاً: $SKIPPED$.",
+    "description": "Status after a Merge import when one channel was added. $ADDED$ is 1; $SKIPPED$ were already in the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "1"
+      },
+      "skipped": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
   "settingsImportReplaced": {
-    "message": "استُبدل بـ $ADDED$ قنوات.",
+    "message": "عدد القنوات بعد الاستبدال: $ADDED$.",
     "description": "Status after a Replace import. $ADDED$ is how many channels the file contained.",
     "placeholders": {
       "added": {
         "content": "$1",
         "example": "12"
+      }
+    }
+  },
+  "settingsImportReplacedOne": {
+    "message": "عدد القنوات بعد الاستبدال: $ADDED$.",
+    "description": "Status after a Replace import when the file contained one channel. $ADDED$ is 1.",
+    "placeholders": {
+      "added": {
+        "content": "$1",
+        "example": "1"
       }
     }
   },
@@ -690,7 +754,7 @@
     }
   },
   "settingsExportDone": {
-    "message": "صُدِّرَت $COUNT$ قنوات.",
+    "message": "عدد القنوات المُصدَّرة: $COUNT$.",
     "description": "Status after a backup file is downloaded. $COUNT$ is the number of channels written.",
     "placeholders": {
       "count": {
@@ -699,8 +763,18 @@
       }
     }
   },
+  "settingsExportDoneOne": {
+    "message": "عدد القنوات المُصدَّرة: $COUNT$.",
+    "description": "Status after a backup file is downloaded when it wrote one channel. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsFooterChannels": {
-    "message": "$COUNT$ قنوات",
+    "message": "القنوات: $COUNT$",
     "description": "Settings footer line with the number of watched channels. $COUNT$ is the count.",
     "placeholders": {
       "count": {
@@ -709,13 +783,33 @@
       }
     }
   },
+  "settingsFooterChannelsOne": {
+    "message": "القنوات: $COUNT$",
+    "description": "Settings footer line when one channel is watched. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "settingsFooterFeed": {
-    "message": "$COUNT$ فيديوهات",
+    "message": "الفيديوهات: $COUNT$",
     "description": "Settings footer line with the number of feed items. $COUNT$ is the count.",
     "placeholders": {
       "count": {
         "content": "$1",
         "example": "40"
+      }
+    }
+  },
+  "settingsFooterFeedOne": {
+    "message": "الفيديوهات: $COUNT$",
+    "description": "Settings footer line when the feed has one item. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
       }
     }
   },
@@ -984,7 +1078,7 @@
     "description": "Label of the Colour / Image select for the audio-mode overlay."
   },
   "settingsAudioBgTypeTitle": {
-    "message": "اللون يرسم تدرجاً أو لوناً مخصصاً. الصورة تستخدم الرابط أدناه.",
+    "message": "اللون يرسم تدرجاً أو لوناً مخصصاً. الصورة تستخدم ملفاً تختاره.",
     "description": "Tooltip on the overlay background-type select."
   },
   "settingsAudioBgColor": {
@@ -993,7 +1087,7 @@
   },
   "settingsAudioBgImage": {
     "message": "صورة",
-    "description": "Background-type option that uses an image URL."
+    "description": "Background-type option that uses a picture you choose on this device."
   },
   "settingsAudioPresets": {
     "message": "الإعدادات الجاهزة",
@@ -1031,21 +1125,45 @@
     "message": "مخصص",
     "description": "Accessible name of the custom overlay colour picker."
   },
-  "settingsAudioImageUrl": {
-    "message": "رابط الصورة",
-    "description": "Label of the overlay background image URL field."
+  "settingsAudioChooseImage": {
+    "message": "اختر صورة",
+    "description": "Button and file-input label that opens a picker for the audio-mode overlay cover."
   },
-  "settingsAudioImageUrlTitle": {
-    "message": "الصق رابطاً مباشراً لصورة. يُحفظ فقط https وروابط data:image.",
-    "description": "Tooltip on the overlay image URL field."
+  "settingsAudioCoverRemove": {
+    "message": "إزالة",
+    "description": "Button that clears the stored audio-mode overlay cover."
   },
-  "settingsAudioImageApply": {
-    "message": "تطبيق",
-    "description": "Button that saves the overlay image URL."
+  "settingsAudioCoverTitle": {
+    "message": "اختر صورة PNG أو JPEG أو WebP أو GIF. تبقى على هذا الجهاز ولا تدخل في النسخ الاحتياطي.",
+    "description": "Tooltip on the overlay cover picker."
   },
-  "settingsAudioImageHint": {
-    "message": "الصق رابطاً مباشراً لصورة.",
-    "description": "Hint under the overlay image URL field."
+  "settingsAudioCoverHint": {
+    "message": "اختر صورة لتغطية الفيديو. تبقى على هذا الجهاز.",
+    "description": "Prompt shown when Image is selected and no cover has been stored yet."
+  },
+  "settingsAudioCoverTooLarge": {
+    "message": "هذه الصورة أكبر من 10 ميجا.",
+    "description": "Error when the chosen overlay cover file is larger than 10 MB before shrinking."
+  },
+  "settingsAudioCoverTooHeavy": {
+    "message": "ما زالت هذه الصورة كبيرة بعد تصغيرها.",
+    "description": "Error when the overlay cover cannot be encoded under 600 KB."
+  },
+  "settingsAudioCoverBad": {
+    "message": "هذا الملف ليس صورة يمكن استخدامها.",
+    "description": "Error when the chosen overlay cover cannot be decoded or encoded."
+  },
+  "audioRateNote": {
+    "message": "وفّرت أكثر من 1 جيجا بوضع الصوت. تقييمك يساعد الآخرين على إيجاد الإضافة.",
+    "description": "Thank-you on the Audio tab the first time all-time data saved reaches 1 GB."
+  },
+  "audioRateYes": {
+    "message": "قيّمها",
+    "description": "Button that opens this browser's store listing so the user can leave a rating."
+  },
+  "audioRateNo": {
+    "message": "ليس الآن",
+    "description": "Button that hides the 1 GB rating thank-you without opening the store."
   },
   "supportOpen": {
     "message": "ادعم المشروع",
@@ -1162,7 +1280,7 @@
     "description": "Status while the Takeout file is imported."
   },
   "welcomeImportAdded": {
-    "message": "تمت إضافة $COUNT$ من القنوات. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
+    "message": "عدد القنوات المضافة: $COUNT$. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
     "description": "Status after an import. $COUNT$ is the number of channels added.",
     "placeholders": {
       "count": {
@@ -1170,8 +1288,17 @@
       }
     }
   },
+  "welcomeImportAddedOne": {
+    "message": "عدد القنوات المضافة: $COUNT$. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
+    "description": "Status after an import when one channel was added. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "welcomeImportAddedSkipped": {
-    "message": "تمت إضافة $ADDED$ من القنوات، و$SKIPPED$ كانت في قائمتك من قبل. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
+    "message": "عدد القنوات المضافة: $ADDED$، والموجودة مسبقاً: $SKIPPED$. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
     "description": "Status after an import. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
     "placeholders": {
       "added": {
@@ -1182,8 +1309,20 @@
       }
     }
   },
+  "welcomeImportAddedSkippedOne": {
+    "message": "عدد القنوات المضافة: $ADDED$، والموجودة مسبقاً: $SKIPPED$. تصل أحدث فيديوهاتها خلال الدقائق القادمة، دون تنبيهات.",
+    "description": "Status after an import when one channel was added and some were already on the list. $ADDED$ is 1; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
   "welcomeImportSlowDown": {
-    "message": "تمت إضافة $COUNT$ من القنوات. طلب يوتيوب منّا الإبطاء، لذلك تصل أحدث فيديوهاتها بعد التوقّف، دون تنبيهات.",
+    "message": "عدد القنوات المضافة: $COUNT$. طلب يوتيوب منّا الإبطاء، لذلك تصل أحدث فيديوهاتها بعد التوقّف، دون تنبيهات.",
     "description": "Status after an import when a check could not start because YouTube answered 429 or sent its unusual-traffic page. $COUNT$ is the number of channels added.",
     "placeholders": {
       "count": {
@@ -1191,9 +1330,30 @@
       }
     }
   },
+  "welcomeImportSlowDownOne": {
+    "message": "عدد القنوات المضافة: $COUNT$. طلب يوتيوب منّا الإبطاء، لذلك تصل أحدث فيديوهاتها بعد التوقّف، دون تنبيهات.",
+    "description": "Status after an import of one channel when a check could not start because YouTube asked us to slow down. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
   "welcomeImportSlowDownSkipped": {
-    "message": "تمت إضافة $ADDED$ من القنوات، و$SKIPPED$ كانت في قائمتك من قبل. طلب يوتيوب منّا الإبطاء، لذلك تصل أحدث فيديوهاتها بعد التوقّف، دون تنبيهات.",
+    "message": "عدد القنوات المضافة: $ADDED$، والموجودة مسبقاً: $SKIPPED$. طلب يوتيوب منّا الإبطاء، لذلك تصل أحدث فيديوهاتها بعد التوقّف، دون تنبيهات.",
     "description": "Status after an import, with some channels already on the list, when a check could not start because YouTube asked us to slow down. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
+  "welcomeImportSlowDownSkippedOne": {
+    "message": "عدد القنوات المضافة: $ADDED$، والموجودة مسبقاً: $SKIPPED$. طلب يوتيوب منّا الإبطاء، لذلك تصل أحدث فيديوهاتها بعد التوقّف، دون تنبيهات.",
+    "description": "Status after an import of one new channel, with some already on the list, when a check could not start because YouTube asked us to slow down. $ADDED$ is 1; $SKIPPED$ were already on the list.",
     "placeholders": {
       "added": {
         "content": "$1"
@@ -1206,6 +1366,15 @@
   "welcomeImportNothingNew": {
     "message": "كل القنوات في هذا الملف ($COUNT$) موجودة في قائمتك من قبل.",
     "description": "Status after importing a file whose channels are all on the list already.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportNothingNewOne": {
+    "message": "كل القنوات في هذا الملف ($COUNT$) موجودة في قائمتك من قبل.",
+    "description": "Status after importing a file whose only channel is already on the list. $COUNT$ is 1.",
     "placeholders": {
       "count": {
         "content": "$1"

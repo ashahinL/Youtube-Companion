@@ -2,10 +2,11 @@
  * Popup view decisions for the Feeds, Watchlist and Audio tabs: which
  * rows show, whether Add is live, which empty state applies, which
  * YouTube tab the player drives, when the player card may sync a
- * control, how audioStats fold into the four cards, how a failed channel
- * is described, when the Follow card shows, which credited channels
- * are followed, which Follow buttons wait, how a backup merge-over-cap
- * error is named, and which ⋯ menu item Arrow/Home/End would select.
+ * control, how audioStats fold into the four cards, when the 1 GB
+ * rating note shows, how a failed channel is described, when the Follow
+ * card shows, which credited channels are followed, which Follow buttons
+ * wait, how a backup merge-over-cap error is named, and which ⋯ menu
+ * item Arrow/Home/End would select.
  * Pure — no DOM, no chrome, no clock.
  */
 
@@ -228,6 +229,23 @@ export function audioStatsView(stats, scope, now, core) {
     usedMb: savings.usedMb,
     savedMb: savings.savedMb,
   };
+}
+
+// Same 1024-MB step formatData uses when it switches the popup to GB.
+export const RATE_NOTE_SAVED_MB = 1024;
+export const RATE_NOTE_KEY = 'rateNoteDone';
+export const CHROME_REVIEWS_URL = 'https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd/reviews';
+export const EDGE_ADDONS_URL = 'https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh';
+
+/** True when all-time saved has reached 1 GB and the note has never been dismissed. */
+export function showRateNote(savedMb, rateNoteDone) {
+  if (rateNoteDone) return false;
+  const n = Number(savedMb);
+  return Number.isFinite(n) && n >= RATE_NOTE_SAVED_MB;
+}
+
+export function storeReviewsUrl(userAgent) {
+  return String(userAgent || '').includes('Edg/') ? EDGE_ADDONS_URL : CHROME_REVIEWS_URL;
 }
 
 /**

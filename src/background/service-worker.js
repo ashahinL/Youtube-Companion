@@ -14,12 +14,13 @@ import {
   fetchChannelHeader,
   classifyVideo,
   isPushback,
+  isInnertubeForbidden,
   isAvatarUrl,
 } from '../lib/yt.js';
-import { readSettings, writeSettings, onSettingsChanged } from '../lib/settings.js';
+import { readSettings, writeSettings, onSettingsChanged, migrateAudioCover } from '../lib/settings.js';
 import { parseBackup, mergeBackup } from '../lib/backup.js';
 import { parseTakeoutCsv, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
-import { resolveLocale, loadMessages, translate } from '../lib/i18n.js';
+import { resolveLocale, loadMessages, translateCount } from '../lib/i18n.js';
 import {
   readChannels,
   writeChannels,
@@ -44,6 +45,8 @@ import {
   backoffDelayMs,
   isSameListing,
 } from '../lib/store.js';
+
+const OVERLAY_MESSAGE_KEYS = ['overlayTitle', 'overlayExit', 'overlayExitShortcut'];
 
 const ALARM_ALL = 'poll-all';
 const ALARM_FAV = 'poll-fav';
@@ -167,6 +170,27 @@ function newestAt(feed, channelId) {
   return max;
 }
 
+function overlayPackFrom(map) {
+  const pack = {};
+  for (const key of OVERLAY_MESSAGE_KEYS) {
+    pack[key] = map && typeof map[key] === 'string' ? map[key] : '';
+  }
+  return pack;
+}
+
+async function overlayStringsForSettings(settings) {
+  // Both languages go in the reply so a language change while the tab is
+  // open can still switch overlay copy, the way a refetch of messages.json
+  // used to.
+  const locale = resolveLocale(settings?.ui?.locale, globalThis.navigator?.language);
+  let en = overlayPackFrom(null);
+  let ar = overlayPackFrom(null);
+  try { en = overlayPackFrom(await loadMessages('en')); } catch { /* empty */ }
+  try { ar = overlayPackFrom(await loadMessages('ar')); } catch { /* empty */ }
+  const overlays = { en, ar };
+  return { locale, overlay: locale === 'ar' ? ar : en, overlays };
+}
+
 /* Chrome's own lookup follows the browser language, which would leave a user
  * who chose Arabic with an Arabic interface and English alerts. The worker
  * resolves the same setting the interface does. */
@@ -174,13 +198,14 @@ async function nNewVideosText(n, settings) {
   const locale = resolveLocale(settings?.ui?.locale, globalThis.navigator?.language);
   try {
     const map = await loadMessages(locale);
-    const text = translate(map, 'nNewVideos', [String(n)]);
-    if (text && text !== 'nNewVideos') return text;
+    const text = translateCount(map, 'nNewVideos', n);
+    if (text && text !== 'nNewVideos' && text !== 'nNewVideosOne') return text;
   } catch {
     // A missing or unreadable message file must not cost the user the alert.
   }
-  const fallback = chromeApi()?.i18n?.getMessage?.('nNewVideos', [String(n)]);
-  return fallback || `${n} new videos`;
+  const key = Number(n) === 1 ? 'nNewVideosOne' : 'nNewVideos';
+  const fallback = chromeApi()?.i18n?.getMessage?.(key, [String(n)]);
+  return fallback || (Number(n) === 1 ? `${n} new video` : `${n} new videos`);
 }
 
 function iconUrlFor(channel, settings) {
@@ -220,6 +245,7 @@ export async function reconcileRunning() {
 // The rejection is not swallowed here: runSweep still recovers a leftover
 // running flag when this worker is not sweeping.
 const reconciled = reconcileRunning();
+const coverMigrated = migrateAudioCover();
 
 let originRulePromise = null;
 
@@ -235,6 +261,10 @@ export function ensureYtOriginRule() {
     throw err;
   });
   return originRulePromise;
+}
+
+function resetYtOriginRule() {
+  originRulePromise = null;
 }
 
 async function installYtOriginRule() {
@@ -369,7 +399,7 @@ async function inLanes(items, lanes, pauseMs, task) {
   await Promise.all(Array.from({ length: Math.min(lanes, items.length) }, lane));
 }
 
-async function classifyIds(ids, videoMeta, fetchImpl, atById) {
+async function classifyIds(ids, videoMeta, fetchImpl, atById, shouldStop) {
   let meta = videoMeta;
   let pushedBack = false;
   await inLanes(ids, LANES, 0, async (id) => {
@@ -384,7 +414,7 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
       meta = putVideoMeta(meta, { [id]: rec });
     } catch (err) {
       // Leave it out of videoMeta so the next sweep retries this id.
-      if (isPushback(err)) {
+      if (isPushback(err) || await shouldStop(err)) {
         pushedBack = true;
         return true;
       }
@@ -418,7 +448,7 @@ function feedFloor(feed, atById, maxItems) {
  * Picture, handle and current name for channels that have no picture, a few
  * per check. Returns true when YouTube pushed back.
  */
-async function fillHeaders(channels, patchChannel, fetchImpl) {
+async function fillHeaders(channels, patchChannel, fetchImpl, shouldStop) {
   const now = Date.now();
   const due = channels
     .filter((ch) => !ch.avatar && now - (Number(ch.headerAt) || 0) >= HEADER_RETRY_MS)
@@ -434,7 +464,7 @@ async function fillHeaders(channels, patchChannel, fetchImpl) {
         avatar: isAvatarUrl(header.avatar) ? header.avatar : '',
       });
     } catch (err) {
-      if (isPushback(err)) {
+      if (isPushback(err) || await shouldStop(err)) {
         pushedBack = true;
         return true;
       }
@@ -564,6 +594,23 @@ async function performSweep({ scope, onlyId, onlyIds }) {
   }
   const incoming = [];
   let pushedBack = false;
+  let innertube403 = 0;
+  let originRetried = false;
+  // One 403 is a dead video. Three on player/browse in one check is the
+  // Origin rewrite missing; reinstall it once, and if they keep coming
+  // treat it like pushback so the feed does not sit frozen.
+  const shouldStop = async (err) => {
+    if (!isInnertubeForbidden(err)) return false;
+    innertube403 += 1;
+    if (innertube403 < 3) return false;
+    if (!originRetried) {
+      originRetried = true;
+      resetYtOriginRule();
+      await ensureYtOriginRule().catch(() => {});
+      return false;
+    }
+    return true;
+  };
 
   // Every channel's changes go out in one write after the fetches. A write
   // per change rewrote the whole list about twice per channel per check.
@@ -580,7 +627,7 @@ async function performSweep({ scope, onlyId, onlyIds }) {
       // The channel is fine; YouTube is refusing this IP. Every further
       // request deepens the block, and marking the rest as broken would
       // be wrong, so stop here and keep what already arrived.
-      if (isPushback(err)) {
+      if (isPushback(err) || await shouldStop(err)) {
         pushedBack = true;
         return true;
       }
@@ -597,7 +644,8 @@ async function performSweep({ scope, onlyId, onlyIds }) {
       if (entry?.v && entry.at > 0) atById.set(entry.v, entry.at);
     }
   }
-  const floor = feedFloor(await readFeed(), atById, settings.feed.maxItems);
+  const feedBefore = await readFeed();
+  const floor = feedFloor(feedBefore, atById, settings.feed.maxItems);
   const toClassify = new Set();
   const tooOld = new Set();
   for (const { entries } of succeeded) {
@@ -608,10 +656,14 @@ async function performSweep({ scope, onlyId, onlyIds }) {
       else toClassify.add(entry.v);
     }
   }
-  for (const id of pendingLiveIds(videoMeta)) toClassify.add(id);
+  const inFeed = new Set();
+  for (const row of feedBefore) {
+    if (row?.v) inFeed.add(row.v);
+  }
+  for (const id of pendingLiveIds(videoMeta, Date.now(), inFeed)) toClassify.add(id);
 
   if (!pushedBack) {
-    const classified = await classifyIds([...toClassify], videoMeta, fetchImpl, atById);
+    const classified = await classifyIds([...toClassify], videoMeta, fetchImpl, atById, shouldStop);
     videoMeta = classified.meta;
     pushedBack = classified.pushedBack;
   }
@@ -686,7 +738,7 @@ async function performSweep({ scope, onlyId, onlyIds }) {
     patchChannel(channel.id, fields);
   }
   if (!pushedBack) {
-    pushedBack = await fillHeaders(succeeded.map((s) => s.channel), patchChannel, fetchImpl);
+    pushedBack = await fillHeaders(succeeded.map((s) => s.channel), patchChannel, fetchImpl, shouldStop);
   }
   await updateChannels(patches, generations);
 
@@ -827,7 +879,7 @@ export async function addChannelByInput(input) {
     id,
     handle: header.handle || '',
     title: header.title || '',
-    avatar: header.avatar || '',
+    avatar: isAvatarUrl(header.avatar) ? header.avatar : '',
   });
   if (!added) return { ok: false, error: 'already added', id };
   const channel = (await readChannels()).find((ch) => ch.id === id);
@@ -1032,7 +1084,9 @@ export async function handleMessage(msg, sender) {
         const got = await chromeApi().storage.session.get(key);
         const open = !!(got && got[key]);
         if (open) await chromeApi().storage.session.remove(key);
-        return { ok: true, openInAudioMode: open };
+        const settings = await readSettings();
+        const strings = await overlayStringsForSettings(settings);
+        return { ok: true, openInAudioMode: open, ...strings };
       }
       case 'importBackup': {
         const raw = msg.data;
@@ -1136,6 +1190,7 @@ export async function syncUninstallUrl() {
 
 function onBoot() {
   ensureYtOriginRule().catch(() => {});
+  migrateAudioCover().catch(() => {});
   syncAlarms().catch(() => {});
   syncUninstallUrl().catch(() => {});
 }
@@ -1174,12 +1229,9 @@ onSettingsChanged(() => {
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 
 /**
- * The real binding, not suggested_key. Chrome registers the command with
- * an empty shortcut when the combination is already taken.
- */
-/**
  * The keys Chrome actually bound: `shortcut` toggles audio mode, `popup` opens
- * the popup. Either is empty when the suggested combination was taken.
+ * the popup. Either is empty when the suggested combination was taken —
+ * Chrome registers the command with no shortcut instead of the suggested_key.
  */
 async function readAudioModeShortcut() {
   const api = chromeApi();
@@ -1225,5 +1277,6 @@ chromeApi().commands?.onCommand?.addListener((command, tab) => {
 
 export const ready = Promise.all([
   reconciled.catch(() => {}),
+  coverMigrated.catch(() => {}),
   ensureYtOriginRule().catch(() => {}),
 ]);

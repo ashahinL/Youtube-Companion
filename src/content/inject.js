@@ -3,20 +3,18 @@
  * the element but not its methods or the page's own data, which is the
  * only reason this file exists. It receives a request, calls the player
  * or reads a collab video's channel list, and posts the result back.
- * Never throws into the page.
+ * Never throws into the page. Loaded as a MAIN-world content script, so
+ * it is not a web-accessible file.
  */
 
 (function (root) {
   'use strict';
 
-  // A second copy of this file would double-reply to every request.
-  // AudioModeBridge is suite-only, so this flag is the browser-side guard.
-  if (root.__ytcAudioBridgeInstalled) return;
-  root.__ytcAudioBridgeInstalled = true;
-
-  const BRIDGE_TYPE = 'ytc-audio-bridge';
   const PAGE_ORIGIN = 'https://www.youtube.com';
   const win = root.window || root;
+  // 32 random bytes, hex. A page can still watch postMessage traffic; the
+  // goal is no fixed name to search for, not secrecy.
+  const TOKEN_RE = /^[0-9a-f]{64}$/;
 
   const ARITY = {
     getPlaybackQuality: 0,
@@ -52,6 +50,8 @@
   // Same rates the Audio tab speed select offers. Object keys would
   // stringify 0.25; keep the list numeric so 0.25 === 0.25 holds.
   const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
+  let adopted = '';
 
   function isQuality(value) {
     return typeof value === 'string' && QUALITIES[value] === true;
@@ -92,15 +92,29 @@
     return true;
   }
 
+  function isPageEvent(event, expectedWindow) {
+    if (!event || event.source !== expectedWindow) return false;
+    if (event.origin !== PAGE_ORIGIN) return false;
+    const data = event.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    return true;
+  }
+
+  function readAdopt(event, expectedWindow) {
+    if (!isPageEvent(event, expectedWindow)) return null;
+    const data = event.data;
+    if (data.dir !== 'adopt') return null;
+    if (typeof data.type !== 'string' || !TOKEN_RE.test(data.type)) return null;
+    return { token: data.type };
+  }
+
   // Content-script postMessage carries the page origin, not
   // chrome-extension://. Other windows and page scripts share this
   // channel, so origin, source, and shape are all checked before any call.
   function readRequest(event, expectedWindow) {
-    if (!event || event.source !== expectedWindow) return null;
-    if (event.origin !== PAGE_ORIGIN) return null;
+    if (!isPageEvent(event, expectedWindow)) return null;
     const data = event.data;
-    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-    if (data.type !== BRIDGE_TYPE) return null;
+    if (!adopted || data.type !== adopted) return null;
     if (data.dir !== 'request') return null;
     if (typeof data.id !== 'number' || !isFinite(data.id)) return null;
     const args = Array.isArray(data.args) ? data.args : null;
@@ -163,20 +177,44 @@
     return out;
   }
 
-  function reply(id, payload) {
+  function postToPage(msg) {
     try {
-      const msg = {
-        type: BRIDGE_TYPE,
-        dir: 'response',
-        id: id,
-        ok: !!payload.ok,
-      };
-      if (payload.ok) msg.result = payload.result;
-      else msg.error = payload.error || 'failed';
       win.postMessage(msg, PAGE_ORIGIN);
     } catch (err) {
       // postMessage itself must not escape.
     }
+  }
+
+  function replyReady(token) {
+    postToPage({ type: token, dir: 'ready' });
+  }
+
+  function reply(id, payload) {
+    const msg = {
+      type: adopted,
+      dir: 'response',
+      id: id,
+      ok: !!payload.ok,
+    };
+    if (payload.ok) msg.result = payload.result;
+    else msg.error = payload.error || 'failed';
+    postToPage(msg);
+  }
+
+  function takeAdopt(event, token) {
+    if (adopted) {
+      if (adopted !== token) return;
+      if (event && typeof event.stopImmediatePropagation === 'function') {
+        event.stopImmediatePropagation();
+      }
+      replyReady(adopted);
+      return;
+    }
+    adopted = token;
+    if (event && typeof event.stopImmediatePropagation === 'function') {
+      event.stopImmediatePropagation();
+    }
+    replyReady(adopted);
   }
 
   let boundPlayer = null;
@@ -188,15 +226,16 @@
     try {
       player.addEventListener('onPlaybackQualityChange', function (ev) {
         try {
+          if (!adopted) return;
           let quality = ev;
           if (ev && typeof ev === 'object' && ev.data != null) quality = ev.data;
           if (typeof quality !== 'string') return;
-          win.postMessage({
-            type: BRIDGE_TYPE,
+          postToPage({
+            type: adopted,
             dir: 'event',
             event: 'onPlaybackQualityChange',
             quality: quality,
-          }, PAGE_ORIGIN);
+          });
         } catch (err) {
           // swallow
         }
@@ -208,6 +247,11 @@
 
   function onMessage(event) {
     try {
+      const adoptReq = readAdopt(event, win);
+      if (adoptReq) {
+        takeAdopt(event, adoptReq.token);
+        return;
+      }
       const req = readRequest(event, win);
       if (!req) return;
       if (req.method === 'collaborators') {
@@ -225,7 +269,7 @@
     } catch (err) {
       try {
         const id = event && event.data && event.data.id;
-        if (typeof id === 'number' && isFinite(id)) {
+        if (typeof id === 'number' && isFinite(id) && adopted) {
           reply(id, { ok: false, error: 'failed' });
         }
       } catch (err2) {
@@ -241,7 +285,7 @@
   }
 
   const api = {
-    BRIDGE_TYPE,
+    TOKEN_RE,
     PAGE_ORIGIN,
     ARITY,
     PLAYBACK_RATES,
@@ -250,9 +294,11 @@
     isPlaybackRate,
     isVolumeLevel,
     isAllowedCall,
+    readAdopt,
     readRequest,
     readCollaborators,
     onMessage,
+    getToken: function () { return adopted; },
   };
 
   // Named API is for the Node suite only. This file runs in MAIN world,

@@ -227,7 +227,8 @@ Measured in a browser on 2026-09-14. The line is
 
 The player is `#movie_player`. Its methods exist only in the page's own
 JavaScript world; an isolated content script sees the element but not the
-methods, which is why `src/content/inject.js` exists. The table is the
+methods, which is why `src/content/inject.js` exists. It runs as a MAIN-world
+content script, not a file the page can fetch. The table is the
 contract audio mode is built against, not a measurement; confirm any change
 to it in a browser by hand. The bullets under it were measured.
 

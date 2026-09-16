@@ -20,6 +20,7 @@ const SUITES = [
   ['i18n',               './i18n.test.js'],
   ['yt wire layer',      './yt.test.js'],
   ['settings',           './settings.test.js'],
+  ['audio cover',        './cover.test.js'],
   ['store',              './store.test.js'],
   ['backup',             './backup.test.js'],
   ['takeout import',     './takeout.test.js'],

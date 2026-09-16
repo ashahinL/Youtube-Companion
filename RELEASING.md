@@ -60,7 +60,10 @@ and wait in line again. Do that only for a fix that cannot wait.
    `dev`.
 2. **Test by hand on youtube.com.** Reload the extension on
    `chrome://extensions` first, then reload the YouTube tab (reloading
-   YouTube alone does not load the new script). Then:
+   YouTube alone does not load the new script). Confirm the live scripts
+   by the version on that page after Reload, and by inspecting them in
+   DevTools → Sources → Content scripts — not a mark on the YouTube page.
+   Then:
    - audio mode on and off
    - a feed video opened in audio mode
    - add a channel, remove it, undo

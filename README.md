@@ -40,6 +40,8 @@
 **Audio**
 - Turn on audio mode for a YouTube tab. The video drops to 144p and a cover
   goes over it. You keep the sound and use about 8× less data than 720p.
+  In Settings you can pick that cover from a picture on your device; it is
+  not a web address and is not in backups.
 - Turn it off and the video goes back to the quality you were watching.
 - Control playback from the popup: seek, back and forward 10 seconds, play
   and pause, speed, and volume.

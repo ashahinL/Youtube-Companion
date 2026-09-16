@@ -70,22 +70,46 @@ export default async function run(t) {
     JSON.stringify(imgSrc),
   );
 
-  const cs = (manifest.content_scripts || [])[0] || {};
+  const csList = manifest.content_scripts || [];
+  const isolated = csList.find((entry) => (entry.js || []).includes('src/content/content.js')) || {};
+  const main = csList.find((entry) => (entry.js || []).includes('src/content/inject.js')) || {};
   t.check(
-    'content_scripts matches youtube.com',
-    Array.isArray(cs.matches) && cs.matches.includes('https://www.youtube.com/*'),
-    JSON.stringify(cs.matches),
+    'isolated content_scripts matches youtube.com',
+    Array.isArray(isolated.matches) && isolated.matches.includes('https://www.youtube.com/*'),
+    JSON.stringify(isolated.matches),
   );
-  t.check('content_scripts run_at is document_idle', cs.run_at === 'document_idle', String(cs.run_at));
+  t.check('isolated run_at is document_idle', isolated.run_at === 'document_idle', String(isolated.run_at));
   t.check(
-    'content_scripts js is core.js then content.js',
-    Array.isArray(cs.js) && cs.js[0] === 'src/content/core.js' && cs.js[1] === 'src/content/content.js',
-    JSON.stringify(cs.js),
+    'isolated js is core.js then content.js',
+    Array.isArray(isolated.js) && isolated.js[0] === 'src/content/core.js' && isolated.js[1] === 'src/content/content.js',
+    JSON.stringify(isolated.js),
+  );
+  t.check(
+    'isolated js does not include inject.js',
+    Array.isArray(isolated.js) && !isolated.js.includes('src/content/inject.js'),
+    JSON.stringify(isolated.js),
   );
   t.check(
     'content_scripts css includes overlay.css',
-    Array.isArray(cs.css) && cs.css.includes('src/content/overlay.css'),
-    JSON.stringify(cs.css),
+    Array.isArray(isolated.css) && isolated.css.includes('src/content/overlay.css'),
+    JSON.stringify(isolated.css),
+  );
+  t.check(
+    'inject.js is a MAIN-world content script',
+    main.world === 'MAIN'
+      && Array.isArray(main.js)
+      && main.js.length === 1
+      && main.js[0] === 'src/content/inject.js'
+      && Array.isArray(main.matches)
+      && main.matches.includes('https://www.youtube.com/*'),
+    JSON.stringify(main),
+  );
+  t.check('inject.js run_at is document_start', main.run_at === 'document_start', String(main.run_at));
+  const minChrome = parseInt(String(manifest.minimum_chrome_version || ''), 10);
+  t.check(
+    'minimum_chrome_version is at least 111',
+    Number.isFinite(minChrome) && minChrome >= 111,
+    String(manifest.minimum_chrome_version),
   );
 
   t.check(
@@ -99,14 +123,11 @@ export default async function run(t) {
     JSON.stringify(manifest.commands),
   );
 
-  const war = (manifest.web_accessible_resources || [])[0] || {};
   t.check(
-    'web_accessible_resources lists inject.js for youtube.com',
-    Array.isArray(war.resources)
-      && war.resources.includes('src/content/inject.js')
-      && Array.isArray(war.matches)
-      && war.matches.includes('https://www.youtube.com/*'),
-    JSON.stringify(war),
+    'web_accessible_resources is absent',
+    !Object.prototype.hasOwnProperty.call(manifest, 'web_accessible_resources')
+      && !(manifest.web_accessible_resources && manifest.web_accessible_resources.length),
+    JSON.stringify(manifest.web_accessible_resources),
   );
 
   t.section('locales');

@@ -9,6 +9,7 @@ import {
   resolveLocale,
   loadMessages,
   translate,
+  translateCount,
   direction,
   applyTo,
   applyDirection,
@@ -61,6 +62,33 @@ export default async function run(t) {
   t.check('no slots is unchanged', translate(map, 'plain', ['x']) === 'Ready');
   t.check('empty map returns the key', translate({}, 'hi') === 'hi');
   t.check('null map returns the key', translate(null, 'hi') === 'hi');
+
+  t.section('translateCount');
+
+  const counted = {
+    n: '$1 channels',
+    nOne: '$1 channel',
+    two: 'Added $1 channels, $2 already present.',
+    twoOne: 'Added $1 channel, $2 already present.',
+  };
+  t.check('count 3 uses the plural key', translateCount(counted, 'n', 3) === '3 channels');
+  t.check('count 1 uses the One key', translateCount(counted, 'n', 1) === '1 channel');
+  t.check('string 1 uses the One key', translateCount(counted, 'n', '1') === '1 channel');
+  t.check('count 0 uses the plural key', translateCount(counted, 'n', 0) === '0 channels');
+  t.check(
+    'count 1 without a One key falls through',
+    translateCount({ n: '$1 channels' }, 'n', 1) === '1 channels',
+  );
+  t.check(
+    'extra slots pass through on One',
+    translateCount(counted, 'two', 1, ['1', '4']) === 'Added 1 channel, 4 already present.',
+  );
+  t.check(
+    'extra slots pass through on plural',
+    translateCount(counted, 'two', 3, ['3', '1']) === 'Added 3 channels, 1 already present.',
+  );
+  t.check('missing key returns the key', translateCount(counted, 'nope', 1) === 'nope');
+  t.check('null map returns the key', translateCount(null, 'n', 1) === 'n');
 
   t.section('direction');
 
@@ -184,6 +212,26 @@ export default async function run(t) {
 
   const en = json('_locales/en/messages.json');
   const ar = json('_locales/ar/messages.json');
+  const countedPlural = (message) => (
+    /\$(?:COUNT|ADDED)\$ (?:new )?(?:channels|videos|views)\b/.test(message)
+  );
+  const oneKeys = Object.keys(en).filter((key) => key.endsWith('One'));
+  t.check('there are One siblings', oneKeys.length >= 10, String(oneKeys.length));
+  for (const oneKey of oneKeys) {
+    const base = oneKey.slice(0, -3);
+    t.check(`${oneKey} has a base key`, base in en && base in ar);
+    t.check(`${oneKey} is in ar`, oneKey in ar);
+    t.check(
+      `en.${oneKey} has no plural noun next to the number`,
+      !countedPlural(en[oneKey].message),
+      en[oneKey].message,
+    );
+  }
+  for (const [key, entry] of Object.entries(en)) {
+    if (key.endsWith('One')) continue;
+    if (!countedPlural(entry.message)) continue;
+    t.check(`${key} has a One sibling`, `${key}One` in en && `${key}One` in ar);
+  }
   t.check('en has audioSeek', 'audioSeek' in en && en.audioSeek.message.length > 0);
   t.check('ar has audioSeek', 'audioSeek' in ar && ar.audioSeek.message.length > 0);
   t.check(

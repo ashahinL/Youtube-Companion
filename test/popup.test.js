@@ -436,6 +436,25 @@ export default async function run(t) {
       && /id="audio-stat-listened"/.test(a)
       && /id="audio-stat-active"/.test(a),
   );
+  const rateNote = a.match(/<div[^>]*\bid="audio-rate-note"[^>]*>/);
+  t.check(
+    'the 1 GB note sits below the stats cards',
+    a.indexOf('id="audio-stat-active"') >= 0
+      && a.indexOf('id="audio-rate-note"') > a.indexOf('id="audio-stat-active"'),
+  );
+  t.check(
+    'the 1 GB note is role=status, not an alert',
+    !!rateNote && /\brole="status"/.test(rateNote[0]) && !/\brole="alert"/.test(rateNote[0]),
+  );
+  t.check('the 1 GB note has Rate it', /id="audio-rate-yes"[^>]*data-i18n="audioRateYes"/.test(a));
+  t.check('the 1 GB note has Not now', /id="audio-rate-no"[^>]*data-i18n="audioRateNo"/.test(a));
+  t.check(
+    'either rate button writes rateNoteDone to storage.local',
+    /async function dismissRateNote/.test(js)
+      && /storage\.local\.set\(\{\s*\[RATE_NOTE_KEY\]:\s*true\s*\}\)/.test(js)
+      && /audio-rate-yes/.test(js)
+      && /audio-rate-no/.test(js),
+  );
   t.check('disabled settings-select is dimmed', /\.settings-select:disabled/.test(css));
   t.check(
     'empty shortcut uses audioShortcutNone',
@@ -502,8 +521,14 @@ export default async function run(t) {
     JSON.stringify(presets),
   );
   t.check('look group has a custom colour picker', /id="audio-custom-color"/.test(s));
-  t.check('look group has an image URL field', /id="audio-image-url"/.test(s));
-  t.check('look group has an Apply control', /id="audio-image-apply"/.test(s));
+  t.check('look group has a cover file input', /id="audio-cover-file"/.test(s));
+  t.check(
+    'cover file input accepts png jpeg webp gif',
+    /id="audio-cover-file"[\s\S]{0,240}accept="image\/png,image\/jpeg,image\/webp,image\/gif"/.test(s),
+  );
+  t.check('look group has a cover preview', /id="audio-cover-preview"/.test(s));
+  t.check('look group has Remove', /id="audio-cover-remove"/.test(s) && /settingsAudioCoverRemove/.test(s));
+  t.check('look group has no image URL field', !/id="audio-image-url"/.test(s) && !/id="audio-image-form"/.test(s));
   t.check('import offers merge', /id="settings-import-merge"/.test(s));
   t.check('import offers replace', /id="settings-import-replace"/.test(s));
   t.check(
@@ -524,7 +549,7 @@ export default async function run(t) {
     'the confirm row has Remove all and Cancel',
     !!clearRow && /id="settings-clear-yes"/.test(clearRow[0]) && /id="settings-clear-cancel"/.test(clearRow[0]),
   );
-  t.check('the prompt names how many channels go', /t\('settingsClearPrompt', \[String\(view\.channels\.length\)\]\)/.test(js));
+  t.check('the prompt names how many channels go', /tCount\('settingsClearPrompt', view\.channels\.length\)/.test(js));
   t.check('Clear is disabled with nothing to clear', /clearBtn\.disabled = locked \|\| view\.channels\.length === 0/.test(js));
   t.check(
     'only Remove all sends clearChannels',

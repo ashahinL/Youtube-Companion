@@ -9,6 +9,7 @@ import {
   resolveLocale,
   loadMessages,
   translate,
+  translateCount,
   applyTo,
   applyDirection,
 } from '../lib/i18n.js';
@@ -49,7 +50,9 @@ function isolate(text) {
 
 function render() {
   const statusEl = el('welcome-import-status');
-  statusEl.textContent = status.key ? t(status.key, status.subs) : '';
+  statusEl.textContent = status.key
+    ? translateCount(messages, status.key, Number(status.subs[0]), status.subs)
+    : '';
   statusEl.className = status.kind ? `status status--${status.kind}` : 'status';
 
   el('welcome-import').disabled = busy;
@@ -59,9 +62,10 @@ function render() {
     ['welcome-audio-key', 'welcomeAudioKey', shortcuts.shortcut],
     ['welcome-popup-key', 'welcomePopupKey', shortcuts.popup],
   ]) {
-    // Chrome binds nothing when the suggested keys were taken.
-    el(id).hidden = !keys;
-    el(id).textContent = keys ? t(key, [isolate(keys)]) : '';
+    // Chrome binds nothing when the suggested keys were taken. Same words
+    // as the popup; this page has no link to change them.
+    el(id).hidden = false;
+    el(id).textContent = keys ? t(key, [isolate(keys)]) : t('audioShortcutNone');
   }
 }
 
@@ -92,8 +96,10 @@ async function importFile(file) {
     const res = await send({ type: 'importTakeout', data: await file.text() });
     if (!res || res.ok === false) {
       const key = IMPORT_ERRORS[res?.error];
-      if (key) setStatus(key, [String(MAX_TAKEOUT_CHANNELS)], 'error');
-      else setStatus('welcomeImportFailed', [String(res?.error || '')], 'error');
+      if (key) {
+        const subs = res.error === 'count' ? [String(MAX_TAKEOUT_CHANNELS)] : [];
+        setStatus(key, subs, 'error');
+      } else setStatus('welcomeImportFailed', [String(res?.error || '')], 'error');
       return;
     }
     const added = Number(res.added) || 0;

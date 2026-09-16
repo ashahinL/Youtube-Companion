@@ -69,6 +69,8 @@ export default async function run(t) {
   t.check('channels length matches', built.channels.length === 2, String(built.channels.length));
   t.check('feed is absent', !('feed' in built));
   t.check('videoMeta is absent', !('videoMeta' in built));
+  t.check('export has no audioCover', !('audioCover' in built) && !('audioCover' in (built.settings || {})));
+  t.check('export has no imageUrl', !('imageUrl' in (built.settings?.audio || {})));
 
   t.section('channel fields on export');
 
@@ -385,6 +387,43 @@ export default async function run(t) {
     );
   });
   t.check('a dropped avatar still imports the channel', withAvatars.channels.length === avatarCases.length);
+
+  t.section('cover picture stays out of backups');
+
+  const withUrl = buildBackup({
+    settings: {
+      ...DEFAULT_SETTINGS,
+      audio: { ...DEFAULT_SETTINGS.audio, imageUrl: 'data:image/png;base64,aaa', backgroundType: 'image' },
+      audioCover: 'data:image/jpeg;base64,shouldNotExport',
+      rateNoteDone: true,
+    },
+    channels: [],
+  });
+  t.check('a leftover imageUrl is stripped on export', !('imageUrl' in (withUrl.settings?.audio || {})));
+  t.check('audioCover stuffed into settings is stripped on export', !('audioCover' in withUrl.settings));
+  t.check('rateNoteDone is stripped on export', !('rateNoteDone' in withUrl.settings));
+  t.check('backgroundType image still exports', withUrl.settings?.audio?.backgroundType === 'image');
+
+  const importedCover = mergeBackup(emptyState(), {
+    app: 'youtube-companion',
+    version: 1,
+    settings: {
+      audio: {
+        backgroundType: 'image',
+        imageUrl: 'https://example.com/bg.jpg',
+      },
+    },
+    channels: [],
+  }, 'replace');
+  t.check(
+    'import ignores imageUrl',
+    !('imageUrl' in (importedCover.settings?.audio || {})),
+    JSON.stringify(importedCover.settings?.audio),
+  );
+  t.check(
+    'import still takes backgroundType image',
+    importedCover.settings.audio.backgroundType === 'image',
+  );
 
   t.section('merge refuses when live plus file would pass the cap');
 

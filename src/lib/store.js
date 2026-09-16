@@ -220,7 +220,10 @@ export function mergeFeedItems(existing, incoming, maxItems) {
   });
   const cap = Number(maxItems);
   const capped = Number.isFinite(cap) && cap >= 0 ? feed.slice(0, cap) : feed;
-  return { feed: capped, added };
+  // Callers alert from `added`. A row the cap then drops never landed
+  // in the stored feed, so it must not count as new.
+  const stayed = new Set(capped.map((row) => row.v));
+  return { feed: capped, added: added.filter((row) => stayed.has(row.v)) };
 }
 
 /**
@@ -307,13 +310,16 @@ const PREMIERE_FAR_RECHECK_MS = 6 * 60 * 60_000;
 
 /**
  * Live and premiere ids due for another look. `ck` is when a record was last
- * classified; a record without one is due.
+ * classified; a record without one is due. `keep` is the ids still in the
+ * stored feed — a live the cap already pushed out would otherwise be a
+ * player request on every check until videoMeta evicts it.
  */
-export function pendingLiveIds(map, now = Date.now()) {
+export function pendingLiveIds(map, now = Date.now(), keep = null) {
   const ids = [];
   if (!isPlainObject(map)) return ids;
   for (const [id, rec] of Object.entries(map)) {
     if (!rec) continue;
+    if (keep && !keep.has(id)) continue;
     if (rec.k === 'live') ids.push(id);
     if (rec.k !== 'premiere') continue;
     const startsIn = (Number(rec.st) || 0) - now;

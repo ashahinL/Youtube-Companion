@@ -103,10 +103,14 @@ asks.
   or not.
 - **English and Arabic**, full RTL, with a language override in Settings.
 - **Audio mode**: its switch lives only inside the Audio tab. No recorder. The
-  overlay look is a group in Settings. With two or more YouTube tabs open, a
-  picker chooses which one the player drives. The keyboard command acts on the
-  active tab only. The sleep timer (15, 30 or 60 minutes) sits in the player
-  card and runs in the YouTube tab, not the popup or the worker.
+  overlay look is a group in Settings; Image uses a picture you pick on the
+  device, stored outside settings so it is not in backups. With two or more
+  YouTube tabs open, a picker chooses which one the player drives. The
+  keyboard command acts on the active tab only. The sleep timer (15, 30 or 60
+  minutes) sits in the player card and runs in the YouTube tab, not the popup
+  or the worker. After audio mode has saved 1 GB, the Audio tab offers a
+  one-time store rating; either button dismisses it for good, and that flag
+  is not in backups.
 - **Backup** exports settings and channels (merge or replace on import), not
   the feed. **Clear watchlist** sits in the same group: an inline confirm
   naming the count, then every channel and the whole feed go. Alert history
@@ -240,14 +244,20 @@ Most live as comments at the line they protect. These span files or tools:
 - **Reloading a YouTube page does not load new content-script code**; only
   reloading the extension does, and the version on the extensions page follows
   the manifest, so it can look current while a stale script runs. The isolated
-  world's `console` is not the page's either. `content.js` sets a
-  `data-am-beacon` attribute on `<html>` to prove which revision is live.
+  world's `console` is not the page's either. Confirm the new code by Reload on
+  `chrome://extensions` (the version there) and by inspecting the content
+  scripts in DevTools' "Content scripts" section.
 - **A test that asserts a call exists is not a test.** A structural grep once
   passed while the handler holding the call was unreachable. Anything that must
   actually fire on youtube.com is checked in a browser by hand.
 - **Persist a durable flag the moment it changes**, not at the next convenient
   write. MV3 can kill the worker in between; clearing a flag in memory and
   letting a later batch carry it gave poppo an endless re-seed loop.
+- **The audio-mode cover is a `data:image/` URL on its own storage key, never
+  an https address.** A leftover `settings.audio.imageUrl` from 1.x is
+  migrated when it is already a data URL, and dropped when it is https, so
+  the YouTube page never loads a third-party picture. The cover is not in
+  backups.
 - **An extension cannot assign its own keyboard shortcut.** `suggested_key`
   applies only at install, and when the combination is taken Chrome registers
   the command with no shortcut, silently (Dark Reader had `Alt+Shift+A`).

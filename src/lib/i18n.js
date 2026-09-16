@@ -81,6 +81,20 @@ export function translate(map, key, substitutions) {
   return substitute(map[key], substitutions);
 }
 
+/**
+ * Chrome i18n has no plural rules, so count-1 copy lives on a `…One`
+ * sibling of `key`. Missing One falls through to `key`.
+ */
+export function translateCount(map, key, count, substitutions) {
+  const n = Number(count);
+  const oneKey = `${key}One`;
+  const use = n === 1 && map && Object.prototype.hasOwnProperty.call(map, oneKey)
+    ? oneKey
+    : key;
+  const subs = substitutions == null ? [String(count)] : substitutions;
+  return translate(map, use, subs);
+}
+
 export function applyTo(root, map) {
   if (!root || typeof root.querySelectorAll !== 'function') return;
   for (const el of root.querySelectorAll('[data-i18n]')) {

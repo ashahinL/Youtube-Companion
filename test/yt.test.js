@@ -28,6 +28,7 @@ import {
   isChannelId,
   isAvatarUrl,
   isPushback,
+  isInnertubeForbidden,
 } from '../src/lib/yt.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -771,6 +772,16 @@ export default async function run(t) {
 
   const five00 = await thrown(() => fetchChannelFeed(mkbhdId, { fetch: recordFetch(() => headRes({ status: 500 })) }));
   t.check('a 500 is not pushback', five00 instanceof YtError && !isPushback(five00));
+  const player403 = await thrown(() => classifyVideo('Od6M0AXpcxQ', { fetch: recordFetch(() => headRes({ status: 403 })) }));
+  t.check(
+    'a 403 player is Innertube forbidden, not pushback',
+    isInnertubeForbidden(player403) && !isPushback(player403),
+    String(player403),
+  );
+  const browse403 = await thrown(() => fetchChannelHeader(mkbhdId, { fetch: recordFetch(() => headRes({ status: 403 })) }));
+  t.check('a 403 browse is Innertube forbidden', isInnertubeForbidden(browse403), String(browse403));
+  const feed403 = await thrown(() => fetchChannelFeed(mkbhdId, { fetch: recordFetch(() => headRes({ status: 403 })) }));
+  t.check('a 403 feed is not Innertube forbidden', !isInnertubeForbidden(feed403) && feed403?.status === 403, String(feed403));
   const lookalike = recordFetch(() => headRes({ status: 200, redirected: true, url: 'https://notgoogle.com/sorry/' }));
   const lookalikeErr = await thrown(() => isShort('gTKS8SAwUzE', { fetch: lookalike }));
   t.check('a /sorry path on another host is not pushback', !isPushback(lookalikeErr), String(lookalikeErr));

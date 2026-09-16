@@ -75,6 +75,18 @@ export function isPushback(err) {
   return err instanceof YtError && err.kind === 'http' && err.status === PUSHBACK_STATUS;
 }
 
+/**
+ * Origin: chrome-extension://… on Innertube is a 403, not a 429. One
+ * dead video must stay a per-video miss; a pile of these is the rewrite
+ * rule missing, and looks like a frozen feed if the sweep carries on.
+ */
+export function isInnertubeForbidden(err) {
+  return err instanceof YtError
+    && err.kind === 'http'
+    && err.status === 403
+    && (err.endpoint === 'player' || err.endpoint === 'browse');
+}
+
 function landedOnBlockPage(res) {
   if (res.status === PUSHBACK_STATUS) return true;
   if (!res.url) return false;

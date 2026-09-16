@@ -57,23 +57,41 @@ console.log('\ncontent scripts');
 const csList = manifest.content_scripts || [];
 if (!csList.length) bad('content_scripts is missing');
 else {
-  const cs = csList[0];
-  if ((cs.matches || []).includes('https://www.youtube.com/*')) ok('matches https://www.youtube.com/*');
-  else bad('content_scripts matches', JSON.stringify(cs.matches));
-  if (cs.run_at === 'document_idle') ok('run_at is document_idle');
-  else bad('run_at is not document_idle', String(cs.run_at));
-  const js = cs.js || [];
-  if (js[0] === 'src/content/core.js' && js[1] === 'src/content/content.js' && js.length === 2) {
-    ok('js is core.js then content.js');
-  } else {
-    bad('js order', JSON.stringify(js));
+  const isolated = csList.find((entry) => (entry.js || []).includes('src/content/content.js'));
+  const main = csList.find((entry) => (entry.js || []).includes('src/content/inject.js'));
+  if (!isolated) bad('isolated content script (content.js) is missing');
+  else {
+    if ((isolated.matches || []).includes('https://www.youtube.com/*')) ok('isolated matches https://www.youtube.com/*');
+    else bad('isolated content_scripts matches', JSON.stringify(isolated.matches));
+    if (isolated.run_at === 'document_idle') ok('isolated run_at is document_idle');
+    else bad('isolated run_at is not document_idle', String(isolated.run_at));
+    if (isolated.world && isolated.world !== 'ISOLATED') {
+      bad('content.js must stay in the isolated world', String(isolated.world));
+    } else {
+      ok('content.js stays isolated');
+    }
+    const js = isolated.js || [];
+    if (js[0] === 'src/content/core.js' && js[1] === 'src/content/content.js' && !js.includes('src/content/inject.js')) {
+      ok('isolated js is core.js then content.js');
+    } else {
+      bad('isolated js order', JSON.stringify(js));
+    }
+    const css = isolated.css || [];
+    if (css.includes('src/content/overlay.css')) ok('css includes overlay.css');
+    else bad('css missing overlay.css', JSON.stringify(css));
   }
-  if (js.includes('src/content/inject.js')) {
-    bad('inject.js is a content_scripts js entry; it must be MAIN-world via web_accessible_resources');
+  if (!main) bad('MAIN-world inject.js content script is missing');
+  else {
+    if ((main.matches || []).includes('https://www.youtube.com/*')) ok('MAIN inject.js matches https://www.youtube.com/*');
+    else bad('MAIN inject.js matches', JSON.stringify(main.matches));
+    if (main.world === 'MAIN') ok('inject.js world is MAIN');
+    else bad('inject.js world is not MAIN', String(main.world));
+    if (main.run_at === 'document_start') ok('inject.js run_at is document_start');
+    else bad('inject.js run_at is not document_start', String(main.run_at));
+    const js = main.js || [];
+    if (js.length === 1 && js[0] === 'src/content/inject.js') ok('MAIN js is only inject.js');
+    else bad('MAIN js', JSON.stringify(js));
   }
-  const css = cs.css || [];
-  if (css.includes('src/content/overlay.css')) ok('css includes overlay.css');
-  else bad('css missing overlay.css', JSON.stringify(css));
 }
 
 const cmd = manifest.commands && manifest.commands['toggle-audio-mode'];
@@ -81,24 +99,12 @@ if (cmd && typeof cmd.description === 'string' && cmd.description.length) ok('to
 else bad('commands.toggle-audio-mode is missing');
 
 const warList = manifest.web_accessible_resources || [];
-const warHit = warList.some((entry) => (
-  Array.isArray(entry.resources)
-  && entry.resources.includes('src/content/inject.js')
-  && Array.isArray(entry.matches)
-  && entry.matches.includes('https://www.youtube.com/*')
-));
-if (warHit) ok('inject.js is web-accessible on youtube.com');
-else bad('web_accessible_resources does not expose inject.js on youtube.com');
+if (!warList.length) ok('no web_accessible_resources');
+else bad('web_accessible_resources must be absent', JSON.stringify(warList));
 
-const localeWar = warList.some((entry) => (
-  Array.isArray(entry.resources)
-  && entry.resources.includes('_locales/en/messages.json')
-  && entry.resources.includes('_locales/ar/messages.json')
-  && Array.isArray(entry.matches)
-  && entry.matches.includes('https://www.youtube.com/*')
-));
-if (localeWar) ok('locale files are web-accessible on youtube.com');
-else bad('web_accessible_resources does not expose _locales/{en,ar}/messages.json on youtube.com');
+const minChrome = parseInt(String(manifest.minimum_chrome_version || ''), 10);
+if (Number.isFinite(minChrome) && minChrome >= 111) ok(`minimum_chrome_version is ${manifest.minimum_chrome_version}`);
+else bad('minimum_chrome_version must be >= 111', String(manifest.minimum_chrome_version));
 
 /* ---- source parses -------------------------------------------------- */
 console.log('\nsyntax');

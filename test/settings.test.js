@@ -10,7 +10,9 @@ import {
   writeSettings,
   clampSettings,
   onSettingsChanged,
+  migrateAudioCover,
 } from '../src/lib/settings.js';
+import { AUDIO_COVER_KEY } from '../src/lib/cover.js';
 
 function same(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -212,7 +214,7 @@ export default async function run(t) {
       'customColor defaults to the midnight from-stop',
       DEFAULT_SETTINGS.audio.customColor === '#0f0f14',
     );
-    t.check('imageUrl defaults to empty', DEFAULT_SETTINGS.audio.imageUrl === '');
+    t.check('imageUrl is not a setting', !('imageUrl' in DEFAULT_SETTINGS.audio));
     t.check(
       'openFeedInAudioMode defaults to false',
       DEFAULT_SETTINGS.audio.openFeedInAudioMode === false,
@@ -288,46 +290,16 @@ export default async function run(t) {
     );
 
     t.check(
-      'https imageUrl is kept',
-      audioOf({ imageUrl: 'https://example.com/bg.jpg' }).imageUrl === 'https://example.com/bg.jpg',
+      'https imageUrl is dropped',
+      !('imageUrl' in audioOf({ imageUrl: 'https://example.com/bg.jpg' })),
     );
     t.check(
-      'https imageUrl is trimmed',
-      audioOf({ imageUrl: '  https://example.com/bg.jpg  ' }).imageUrl === 'https://example.com/bg.jpg',
+      'data:image imageUrl is dropped from settings',
+      !('imageUrl' in audioOf({ imageUrl: 'data:image/png;base64,aaa' })),
     );
     t.check(
-      'javascript imageUrl is emptied',
-      audioOf({ imageUrl: 'javascript:alert(1)' }).imageUrl === '',
-    );
-    t.check(
-      'http imageUrl is emptied',
-      audioOf({ imageUrl: 'http://example.com/bg.jpg' }).imageUrl === '',
-    );
-    t.check(
-      'quoted imageUrl is emptied',
-      audioOf({ imageUrl: 'https://example.com/a".jpg' }).imageUrl === '',
-    );
-    t.check(
-      'backslash imageUrl is emptied',
-      audioOf({ imageUrl: 'https://example.com/a\\b.jpg' }).imageUrl === '',
-    );
-    t.check(
-      'newline imageUrl is emptied',
-      audioOf({ imageUrl: 'https://example.com/a\n.jpg' }).imageUrl === '',
-    );
-    t.check(
-      'data:image is kept',
-      audioOf({ imageUrl: 'data:image/png;base64,aaa' }).imageUrl === 'data:image/png;base64,aaa',
-    );
-    t.check(
-      'data:text is emptied',
-      audioOf({ imageUrl: 'data:text/html,hi' }).imageUrl === '',
-    );
-    t.check('non-string imageUrl is emptied', audioOf({ imageUrl: 1 }).imageUrl === '');
-    t.check('empty imageUrl stays empty', audioOf({ imageUrl: '' }).imageUrl === '');
-    t.check(
-      'whitespace imageUrl is emptied',
-      audioOf({ imageUrl: '   ' }).imageUrl === '',
+      'javascript imageUrl is dropped',
+      !('imageUrl' in audioOf({ imageUrl: 'javascript:alert(1)' })),
     );
 
     const fullLook = {
@@ -336,7 +308,6 @@ export default async function run(t) {
       preset: 'forest',
       backgroundType: 'image',
       customColor: '#14763a',
-      imageUrl: 'https://example.com/bg.jpg',
     };
     t.check(
       'a full audio group round-trips',
@@ -349,7 +320,7 @@ export default async function run(t) {
         && partialLook.preset === 'midnight'
         && partialLook.backgroundType === 'color'
         && partialLook.customColor === '#0f0f14'
-        && partialLook.imageUrl === '',
+        && !('imageUrl' in partialLook),
     );
     t.check(
       'junk look keys fall back without dropping restoreQuality',
@@ -367,8 +338,42 @@ export default async function run(t) {
         preset: 'midnight',
         backgroundType: 'color',
         customColor: '#0f0f14',
-        imageUrl: '',
       }),
+    );
+
+    t.section('audio cover migration');
+
+    const dataUrl = 'data:image/jpeg;base64,aaa';
+    await globalThis.chrome.storage.local.clear();
+    await globalThis.chrome.storage.local.set({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        audio: { ...DEFAULT_SETTINGS.audio, imageUrl: dataUrl },
+      },
+    });
+    const moved = await migrateAudioCover();
+    t.check('data imageUrl is moved onto audioCover', moved.writeCover === true && moved.cover === dataUrl);
+    const afterMove = await globalThis.chrome.storage.local.get(['settings', AUDIO_COVER_KEY]);
+    t.check('audioCover holds the data URL', afterMove[AUDIO_COVER_KEY] === dataUrl);
+    t.check(
+      'imageUrl is gone from stored settings after a data move',
+      !('imageUrl' in (afterMove.settings?.audio || {})),
+    );
+
+    await globalThis.chrome.storage.local.clear();
+    await globalThis.chrome.storage.local.set({
+      settings: {
+        ...DEFAULT_SETTINGS,
+        audio: { ...DEFAULT_SETTINGS.audio, imageUrl: 'https://example.com/bg.jpg' },
+      },
+    });
+    const httpsGone = await migrateAudioCover();
+    t.check('https imageUrl is not copied onto audioCover', httpsGone.writeCover === false);
+    const afterDrop = await globalThis.chrome.storage.local.get(['settings', AUDIO_COVER_KEY]);
+    t.check('https leftover does not create audioCover', afterDrop[AUDIO_COVER_KEY] === undefined);
+    t.check(
+      'https imageUrl is gone from stored settings',
+      !('imageUrl' in (afterDrop.settings?.audio || {})),
     );
 
     t.section('writeSettings');

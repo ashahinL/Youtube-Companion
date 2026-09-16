@@ -13,10 +13,21 @@ import { thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
 import { buildBackup, backupSizeError, MAX_BACKUP_CHANNELS } from '../lib/backup.js';
+import { migrateAudioCover } from '../lib/settings.js';
+import {
+  AUDIO_COVER_KEY,
+  COVER_MAX_INPUT_BYTES,
+  COVER_MAX_STORED_BYTES,
+  COVER_JPEG_QUALITY,
+  isCoverDataUrl,
+  coverOutputSize,
+  nextCoverJpegQuality,
+} from '../lib/cover.js';
 import {
   resolveLocale,
   loadMessages,
   translate,
+  translateCount,
   applyTo,
   applyDirection,
 } from '../lib/i18n.js';
@@ -30,6 +41,9 @@ import {
   watchlistView,
   audioTabView,
   audioStatsView,
+  showRateNote,
+  storeReviewsUrl,
+  RATE_NOTE_KEY,
   channelProblem,
   followView,
   followActionState,
@@ -95,6 +109,9 @@ const view = {
   audioPlayer: null,
   audioStats: { listened: {}, active: {}, totals: { listened: 0, active: 0 } },
   audioStatsScope: 'month',
+  audioCover: '',
+  rateNoteDone: false,
+  coverError: '',
 };
 
 let audioPollTimer = null;
@@ -155,6 +172,12 @@ document.querySelector('.tabs')?.addEventListener('keydown', (event) => {
 
 function t(key, substitutions) {
   return translate(messages, key, substitutions);
+}
+
+function tCount(key, count, substitutions) {
+  const n = Number(count);
+  const subs = substitutions == null ? [String(count)] : substitutions;
+  return translateCount(messages, key, n, subs);
 }
 
 async function applyI18n(setting) {
@@ -693,7 +716,7 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   const views = Number(item.vw);
   if (Number.isFinite(views) && views > 0) {
     const count = compactCount(views, locale);
-    if (count) metaNodes.push(textEl('span', 'feed-row__views', t('feedViews', [count])));
+    if (count) metaNodes.push(textEl('span', 'feed-row__views', tCount('feedViews', views, [count])));
   }
 
   if (metaNodes.length) {
@@ -1430,6 +1453,12 @@ function renderAudioStats() {
   if (saved) saved.textContent = Core.formatData(folded.savedMb, units);
   if (listened) listened.textContent = Core.formatTime(folded.listened);
   if (active) active.textContent = Core.formatTime(folded.active);
+
+  const note = document.getElementById('audio-rate-note');
+  if (note) {
+    const allTime = audioStatsView(view.audioStats, 'all', Date.now(), Core);
+    note.hidden = !showRateNote(allTime.savedMb, view.rateNoteDone);
+  }
 }
 
 function currentFollow() {
@@ -1659,10 +1688,17 @@ function renderSettings(locale) {
     customWrap?.style.setProperty('background', color);
   }
 
-  const imageInput = document.getElementById('audio-image-url');
-  if (imageInput && document.activeElement !== imageInput) {
-    imageInput.value = audio.imageUrl || '';
+  const hasCover = isCoverDataUrl(view.audioCover);
+  const removeBtn = document.getElementById('audio-cover-remove');
+  if (removeBtn) removeBtn.disabled = !hasCover;
+  const hint = document.getElementById('audio-cover-hint');
+  if (hint) hint.hidden = hasCover;
+  const coverErr = document.getElementById('audio-cover-error');
+  if (coverErr) {
+    coverErr.hidden = !view.coverError;
+    coverErr.textContent = view.coverError || '';
   }
+  paintCoverPreview(hasCover ? view.audioCover : '');
 
   const locked = view.importBusy;
   const exportBtn = document.getElementById('settings-export');
@@ -1686,7 +1722,7 @@ function renderSettings(locale) {
   const clearRow = document.getElementById('settings-clear-confirm');
   if (clearRow) clearRow.hidden = !view.clearOpen || view.channels.length === 0;
   const clearPrompt = document.getElementById('settings-clear-prompt');
-  if (clearPrompt) clearPrompt.textContent = t('settingsClearPrompt', [String(view.channels.length)]);
+  if (clearPrompt) clearPrompt.textContent = tCount('settingsClearPrompt', view.channels.length);
 
   const status = document.getElementById('settings-backup-status');
   if (status) {
@@ -1707,8 +1743,8 @@ function renderSettings(locale) {
   const feedEl = document.getElementById('settings-stat-feed');
   const lastEl = document.getElementById('settings-stat-last');
   const verEl = document.getElementById('settings-stat-version');
-  if (chEl) chEl.textContent = t('settingsFooterChannels', [String(nCh)]);
-  if (feedEl) feedEl.textContent = t('settingsFooterFeed', [String(nFeed)]);
+  if (chEl) chEl.textContent = tCount('settingsFooterChannels', nCh);
+  if (feedEl) feedEl.textContent = tCount('settingsFooterFeed', nFeed);
   if (lastEl) {
     const lastAt = Number(view.pollState?.lastPollAt) || 0;
     if (lastAt) {
@@ -2013,7 +2049,7 @@ function exportBackup() {
   // Revoking in the same turn can cancel the download in some browsers.
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   view.backupNotice = {
-    text: t('settingsExportDone', [String((data.channels || []).length)]),
+    text: tCount('settingsExportDone', (data.channels || []).length),
     error: false,
   };
   render();
@@ -2039,8 +2075,8 @@ async function importBackup(mode) {
       const added = Number(res.added) || 0;
       const skipped = Number(res.skipped) || 0;
       const text = mode === 'replace'
-        ? t('settingsImportReplaced', [String(added)])
-        : t('settingsImportAdded', [String(added), String(skipped)]);
+        ? tCount('settingsImportReplaced', added)
+        : tCount('settingsImportAdded', added, [String(added), String(skipped)]);
       view.backupNotice = { text, error: false };
       view.pendingImportText = '';
       view.importStage = 'idle';
@@ -2067,7 +2103,7 @@ async function clearWatchlist() {
       if (res.state) applySnapshot(res.state);
       view.undo = null;
       view.clearOpen = false;
-      view.backupNotice = { text: t('settingsCleared', [String(Number(res.removed) || 0)]), error: false };
+      view.backupNotice = { text: tCount('settingsCleared', Number(res.removed) || 0), error: false };
     }
   } catch (err) {
     view.backupNotice = { text: formatError(err?.message || err), error: true };
@@ -2256,6 +2292,190 @@ async function refreshAudioStats() {
   }
 }
 
+async function refreshAudioCover() {
+  try {
+    const got = await chrome.storage.local.get(AUDIO_COVER_KEY);
+    const raw = got && got[AUDIO_COVER_KEY];
+    view.audioCover = isCoverDataUrl(raw) ? raw : '';
+  } catch {
+    view.audioCover = '';
+  }
+}
+
+async function refreshRateNote() {
+  try {
+    const got = await chrome.storage.local.get(RATE_NOTE_KEY);
+    view.rateNoteDone = !!(got && got[RATE_NOTE_KEY]);
+  } catch {
+    view.rateNoteDone = false;
+  }
+}
+
+async function dismissRateNote() {
+  // Persist the moment it changes. MV3 can kill the popup between a
+  // memory write and a later batch.
+  try {
+    await chrome.storage.local.set({ [RATE_NOTE_KEY]: true });
+  } catch {
+    // hide this session even if the write failed
+  }
+  view.rateNoteDone = true;
+}
+
+let paintedCover = '';
+
+function paintCoverPreview(dataUrl) {
+  const canvas = document.getElementById('audio-cover-preview');
+  if (!canvas) return;
+  if (!isCoverDataUrl(dataUrl)) {
+    paintedCover = '';
+    canvas.hidden = true;
+    return;
+  }
+  if (paintedCover === dataUrl) {
+    canvas.hidden = false;
+    return;
+  }
+  paintedCover = dataUrl;
+  void (async () => {
+    try {
+      const blob = blobFromDataUrl(dataUrl);
+      if (!blob) return;
+      const bmp = await createImageBitmap(blob);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        bmp.close?.();
+        return;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const scale = Math.max(canvas.width / bmp.width, canvas.height / bmp.height);
+      const dw = bmp.width * scale;
+      const dh = bmp.height * scale;
+      ctx.drawImage(bmp, (canvas.width - dw) / 2, (canvas.height - dh) / 2, dw, dh);
+      bmp.close?.();
+      if (paintedCover === dataUrl) canvas.hidden = false;
+    } catch {
+      if (paintedCover === dataUrl) paintedCover = '';
+    }
+  })();
+}
+
+function blobFromDataUrl(dataUrl) {
+  const comma = String(dataUrl).indexOf(',');
+  if (comma < 0) return null;
+  const header = dataUrl.slice(0, comma);
+  const payload = dataUrl.slice(comma + 1);
+  const mime = (header.match(/^data:([^;,]+)/i) || [])[1] || 'application/octet-stream';
+  let binary;
+  try {
+    binary = atob(payload);
+  } catch {
+    return null;
+  }
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function rasterToJpeg(bitmap, width, height, quality) {
+  if (typeof OffscreenCanvas === 'function') {
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    if (ctx && typeof canvas.convertToBlob === 'function') {
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      return canvas.convertToBlob({ type: 'image/jpeg', quality });
+    }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('canvas');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('encode'));
+    }, 'image/jpeg', quality);
+  });
+}
+
+async function encodeCoverFile(file) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return { ok: false, key: 'settingsAudioCoverBad' };
+  }
+  const size = coverOutputSize(bitmap.width, bitmap.height);
+  let quality = COVER_JPEG_QUALITY;
+  try {
+    for (let i = 0; i < 8; i++) {
+      const blob = await rasterToJpeg(bitmap, size.width, size.height, quality);
+      if (blob.size <= COVER_MAX_STORED_BYTES) {
+        const dataUrl = await blobToDataUrl(blob);
+        if (!isCoverDataUrl(dataUrl)) return { ok: false, key: 'settingsAudioCoverBad' };
+        return { ok: true, dataUrl };
+      }
+      const next = nextCoverJpegQuality(quality, blob.size);
+      if (typeof next !== 'number') return { ok: false, key: 'settingsAudioCoverTooHeavy' };
+      quality = next;
+    }
+    return { ok: false, key: 'settingsAudioCoverTooHeavy' };
+  } catch {
+    return { ok: false, key: 'settingsAudioCoverBad' };
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+async function pickCoverFile(file) {
+  if (!file) return;
+  view.coverError = '';
+  if (file.size > COVER_MAX_INPUT_BYTES) {
+    view.coverError = t('settingsAudioCoverTooLarge');
+    render();
+    return;
+  }
+  const result = await encodeCoverFile(file);
+  if (!result.ok) {
+    view.coverError = t(result.key);
+    render();
+    return;
+  }
+  try {
+    await chrome.storage.local.set({ [AUDIO_COVER_KEY]: result.dataUrl });
+  } catch {
+    view.coverError = t('settingsAudioCoverBad');
+    render();
+    return;
+  }
+  view.audioCover = result.dataUrl;
+  render();
+}
+
+async function removeCover() {
+  view.coverError = '';
+  try {
+    await chrome.storage.local.set({ [AUDIO_COVER_KEY]: '' });
+  } catch {
+    render();
+    return;
+  }
+  view.audioCover = '';
+  paintedCover = '';
+  render();
+}
+
 async function refreshAudioShortcut() {
   try {
     const res = await send({ type: 'audioMode.shortcut' });
@@ -2370,6 +2590,15 @@ function bindAudio() {
     renderAudio();
   });
 
+  document.getElementById('audio-rate-yes')?.addEventListener('click', () => {
+    void dismissRateNote().then(() => {
+      openUrl(storeReviewsUrl(navigator.userAgent));
+    });
+  });
+  document.getElementById('audio-rate-no')?.addEventListener('click', () => {
+    void dismissRateNote().then(() => renderAudio());
+  });
+
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local' || !changes) return;
@@ -2379,6 +2608,15 @@ function bindAudio() {
         view.audioStats = next && typeof next === 'object'
           ? next
           : { listened: {}, active: {}, totals: { listened: 0, active: 0 } };
+        touched = true;
+      }
+      if (changes.audioCover) {
+        const raw = changes.audioCover.newValue;
+        view.audioCover = isCoverDataUrl(raw) ? raw : '';
+        touched = true;
+      }
+      if (changes.rateNoteDone) {
+        view.rateNoteDone = !!changes.rateNoteDone.newValue;
         touched = true;
       }
       // Seed writes the list and the feed after Follow / Add has already
@@ -2438,11 +2676,18 @@ function bindLookSettings() {
     });
   });
 
-  document.getElementById('audio-image-form')?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const input = document.getElementById('audio-image-url');
-    const url = input instanceof HTMLInputElement ? input.value : '';
-    void patchSettings({ audio: { backgroundType: 'image', imageUrl: url } });
+  document.getElementById('audio-cover-choose')?.addEventListener('click', () => {
+    document.getElementById('audio-cover-file')?.click();
+  });
+  document.getElementById('audio-cover-file')?.addEventListener('change', (event) => {
+    const el = event.target;
+    if (!(el instanceof HTMLInputElement)) return;
+    const file = el.files && el.files[0];
+    el.value = '';
+    void pickCoverFile(file);
+  });
+  document.getElementById('audio-cover-remove')?.addEventListener('click', () => {
+    void removeCover();
   });
 }
 
@@ -2649,10 +2894,17 @@ void (async () => {
   view.busy = true;
   render();
   try {
+    await migrateAudioCover();
     const snap = await send({ type: 'popupOpened' });
     if (!applySnapshot(snap)) view.error = formatError(snap?.error);
     await applyI18n(view.settings?.ui?.locale);
-    await Promise.all([refreshAudioState(), refreshAudioShortcut(), refreshAudioStats()]);
+    await Promise.all([
+      refreshAudioState(),
+      refreshAudioShortcut(),
+      refreshAudioStats(),
+      refreshAudioCover(),
+      refreshRateNote(),
+    ]);
   } catch (err) {
     view.error = formatError(err?.message || err);
   } finally {

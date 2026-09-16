@@ -27,6 +27,11 @@ import {
   watchlistView,
   audioTabView,
   audioStatsView,
+  showRateNote,
+  storeReviewsUrl,
+  RATE_NOTE_SAVED_MB,
+  CHROME_REVIEWS_URL,
+  EDGE_ADDONS_URL,
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
@@ -947,5 +952,24 @@ export default async function run(t) {
     'data saved is against 720p',
     Math.round(hour.usedMb) === 72 && Math.round(hour.savedMb) === 528,
     JSON.stringify(hour),
+  );
+
+  t.section('1 GB rating note');
+
+  t.check('the 1 GB mark is 1024 MB, matching formatData', RATE_NOTE_SAVED_MB === 1024);
+  t.check('below 1 GB is hidden', showRateNote(1023, false) === false);
+  t.check('exactly 1 GB shows', showRateNote(1024, false) === true);
+  t.check('above 1 GB shows', showRateNote(2048, false) === true);
+  t.check('the flag hides the note even at 10 GB', showRateNote(10 * 1024, true) === false);
+  t.check('a stats reset after dismiss stays hidden', showRateNote(0, true) === false);
+  t.check('zero saved is hidden', showRateNote(0, false) === false);
+  t.check('a non-number saved amount is hidden', showRateNote('nope', false) === false);
+  t.check(
+    'Chrome UA opens the Chrome reviews page',
+    storeReviewsUrl('Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36') === CHROME_REVIEWS_URL,
+  );
+  t.check(
+    'Edge UA opens Edge Add-ons',
+    storeReviewsUrl('Mozilla/5.0 Chrome/120.0.0.0 Edg/120.0.0.0') === EDGE_ADDONS_URL,
   );
 }

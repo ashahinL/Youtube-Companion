@@ -17,7 +17,9 @@ Everything stays in your browser's extension storage, on your device:
   count), capped at the number you choose in Settings;
 - your settings;
 - audio-mode listening totals (seconds listened, by day, kept for 90 days,
-  plus running totals).
+  plus running totals);
+- the audio-mode cover picture you choose (it stays on this device and is
+  not in backups).
 
 Nothing is copied off your device. Removing the extension deletes all of it.
 **Export** in Settings writes a file to your computer; nothing else sees it.
@@ -36,11 +38,9 @@ is not sent anywhere.
 - **`i.ytimg.com`, `yt3.ggpht.com`, `yt3.googleusercontent.com`** — video
   thumbnails and channel pictures, loaded as images, including the channel
   picture on an alert.
-- **An image address you type yourself**, only if you choose an image as the
-  audio-mode cover in Settings. It loads like any image on the YouTube page.
 
 It sends nothing to any other server, and it never sends your channel list,
-settings or listening totals anywhere.
+settings, listening totals or cover picture anywhere.
 
 **When you remove the extension**, your browser opens a short page at
 `ashahinl.github.io` on GitHub Pages. Visiting it is a normal GitHub Pages

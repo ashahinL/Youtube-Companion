@@ -202,8 +202,13 @@ export default async function run(t) {
     t.check('truncated feed keeps the newest',
       capped.feed.map((x) => x.v).join(',') === 'n4,n2',
       capped.feed.map((x) => x.v).join(','));
-    t.check('added reports pre-truncation',
-      capped.added.length === 4, String(capped.added.length));
+    t.check(
+      'added reports only rows that stayed in the capped feed',
+      capped.added.length === 2
+        && capped.added.every((row) => capped.feed.some((f) => f.v === row.v))
+        && capped.feed.every((row) => capped.added.some((a) => a.v === row.v)),
+      capped.added.map((x) => x.v).join(','),
+    );
 
     await addChannel({ id: 'UCx', title: 'X', addedAt: 1 });
     const applied = await applyFeedMerge([item('live1', { at: 50, k: 'live', vw: 1 })], 10);
@@ -337,6 +342,14 @@ export default async function run(t) {
     t.check('a premiere days away, checked an hour ago, is not due', !due.includes('far'), JSON.stringify(due));
     t.check('a premiere days away is due again after six hours', due.includes('farstale'));
     t.check('a premiere never checked is due', due.includes('farnever'));
+    t.check(
+      'ids not in keep are skipped',
+      pendingLiveIds({ a: { k: 'live' }, b: { k: 'live' } }, NOW, new Set(['b'])).join() === 'b',
+    );
+    t.check(
+      'omit keep still returns every live',
+      pendingLiveIds({ a: { k: 'live' } }).includes('a'),
+    );
 
     t.section('pollState');
 
