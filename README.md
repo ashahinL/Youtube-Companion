@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd"><img src="https://img.shields.io/badge/Chrome%20Web%20Store-Add%20to%20Chrome-1f6feb" alt="Add to Chrome from the Chrome Web Store" /></a>
+  <a href="https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh"><img src="https://img.shields.io/badge/Edge%20Add--ons-Get%20for%20Edge-1f6feb" alt="Get it for Edge from Edge Add-ons" /></a>
   <img src="https://img.shields.io/badge/Chrome%20%2F%20Edge-Manifest%20V3-1f6feb" alt="Chrome / Edge, Manifest V3" />
   <img src="https://img.shields.io/badge/account-not%20needed-2ea043" alt="No account needed" />
   <img src="https://img.shields.io/badge/dependencies-none-2ea043" alt="No dependencies" />
@@ -94,9 +95,8 @@
 **Chrome:** get it from the
 [Chrome Web Store](https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd).
 
-**Edge:** the Edge Add-ons listing is still in review. Until then, Edge can
-install it from the same Chrome Web Store page once you turn on **Allow
-extensions from other stores**.
+**Edge:** get it from
+[Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh).
 
 **From source**, which can be newer than the store version:
 

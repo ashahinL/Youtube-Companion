@@ -9,7 +9,7 @@ the short description come from `_locales/*/messages.json` (`extName`,
 
 | Store | State | Record |
 |---|---|---|
-| Edge Add-ons | **Submitted 2026-09-13, in review** (Microsoft quotes up to 7 business days) | Store ID `0RDCKC7S7L34` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
+| Edge Add-ons | **Live by 2026-09-16** (submitted 2026-09-13) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
 | Chrome Web Store | **Live 2026-09-14** (submitted 2026-09-13) | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
 
 When a listing goes live, put its link in the README's install section.

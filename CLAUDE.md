@@ -26,7 +26,7 @@ methods are reached through a MAIN-world bridge.
 
 **1.0.0 has shipped**: GitHub release `v1.0.0` with the store zip attached.
 Both stores got the same zip on 2026-09-13. Chrome published it on
-2026-09-14; Edge is still in review. `store/LISTING.md`
+2026-09-14; Edge had it live by 2026-09-16. `store/LISTING.md`
 holds the store IDs and every answer given. Chrome blocks every extension from
 its Web Store pages, so the Chrome dashboard is clicked through by hand from
 that file; no browser automation reaches it.
