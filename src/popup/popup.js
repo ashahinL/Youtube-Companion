@@ -12,7 +12,7 @@
 import { thumbUrl } from '../lib/yt.js';
 import { sortChannelsForDisplay } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
-import { buildBackup, backupSizeError } from '../lib/backup.js';
+import { buildBackup, backupSizeError, MAX_BACKUP_CHANNELS } from '../lib/backup.js';
 import {
   resolveLocale,
   loadMessages,
@@ -32,8 +32,11 @@ import {
   audioStatsView,
   channelProblem,
   followView,
+  followActionState,
+  backupImportMessage,
   pageChannelsView,
   sleepMinutesLeft,
+  menuNavIndex,
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
@@ -56,6 +59,8 @@ const view = {
   error: '',
   ok: '',
   busy: false,
+  adding: false,
+  undoing: false,
   sweeping: false,
   feedNotice: '',
   backupNotice: null,
@@ -72,12 +77,14 @@ const view = {
   feedOk: '',
   followError: '',
   followOk: '',
+  followErrors: {},
   // The focused tab when it is a YouTube page, and what its content script
   // read about the page's channels, for the Follow card.
   activeTab: null,
   activePage: null,
-  // The Follow card row whose add is running.
-  followPending: '',
+  // Follow card inputs whose add is in flight. Several collab rows can wait
+  // at once; only that row's button is disabled.
+  followPending: [],
   audioKnown: false,
   audioReachable: false,
   audioOn: false,
@@ -211,7 +218,15 @@ function formatError(error) {
   const code = String(error || '');
   if (code === 'already added') return t('watchlistAlreadyAdded');
   if (code === 'not a channel') return t('watchlistNotAChannel');
+  const backup = backupImportMessage(code, MAX_BACKUP_CHANNELS);
+  if (backup.key) return t(backup.key, backup.subs);
   return t('watchlistError', [code]);
+}
+
+function formatBackupNotice(error) {
+  const mapped = backupImportMessage(error, MAX_BACKUP_CHANNELS);
+  if (mapped.key) return t(mapped.key, mapped.subs);
+  return String(error || formatError(''));
 }
 
 function ltrRun(el) {
@@ -249,7 +264,6 @@ function buttonEl(className, label, onClick) {
   btn.type = 'button';
   if (className) btn.className = className;
   btn.textContent = label;
-  btn.disabled = view.busy;
   btn.addEventListener('click', onClick);
   return btn;
 }
@@ -424,17 +438,50 @@ function channelRow(ch, locale) {
   return row;
 }
 
-function closeAllMenus() {
+function menuItems(list) {
+  return [...list.querySelectorAll('[role="menuitem"]')];
+}
+
+function closeAllMenus(opts) {
+  let restore = null;
+  for (const toggle of document.querySelectorAll('.menu__toggle')) {
+    if (toggle.getAttribute('aria-expanded') === 'true') restore = toggle;
+    toggle.setAttribute('aria-expanded', 'false');
+  }
   let closed = false;
   for (const list of document.querySelectorAll('.menu__list')) {
     if (!list.hidden) closed = true;
     list.hidden = true;
     list.classList.remove('menu__list--above');
   }
-  for (const toggle of document.querySelectorAll('.menu__toggle')) {
-    toggle.setAttribute('aria-expanded', 'false');
-  }
+  if (opts && opts.restoreFocus && restore) restore.focus();
   return closed;
+}
+
+function onChannelMenuKeydown(event, toggle, list) {
+  if (event.key === 'Tab') {
+    closeAllMenus();
+    return;
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeAllMenus({ restoreFocus: true });
+    return;
+  }
+  if (
+    event.key !== 'ArrowDown'
+    && event.key !== 'ArrowUp'
+    && event.key !== 'Home'
+    && event.key !== 'End'
+  ) {
+    return;
+  }
+  event.preventDefault();
+  const items = menuItems(list);
+  const i = items.indexOf(event.target);
+  const next = menuNavIndex(event.key, i < 0 ? 0 : i, items.length);
+  items[next]?.focus();
 }
 
 function channelMenu(ch) {
@@ -444,6 +491,8 @@ function channelMenu(ch) {
   const list = document.createElement('div');
   list.className = 'menu__list';
   list.hidden = true;
+  list.id = `channel-menu-${ch.id}`;
+  list.setAttribute('role', 'menu');
 
   const toggle = buttonEl('icon-btn menu__toggle', '⋯', (event) => {
     event.stopPropagation?.();
@@ -459,12 +508,23 @@ function channelMenu(ch) {
       if (rect.bottom > window.innerHeight) {
         list.classList.add('menu__list--above');
       }
+      menuItems(list)[0]?.focus();
     }
   });
+  toggle.id = `channel-menu-btn-${ch.id}`;
   toggle.title = t('watchlistActions');
   toggle.setAttribute('aria-label', t('watchlistActions'));
-  toggle.setAttribute('aria-haspopup', 'true');
+  toggle.setAttribute('aria-haspopup', 'menu');
   toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-controls', list.id);
+  toggle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    if (list.hidden) toggle.click();
+    else menuItems(list)[0]?.focus();
+  });
+  list.setAttribute('aria-labelledby', toggle.id);
+  list.addEventListener('keydown', (event) => onChannelMenuKeydown(event, toggle, list));
 
   const fav = buttonEl(
     'menu__item',
@@ -486,6 +546,10 @@ function channelMenu(ch) {
     closeAllMenus();
     void removeChannel(ch.id);
   });
+  for (const item of [fav, mute, remove]) {
+    item.setAttribute('role', 'menuitem');
+    item.tabIndex = -1;
+  }
 
   list.append(fav, mute, remove);
   menu.append(toggle, list);
@@ -559,19 +623,17 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   const modes = rowOpenModes(view.settings);
   const row = document.createElement('div');
   row.className = 'feed-row';
-  row.tabIndex = 0;
   const title = item.t || '';
-  row.setAttribute(
+
+  const openBtn = document.createElement('button');
+  openBtn.type = 'button';
+  openBtn.className = 'feed-row__open';
+  openBtn.setAttribute(
     'aria-label',
     t(modes.row === 'audio' ? 'feedOpenVideoAudio' : 'feedOpenVideo', [title]),
   );
-  row.addEventListener('click', () => openFeedItem(item, modes.row));
-  row.addEventListener('keydown', (event) => {
-    if (event.target !== row) return;
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    openFeedItem(item, modes.row);
-  });
+  openBtn.addEventListener('click', () => openFeedItem(item, modes.row));
+  row.appendChild(openBtn);
 
   // Pin the thumbnail box so a slow image cannot reflow the list.
   const thumb = document.createElement('div');
@@ -702,10 +764,10 @@ function renderFeeds(locale) {
   refreshBtn.disabled = locked;
   refreshBtn.hidden = sweeping;
   if (emptyRefresh) emptyRefresh.disabled = locked;
-  if (addSpinner) addSpinner.hidden = !view.busy;
+  if (addSpinner) addSpinner.hidden = !view.adding;
   spinner.hidden = !sweeping;
-  form.classList.toggle('is-busy', view.busy);
-  form.setAttribute('aria-busy', view.busy ? 'true' : 'false');
+  form.classList.toggle('is-busy', view.adding);
+  form.setAttribute('aria-busy', view.adding ? 'true' : 'false');
   statusEl.classList.toggle('is-busy', sweeping);
   statusEl.setAttribute('aria-busy', sweeping ? 'true' : 'false');
   refreshBtn.setAttribute('aria-label', t('feedRefresh'));
@@ -775,13 +837,12 @@ function renderFeeds(locale) {
   const q = feeds.query;
   const { shown, onList, addable } = feeds;
 
-  filterEl.disabled = view.busy;
-  addBtn.disabled = locked || !addable;
+  addBtn.disabled = view.adding || view.busy || !addable;
   addBtn.textContent = onList ? t('watchlistOnList') : t('watchlistAdd');
   addBtn.title = onList
     ? t('watchlistOnList')
     : (q ? t('feedFilterPlaceholder') : t('watchlistAddFromTab'));
-  if (clearBtn) clearBtn.hidden = !q || view.busy;
+  if (clearBtn) clearBtn.hidden = !q;
 
   const pageKey = JSON.stringify([q, favOnly, !!view.settings?.feed?.showShorts]);
   if (pageKey !== feedPageKey) {
@@ -840,16 +901,15 @@ function renderWatchlist(locale) {
   const q = watchlist.query;
   const { shown, onList, addable } = watchlist;
 
-  form.classList.toggle('is-busy', view.busy);
-  form.setAttribute('aria-busy', view.busy ? 'true' : 'false');
-  input.disabled = view.busy;
-  addBtn.disabled = view.busy || !addable;
+  form.classList.toggle('is-busy', view.adding);
+  form.setAttribute('aria-busy', view.adding ? 'true' : 'false');
+  addBtn.disabled = view.adding || view.busy || !addable;
   addBtn.textContent = onList ? t('watchlistOnList') : t('watchlistAdd');
   addBtn.title = onList
     ? t('watchlistOnList')
     : (q ? t('watchlistAddPlaceholder') : t('watchlistAddFromTab'));
-  spinner.hidden = !view.busy;
-  if (clearBtn) clearBtn.hidden = !q || view.busy;
+  spinner.hidden = !view.adding;
+  if (clearBtn) clearBtn.hidden = !q;
 
   if (view.error) {
     errorEl.hidden = false;
@@ -872,7 +932,7 @@ function renderWatchlist(locale) {
   const undoBtn = document.getElementById('watchlist-undo-btn');
   undoRow.hidden = !view.undo;
   undoText.textContent = view.undo ? t('watchlistRemoved', [isolate(view.undo.title)]) : '';
-  undoBtn.disabled = view.busy;
+  undoBtn.disabled = view.undoing;
 
   const searching = !!q;
   countEl.hidden = !searching;
@@ -1176,6 +1236,14 @@ function closestSelectValue(select, value) {
   return best;
 }
 
+function setSeekValueText(seek, current, duration) {
+  if (!seek) return;
+  seek.setAttribute(
+    'aria-valuetext',
+    t('audioSeekValue', [Core.formatTime(current), Core.formatTime(duration)]),
+  );
+}
+
 function updateTitleScroll(el, text) {
   if (!el) return;
   if (el.textContent !== text) el.textContent = text;
@@ -1183,6 +1251,8 @@ function updateTitleScroll(el, text) {
   if (!wrap) return;
   const overflow = el.scrollWidth - wrap.clientWidth;
   if (overflow > 4) {
+    // Overflow hangs off inline-end; RTL is +X so the CSS mask fade
+    // on that side is `to left`, not the LTR `to right`.
     const rtl = getComputedStyle(document.documentElement).direction === 'rtl';
     const shift = `${rtl ? overflow + 10 : -(overflow + 10)}px`;
     if (el.style.getPropertyValue('--audio-title-shift') !== shift) {
@@ -1274,10 +1344,8 @@ function renderAudioPlayer(reachable) {
   const currentTime = player ? player.currentTime : 0;
   const duration = player ? player.duration : 0;
   const hasDuration = duration > 0 && Number.isFinite(duration);
-  if (elapsed) {
-    const shown = audioSeeking && seek ? Number(seek.value) : currentTime;
-    elapsed.textContent = Core.formatTime(shown);
-  }
+  const shown = audioSeeking && seek ? Number(seek.value) : currentTime;
+  if (elapsed) elapsed.textContent = Core.formatTime(shown);
   if (total) total.textContent = Core.formatTime(duration);
   if (seek) {
     seek.disabled = !reachable || !hasDuration;
@@ -1285,6 +1353,7 @@ function renderAudioPlayer(reachable) {
       seek.max = hasDuration ? String(duration) : '0';
       seek.value = hasDuration ? String(currentTime) : '0';
     }
+    setSeekValueText(seek, shown, duration);
   }
 
   const paused = !player || player.paused !== false;
@@ -1381,7 +1450,7 @@ function followCheck() {
   return mark;
 }
 
-function followRow(row) {
+function followRow(row, action) {
   const li = document.createElement('li');
   li.className = 'follow-card__row';
   if (row.followed) li.appendChild(followCheck());
@@ -1392,14 +1461,21 @@ function followRow(row) {
   if (row.followed) return li;
   const spinner = document.createElement('span');
   spinner.className = 'spinner';
-  spinner.hidden = !(view.busy && view.followPending === row.input);
+  spinner.hidden = !action?.pending;
   li.appendChild(spinner);
   const btn = buttonEl('btn btn--primary follow-card__btn', t('followButton'), () => {
     void followChannel(row.input);
   });
+  btn.disabled = !!action?.disabled;
   btn.dataset.input = row.input;
   btn.setAttribute('aria-label', row.name ? t('followButtonNamed', [row.name]) : t('followButton'));
   li.appendChild(btn);
+  const errText = view.followErrors[row.input];
+  if (errText) {
+    const err = textEl('p', 'follow-card__error', errText);
+    err.setAttribute('role', 'status');
+    li.appendChild(err);
+  }
   return li;
 }
 
@@ -1409,47 +1485,73 @@ function renderFollow() {
   const follow = currentFollow();
   card.hidden = !follow.show;
   const list = document.getElementById('follow-card-list');
+  const actions = followActionState(follow.rows, view.followPending);
   // The card redraws every second with the player; rebuilding rows that did
   // not change would take keyboard focus off a Follow button.
-  const sig = JSON.stringify([locale, follow, view.busy, view.followPending]);
+  const sig = JSON.stringify([locale, follow, view.followPending, view.followErrors]);
   if (follow.show && card.dataset.sig !== sig) {
     card.dataset.sig = sig;
     const labels = { channel: 'followChannelLabel', video: 'followVideoLabel', collab: 'followCollabLabel' };
     document.getElementById('follow-card-label').textContent = t(labels[follow.kind]);
     const focused = document.activeElement?.dataset?.input;
-    list.replaceChildren(...follow.rows.map(followRow));
+    const byInput = new Map(actions.map((a) => [a.input, a]));
+    list.replaceChildren(...follow.rows.map((row) => followRow(row, byInput.get(row.input))));
     if (focused) list.querySelector(`[data-input="${CSS.escape(focused)}"]`)?.focus();
   }
 
   const okEl = document.getElementById('follow-ok');
-  const errorEl = document.getElementById('follow-error');
   okEl.hidden = !view.followOk;
   okEl.textContent = view.followOk;
-  errorEl.hidden = !view.followError;
-  errorEl.textContent = view.followError;
+  const errorEl = document.getElementById('follow-error');
+  if (errorEl) {
+    errorEl.hidden = true;
+    errorEl.textContent = '';
+  }
 }
 
 async function followChannel(input) {
   const row = currentFollow().rows.find((r) => r.input === input && !r.followed);
-  if (!row || view.busy) return;
+  if (!row) return;
+  if (view.followPending.includes(input)) return;
   view.followOk = '';
-  view.followPending = input;
-  await withBusy(async () => {
-    view.undo = null;
+  const cleared = { ...view.followErrors };
+  delete cleared[input];
+  view.followErrors = cleared;
+  view.followPending = [...view.followPending, input];
+  view.undo = null;
+  render();
+  try {
     const res = await send({ type: 'addChannel', input });
     if (!res || res.ok === false) {
-      view.followError = formatError(res?.error);
+      view.followErrors = { ...view.followErrors, [input]: formatError(res?.error) };
       return;
     }
-    await refreshState();
+    // A slower reply's snapshot can predate a Follow that already landed.
+    const known = view.channels.slice();
+    if (res.state) applySnapshot(res.state);
+    else await refreshState();
+    const have = new Set(view.channels.map((ch) => ch.id));
+    const extra = known.filter((ch) => ch?.id && !have.has(ch.id));
+    if (extra.length) view.channels = [...view.channels, ...extra];
+    if (res.channel?.id && !have.has(res.channel.id) && !extra.some((ch) => ch.id === res.channel.id)) {
+      view.channels = [...view.channels, res.channel];
+    }
     const ch = res.channel || {};
     view.followOk = t('followDone', [isolate(ch.title || ch.handle || row.name || ch.id || '')]);
-  }, 'followError');
-  view.followPending = '';
-  render();
-  // The rows were redrawn while busy. Back to the same button if the add
-  // failed; otherwise the pressed one left with its row or the whole card.
+    const nextErr = { ...view.followErrors };
+    delete nextErr[input];
+    view.followErrors = nextErr;
+  } catch (err) {
+    view.followErrors = { ...view.followErrors, [input]: formatError(err?.message || err) };
+  } finally {
+    view.followPending = view.followPending.filter((id) => id !== input);
+    render();
+  }
+  // The pressed button may have left with its row. Leave focus alone if the
+  // reader already moved to another Follow button.
   const card = document.getElementById('follow-card');
+  const active = document.activeElement;
+  if (card && !card.hidden && card.contains(active) && active !== card) return;
   const buttons = card && !card.hidden ? [...card.querySelectorAll('.follow-card__btn')] : [];
   const target = buttons.find((btn) => btn.dataset.input === input) || buttons[0]
     || document.getElementById('tab-audio');
@@ -1651,9 +1753,13 @@ async function addChannel(input, dest = 'watchlist') {
   const errorField = dest === 'feeds' ? 'feedError' : 'error';
   const okField = dest === 'feeds' ? 'feedOk' : 'ok';
   const boxId = dest === 'feeds' ? 'feed-filter' : 'watchlist-input';
-  await withBusy(async () => {
-    view[okField] = '';
-    view.undo = null;
+  if (view.adding) return;
+  view.adding = true;
+  view[errorField] = '';
+  view[okField] = '';
+  view.undo = null;
+  render();
+  try {
     const res = await send({ type: 'addChannel', input });
     if (!res || res.ok === false) {
       view[errorField] = formatError(res?.error);
@@ -1661,10 +1767,16 @@ async function addChannel(input, dest = 'watchlist') {
     }
     const box = document.getElementById(boxId);
     if (box) box.value = '';
-    await refreshState();
+    if (res.state) applySnapshot(res.state);
+    else await refreshState();
     const ch = res.channel || {};
     view[okField] = t('channelAdded', [isolate(ch.title || ch.handle || ch.id || '')]);
-  }, errorField);
+  } catch (err) {
+    view[errorField] = formatError(err?.message || err);
+  } finally {
+    view.adding = false;
+    render();
+  }
 }
 
 async function toggleFavorite(id, on) {
@@ -1717,8 +1829,11 @@ async function removeChannel(id) {
 
 async function undoRemove() {
   const undo = view.undo;
-  if (!undo) return;
-  await withBusy(async () => {
+  if (!undo || view.undoing) return;
+  view.undoing = true;
+  view.error = '';
+  render();
+  try {
     const res = await send({ type: 'undoRemove', id: undo.id });
     view.undo = null;
     if (!res || res.ok === false) {
@@ -1727,7 +1842,12 @@ async function undoRemove() {
     }
     await refreshState();
     view.ok = t('watchlistRestored', [isolate(undo.title)]);
-  });
+  } catch (err) {
+    view.error = formatError(err?.message || err);
+  } finally {
+    view.undoing = false;
+    render();
+  }
   focusSheetOpener(undo.id);
 }
 
@@ -1741,7 +1861,7 @@ async function currentTabUrl() {
 }
 
 async function submitAdd(raw, dest = 'watchlist') {
-  if (view.busy) return;
+  if (view.adding) return;
   const errorField = dest === 'feeds' ? 'feedError' : 'error';
   const okField = dest === 'feeds' ? 'feedOk' : 'ok';
   let input = String(raw || '').trim();
@@ -1911,7 +2031,7 @@ async function importBackup(mode) {
       mode,
     });
     if (!res || res.ok === false) {
-      view.backupNotice = { text: String(res?.error || formatError('')), error: true };
+      view.backupNotice = { text: formatBackupNotice(res?.error), error: true };
       view.importStage = 'idle';
     } else {
       if (res.state) applySnapshot(res.state);
@@ -2231,8 +2351,10 @@ function bindAudio() {
   document.addEventListener('pointercancel', () => { audioSeeking = false; });
   seek?.addEventListener('input', () => {
     audioSeeking = true;
+    const shown = Number(seek.value);
     const elapsed = document.getElementById('audio-elapsed');
-    if (elapsed) elapsed.textContent = Core.formatTime(Number(seek.value));
+    if (elapsed) elapsed.textContent = Core.formatTime(shown);
+    setSeekValueText(seek, shown, Number(seek.max));
   });
   seek?.addEventListener('change', () => {
     audioSeeking = false;
@@ -2250,12 +2372,31 @@ function bindAudio() {
 
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local' || !changes || !changes.audioStats) return;
-      const next = changes.audioStats.newValue;
-      view.audioStats = next && typeof next === 'object'
-        ? next
-        : { listened: {}, active: {}, totals: { listened: 0, active: 0 } };
-      renderAudio();
+      if (area !== 'local' || !changes) return;
+      let touched = false;
+      if (changes.audioStats) {
+        const next = changes.audioStats.newValue;
+        view.audioStats = next && typeof next === 'object'
+          ? next
+          : { listened: {}, active: {}, totals: { listened: 0, active: 0 } };
+        touched = true;
+      }
+      // Seed writes the list and the feed after Follow / Add has already
+      // returned. render() draws only the open tab; the others catch up
+      // when they open.
+      if (changes.channels && Array.isArray(changes.channels.newValue)) {
+        view.channels = changes.channels.newValue;
+        touched = true;
+      }
+      if (changes.feed && Array.isArray(changes.feed.newValue)) {
+        view.feed = changes.feed.newValue;
+        touched = true;
+      }
+      if (changes.pollState && changes.pollState.newValue && typeof changes.pollState.newValue === 'object') {
+        view.pollState = changes.pollState.newValue;
+        touched = true;
+      }
+      if (touched) render();
     });
   } catch {
     // ignore
@@ -2449,7 +2590,7 @@ function bindChannelSheet() {
       return;
     }
     if (event.key !== 'Escape') return;
-    if (closeAllMenus()) {
+    if (closeAllMenus({ restoreFocus: true })) {
       event.preventDefault();
       return;
     }

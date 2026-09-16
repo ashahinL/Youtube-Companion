@@ -184,6 +184,20 @@ export default async function run(t) {
 
   const en = json('_locales/en/messages.json');
   const ar = json('_locales/ar/messages.json');
+  t.check('en has audioSeek', 'audioSeek' in en && en.audioSeek.message.length > 0);
+  t.check('ar has audioSeek', 'audioSeek' in ar && ar.audioSeek.message.length > 0);
+  t.check(
+    'en.audioSeekValue names current and duration',
+    'audioSeekValue' in en
+      && /\$CURRENT\$/.test(en.audioSeekValue.message)
+      && /\$DURATION\$/.test(en.audioSeekValue.message),
+  );
+  t.check(
+    'ar.audioSeekValue names current and duration',
+    'audioSeekValue' in ar
+      && /\$CURRENT\$/.test(ar.audioSeekValue.message)
+      && /\$DURATION\$/.test(ar.audioSeekValue.message),
+  );
   // Language names stay in their own language in both files.
   const allowSame = new Set(['settingsLocaleEn', 'settingsLocaleAr']);
   for (const key of Object.keys(en)) {

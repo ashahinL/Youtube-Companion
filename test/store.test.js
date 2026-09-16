@@ -205,6 +205,7 @@ export default async function run(t) {
     t.check('added reports pre-truncation',
       capped.added.length === 4, String(capped.added.length));
 
+    await addChannel({ id: 'UCx', title: 'X', addedAt: 1 });
     const applied = await applyFeedMerge([item('live1', { at: 50, k: 'live', vw: 1 })], 10);
     t.check('applyFeedMerge persists',
       applied.added.length === 1 && (await readFeed())[0].v === 'live1');
@@ -213,6 +214,36 @@ export default async function run(t) {
       settled.added.length === 0
         && (await readFeed())[0].k === 'video'
         && (await readFeed())[0].vw === 8);
+
+    await writeChannels([]);
+    const gone = await applyFeedMerge([item('ghost1', { c: 'UCx', at: 60 })], 10);
+    t.check(
+      'applyFeedMerge drops rows whose channel is gone',
+      gone.added.length === 0 && !(await readFeed()).some((row) => row.v === 'ghost1'),
+      JSON.stringify(gone),
+    );
+
+    await addChannel({ id: 'UCx', title: 'X again', addedAt: 2 });
+    const relisted = await applyFeedMerge(
+      [item('oldlist01', { c: 'UCx', at: 70 })],
+      10,
+      new Map([['UCx', 1]]),
+    );
+    t.check(
+      'applyFeedMerge drops rows for a new listing of the same id',
+      relisted.added.length === 0 && !(await readFeed()).some((row) => row.v === 'oldlist01'),
+      JSON.stringify(relisted),
+    );
+    const sameGen = await applyFeedMerge(
+      [item('samegen01', { c: 'UCx', at: 80 })],
+      10,
+      new Map([['UCx', 2]]),
+    );
+    t.check(
+      'applyFeedMerge keeps rows when addedAt still matches',
+      sameGen.added.length === 1 && (await readFeed()).some((row) => row.v === 'samegen01'),
+      JSON.stringify(sameGen),
+    );
 
     t.section('newSinceCount');
 

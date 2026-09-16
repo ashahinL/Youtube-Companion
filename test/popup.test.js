@@ -120,7 +120,7 @@ export default async function run(t) {
   t.check('the app bar sits above the tabs', barAt >= 0 && navAt > barAt, `${barAt} ${navAt}`);
   t.check(
     'the app bar shows the extension name, not a hardcoded string',
-    /<h1[^>]*\bdata-i18n="extName"/.test(html),
+    /<h1[^>]*\bdata-i18n="appName"/.test(html),
   );
   t.check('the app bar is styled', /\.appbar\s*\{/.test(css) && /\.appbar__name\s*\{/.test(css));
 
@@ -212,8 +212,40 @@ export default async function run(t) {
   );
   t.check('a click outside closes the menu', /addEventListener\(\s*'click'\s*,\s*closeAllMenus/.test(js));
   t.check(
+    '⋯ is a menu button',
+    /aria-haspopup',\s*'menu'/.test(js) && /aria-expanded/.test(js),
+  );
+  t.check(
+    'the ⋯ popup is role=menu with menuitem children',
+    /setAttribute\(\s*'role',\s*'menu'/.test(js)
+      && /setAttribute\(\s*'role',\s*'menuitem'/.test(js),
+  );
+  t.check(
+    '⋯ keyboard wrapping lives in view.js',
+    /menuNavIndex/.test(js) && /export function menuNavIndex/.test(viewJs),
+  );
+  t.check(
+    'opening ⋯ with Enter/Space/ArrowDown focuses the first item',
+    /menuItems\(list\)\[0\]\?\.focus/.test(js)
+      && /event\.key !== 'ArrowDown'/.test(js),
+  );
+  t.check(
+    'ArrowUp/ArrowDown/Home/End move ⋯ menu focus through menuNavIndex',
+    /function onChannelMenuKeydown[\s\S]{0,700}menuNavIndex\(event\.key/.test(js)
+      && /event\.key !== 'Home'/.test(js)
+      && /event\.key !== 'End'/.test(js),
+  );
+  t.check(
+    'Escape on the ⋯ menu returns focus to the button',
+    /function onChannelMenuKeydown[\s\S]{0,400}closeAllMenus\(\{\s*restoreFocus:\s*true\s*\}\)/.test(js),
+  );
+  t.check(
+    'Tab closes the ⋯ menu',
+    /function onChannelMenuKeydown[\s\S]{0,80}event\.key === 'Tab'[\s\S]{0,40}closeAllMenus\(\)/.test(js),
+  );
+  t.check(
     'Escape closes an open menu before the sheet',
-    /if \(closeAllMenus\(\)\)/.test(js),
+    /if \(closeAllMenus\(\{\s*restoreFocus:\s*true\s*\}\)\)/.test(js),
   );
   t.check(
     'menu flip class exists in CSS and JS',
@@ -356,6 +388,25 @@ export default async function run(t) {
   t.check('has the player card', /id="audio-player"/.test(a));
   t.check('player has a seek bar', /id="audio-seek"/.test(a));
   t.check(
+    'seek bar has a translated accessible name',
+    /id="audio-seek"[\s\S]{0,240}data-i18n-label="audioSeek"/.test(a),
+  );
+  t.check('audioSeek exists in en', 'audioSeek' in en);
+  t.check(
+    'audioSeekValue speaks elapsed of duration',
+    'audioSeekValue' in en
+      && /\$CURRENT\$/.test(en.audioSeekValue.message)
+      && /\$DURATION\$/.test(en.audioSeekValue.message),
+  );
+  t.check(
+    'seek bar keeps aria-valuetext in sync',
+    /function setSeekValueText/.test(js)
+      && /aria-valuetext/.test(js)
+      && /audioSeekValue/.test(js)
+      && /setSeekValueText\(seek, shown, duration\)/.test(js)
+      && /setSeekValueText\(seek, shown, Number\(seek\.max\)\)/.test(js),
+  );
+  t.check(
     'player has back, play and forward',
     /id="audio-back"/.test(a) && /id="audio-play"/.test(a) && /id="audio-forward"/.test(a),
   );
@@ -363,6 +414,20 @@ export default async function run(t) {
     'seek bar and skip buttons stay LTR in RTL',
     /audio-player__timeline"[^>]*\bdir="ltr"/.test(a)
       && /audio-player__transport"[^>]*\bdir="ltr"/.test(a),
+  );
+  t.check(
+    'skip buttons size to their label inside the transport row',
+    /\.audio-player__transport\s+#audio-back[\s\S]{0,80}#audio-forward[\s\S]{0,200}width:\s*auto/.test(css)
+      && /\.audio-player__transport\s+#audio-back[\s\S]{0,200}padding-inline:/.test(css),
+  );
+  t.check(
+    'other icon buttons stay 28px',
+    /\.icon-btn\s*\{[\s\S]{0,80}width:\s*28px/.test(css),
+  );
+  t.check(
+    'the three transport buttons share one height',
+    /\.audio-player__transport\s+\.icon-btn\s*\{[\s\S]{0,60}height:\s*32px/.test(css)
+      && /\.audio-player__play\s*\{[\s\S]{0,60}height:\s*32px/.test(css),
   );
   t.check(
     'has statistics cards',
@@ -674,8 +739,53 @@ export default async function run(t) {
     audioPanel.indexOf('id="follow-card"') >= 0 && audioPanel.indexOf('id="follow-card"') < audioPanel.indexOf('class="audio-head"'),
   );
   t.check('it starts hidden', /id="follow-card"[^>]*\bhidden\b/.test(html));
-  t.check('Follow adds through the worker', /async function followChannel[\s\S]{0,500}type:\s*'addChannel'/.test(js));
+  t.check('Follow adds through the worker', /async function followChannel[\s\S]{0,1200}type:\s*'addChannel'/.test(js));
   t.check('each channel gets its own row in a list', /id="follow-card-list"/.test(html) && /function followRow/.test(js));
+  t.check(
+    'follow list is labelled by the card label',
+    /id="follow-card-list"[^>]*aria-labelledby="follow-card-label"/.test(html),
+  );
+  const followFnStart = js.indexOf('async function followChannel');
+  const followFn = followFnStart >= 0 ? js.slice(followFnStart, followFnStart + 1800) : '';
+  t.check(
+    'Follow buttons are not built from the global busy flag',
+    /followActionState\(follow\.rows/.test(js)
+      && !/function followRow[\s\S]{0,500}view\.busy/.test(js)
+      && !/btn\.disabled = view\.busy/.test(js),
+  );
+  t.check(
+    'Follow is not gated on view.busy and does not take withBusy',
+    /async function followChannel/.test(followFn) && !/view\.busy/.test(followFn) && !/withBusy/.test(followFn),
+    followFn.slice(0, 200),
+  );
+  t.check(
+    'several Follow rows can wait at once',
+    /followPending\.includes\(input\)/.test(followFn)
+      && /followPending = \[\.\.\.view\.followPending, input\]/.test(followFn),
+  );
+  t.check(
+    'a Follow error is drawn on that row',
+    /follow-card__error/.test(js) && /follow-card__error/.test(css),
+  );
+  t.check(
+    'Watchlist Add no longer waits under withBusy',
+    /async function addChannel[\s\S]{0,400}view\.adding = true/.test(js)
+      && !/async function addChannel[\s\S]{0,200}withBusy/.test(js),
+  );
+  t.check(
+    'Undo no longer waits under withBusy',
+    /async function undoRemove[\s\S]{0,200}view\.undoing = true/.test(js)
+      && !/async function undoRemove[\s\S]{0,200}withBusy/.test(js),
+  );
+  t.check(
+    'a storage write of channels or the feed redraws the open tab',
+    /storage\.onChanged\.addListener[\s\S]{0,900}changes\.channels[\s\S]{0,900}changes\.feed/.test(js),
+  );
+  t.check(
+    'a merge that would pass the cap uses settingsImportTooMany',
+    /backupImportMessage/.test(js) && /formatBackupNotice/.test(js)
+      && /settingsImportTooMany/.test(viewJs),
+  );
   t.check(
     'the check mark is named in the reader\'s language',
     /function followCheck[\s\S]{0,240}aria-label',\s*t\('followingChannel'\)/.test(js),
@@ -744,6 +854,46 @@ export default async function run(t) {
     /id="feed-more"[^>]*hidden/.test(html) && /new IntersectionObserver/.test(js) && /showMoreFeed\(\)/.test(js),
   );
   t.check('thumbnails and avatars load lazily', (js.match(/img\.loading = 'lazy';/g) || []).length >= 2);
+  t.check(
+    'a feed row is not a focusable container',
+    !/row\.tabIndex\s*=\s*0/.test(js),
+  );
+  t.check(
+    'the feed video action is a real button covering thumb and title',
+    /openBtn\.className = 'feed-row__open'/.test(js)
+      && /openBtn\.type = 'button'/.test(js)
+      && /row\.appendChild\(openBtn\)/.test(js)
+      && /\.feed-row__open\s*\{[^}]*position:\s*absolute/.test(css)
+      && /\.feed-row__open\s*\{[^}]*inset:\s*0/.test(css),
+  );
+  t.check(
+    'the feed channel button is a sibling of the video action, not nested in it',
+    /row\.appendChild\(openBtn\)/.test(js)
+      && /row\.appendChild\(thumb\)/.test(js)
+      && /row\.appendChild\(body\)/.test(js)
+      && /chBtn\.className = 'feed-row__channel'/.test(js)
+      && !/openBtn\.appendChild/.test(js),
+  );
+  t.check(
+    'Tab hits the video action before the channel name',
+    (() => {
+      const openAt = js.indexOf('row.appendChild(openBtn)');
+      const thumbAt = js.indexOf('row.appendChild(thumb)');
+      const chAt = js.indexOf("chBtn.className = 'feed-row__channel'");
+      return openAt >= 0 && thumbAt > openAt && chAt > thumbAt;
+    })(),
+  );
+  t.check(
+    'Enter on the video action is the button click',
+    /openBtn\.addEventListener\('click',\s*\(\) => openFeedItem\(item, modes\.row\)\)/.test(js)
+      && !/event\.target !== row/.test(js),
+  );
+  t.check(
+    'title fade is to right in LTR and to left in RTL',
+    /\.audio-player__title-wrap\s*\{[^}]*linear-gradient\(to right/.test(css)
+      && /:dir\(rtl\)[\s\S]{0,120}linear-gradient\(to left/.test(css)
+      && /\[dir="rtl"\][\s\S]{0,120}linear-gradient\(to left/.test(css),
+  );
 
   t.section('sleep timer');
 

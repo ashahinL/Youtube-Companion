@@ -10,7 +10,9 @@ per-channel sheet inside the popup, and desktop alerts on new uploads.
 
 The name is **Companion for YouTube** (Arabic **رفيق ليوتيوب**), never
 "YouTube Companion": store review treats YouTube as the name as impersonation.
-For the same reason the icon and the accent are purple, not YouTube red. The
+For the same reason the icon and the accent are purple, not YouTube red. From 2.0 the
+store name is **Companion for YouTube: Audio Only & Feeds** (`extName`, kept
+under 45 characters); the popup and welcome page show the short `appName`. The
 repo and the backup file's `app` id keep the old spelling.
 
 Sibling of `../poppo-companion` and `../bigo-companion`. Same house shape:
@@ -182,7 +184,8 @@ Most live as comments at the line they protect. These span files or tools:
   returns each video several times. `parseChannelVideos` reads the rows when a
   channel's feed fails.
 - **A collab video's channels are not in the DOM.** Its owner line is one
-  link with no address, "A and B"; the ids exist only in the owner renderer's
+  link with no address, "A and B", or "A and 2 more" with three or more
+  channels, so only the first name can be checked against it; the ids exist only in the owner renderer's
   `.data`, which only `inject.js` (the MAIN world) can read. The avatar stack
   stays in the page after moving on to a normal video, and on an in-page move
   the address changes before the owner line does, so `content.js` trusts the
@@ -198,12 +201,23 @@ Most live as comments at the line they protect. These span files or tools:
   to `/shorts/<id>`: 200 means short, 303 means normal video.
 - **Never notify on the seed.** A newly added channel backfills up to 15
   videos; those must be marked as already-alerted silently, or adding 40
-  channels fires 40 alerts.
+  channels fires 40 alerts. Add replies once the channel is stored; the seed
+  runs after. A kill between them is fine: the row stays unseeded, and the
+  next check fills it without alerts. Ids added during a check are queued
+  for one follow-up seed.
 - **A stranded `pollState.running: true` survives restarts forever.** MV3 kills
   the worker, not only the browser, without warning between raising and
   lowering a flag, and `storage.local` outlives reloads. Reconcile at every
   worker start, before any sweep reads the flag. This is the exact bug poppo
-  hit.
+  hit. If that first write fails, a later sweep still treats stored
+  `running` as leftover when this worker is not sweeping.
+- **A listing is its `addedAt`.** A check that already snapshotted the list
+  must drop rows, stamps, and alerts for an id that was removed or added
+  again before it wrote. Re-read the list in the same storage get as the
+  feed write.
+- **Only `at > 0` is a real upload time.** A missing RSS `<published>` is
+  `at: 0`. Treating 0 as finite overwrites the player's time, and that id
+  is never classified again.
 - **`confirm()` / `alert()` in a popup** blocks it and can wedge the extension.
   Use inline confirm rows.
 - **`alarms.create` on an existing name restarts its countdown from now.**

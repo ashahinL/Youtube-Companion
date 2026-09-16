@@ -34,6 +34,9 @@
 
 ## What it does
 
+- On first install, a welcome page helps you bring your channels, try audio
+  mode, and pin the icon. *(coming in 2.0)*
+
 **Audio**
 - Turn on audio mode for a YouTube tab. The video drops to 144p and a cover
   goes over it. You keep the sound and use about 8× less data than 720p.
@@ -118,6 +121,7 @@ There is no build step. The folder is the extension.
   storage. Nothing is sent anywhere else. There are no analytics.
 - Removing the extension opens a short page on GitHub Pages that asks why.
   It sends nothing unless you post your answers as a GitHub issue.
+  *(coming in 2.0)*
 
 The full policy is in [PRIVACY.md](PRIVACY.md). To report a security
 problem, see [SECURITY.md](SECURITY.md).

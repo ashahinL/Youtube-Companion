@@ -26,6 +26,7 @@ const IMPORT_ERRORS = {
 
 let messages = {};
 let busy = false;
+let sweepWatch = 0;
 // Kept as a key, not text, so a language change redraws it.
 let status = { key: '', subs: [], kind: '' };
 let shortcuts = { shortcut: '', popup: '' };
@@ -102,9 +103,21 @@ async function importFile(file) {
       return;
     }
     setStatus(skipped ? 'welcomeImportAddedSkipped' : 'welcomeImportAdded', [String(added), String(skipped)], 'ok');
+    const watch = ++sweepWatch;
     // Not awaited: a first check of hundreds of channels takes minutes, and
     // the worker carries on if this page is closed.
-    send({ type: 'sweep', scope: 'all' }).catch(() => {});
+    send({ type: 'sweep', scope: 'all' }).then((res) => {
+      if (watch !== sweepWatch) return;
+      if (!res || res.ok !== false) return;
+      if (res.error === 'already running') return;
+      if (res.error === 'slow down') {
+        setStatus(
+          skipped ? 'welcomeImportSlowDownSkipped' : 'welcomeImportSlowDown',
+          [String(added), String(skipped)],
+          'ok',
+        );
+      }
+    }).catch(() => {});
   } catch (err) {
     setStatus('welcomeImportFailed', [String(err?.message || err)], 'error');
   } finally {

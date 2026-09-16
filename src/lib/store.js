@@ -89,17 +89,40 @@ export async function updateChannel(id, patch) {
   return next;
 }
 
+function listingAt(ch) {
+  return Number(ch?.addedAt) || 0;
+}
+
+function liveListings(channels) {
+  const live = new Map();
+  for (const ch of channels || []) {
+    if (ch?.id) live.set(ch.id, listingAt(ch));
+  }
+  return live;
+}
+
+/** True when `id` is still the same listing a check snapshotted (`addedAt`). */
+export function isSameListing(id, live, generations) {
+  if (!id || !live.has(id)) return false;
+  if (!(generations instanceof Map)) return true;
+  return generations.has(id) && live.get(id) === generations.get(id);
+}
+
 /**
  * Several patches with one read and one write. An id no longer on the list is
- * skipped, so a channel removed while a check ran stays removed.
+ * skipped, so a channel removed while a check ran stays removed. `generations`
+ * is id → addedAt from the start of that check; a new listing of the same id
+ * is not the one the check fetched.
  */
-export async function updateChannels(patches) {
+export async function updateChannels(patches, generations) {
   const channels = await readChannels();
   if (!(patches instanceof Map) || patches.size === 0) return channels;
+  const live = liveListings(channels);
   let changed = false;
   const next = channels.map((ch) => {
     const patch = patches.get(ch.id);
     if (!patch) return ch;
+    if (!isSameListing(ch.id, live, generations)) return ch;
     changed = true;
     return { ...ch, ...patch };
   });
@@ -200,9 +223,22 @@ export function mergeFeedItems(existing, incoming, maxItems) {
   return { feed: capped, added };
 }
 
-export async function applyFeedMerge(incoming, maxItems) {
-  const existing = await readFeed();
-  const { feed, added } = mergeFeedItems(existing, incoming, maxItems);
+/**
+ * Merge `incoming` into the stored feed. Channels are read in the same
+ * get as the feed so a list cleared or re-added during the check cannot
+ * have its old rows written back. `generations` is id → addedAt from the
+ * start of that check.
+ */
+export async function applyFeedMerge(incoming, maxItems, generations) {
+  const got = await globalThis.chrome.storage.local.get(['feed', 'channels']);
+  const existing = Array.isArray(got.feed) ? got.feed : [];
+  const live = liveListings(Array.isArray(got.channels) ? got.channels : []);
+  const keep = [];
+  for (const item of incoming || []) {
+    if (!item || !isSameListing(item.c, live, generations)) continue;
+    keep.push(item);
+  }
+  const { feed, added } = mergeFeedItems(existing, keep, maxItems);
   await saveFeed(feed);
   return { feed, added };
 }

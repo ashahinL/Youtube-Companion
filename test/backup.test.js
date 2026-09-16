@@ -76,6 +76,7 @@ export default async function run(t) {
   t.check('favorite survives', row.favorite === true, String(row.favorite));
   t.check('muted survives', row.muted === true && built.channels[1].muted === false, JSON.stringify(built.channels));
   t.check('addedAt survives', row.addedAt === 111, String(row.addedAt));
+  t.check('lastVideoAt survives', row.lastVideoAt === 50, String(row.lastVideoAt));
   t.check('lastFetchAt is omitted', !('lastFetchAt' in row));
   t.check('lastError is omitted', !('lastError' in row));
   t.check('seeded is omitted', !('seeded' in row));
@@ -227,8 +228,17 @@ export default async function run(t) {
   const gotBeast = restored.channels.find((c) => c.id === BEAST);
   t.check('round trip keeps favourite', gotMk?.favorite === true, JSON.stringify(gotMk));
   t.check('round trip keeps muted', gotMk?.muted === true, JSON.stringify(gotMk));
-  t.check('round trip keeps addedAt', gotMk?.addedAt === 111, String(gotMk?.addedAt));
-  t.check('round trip keeps second addedAt', gotBeast?.addedAt === 222, String(gotBeast?.addedAt));
+  t.check(
+    'round trip addedAt is the import time, not the file\'s',
+    gotMk?.addedAt >= Date.now() - 5_000 && gotMk?.addedAt <= Date.now(),
+    String(gotMk?.addedAt),
+  );
+  t.check('round trip keeps lastVideoAt', gotMk?.lastVideoAt === 50, String(gotMk?.lastVideoAt));
+  t.check(
+    'round trip second addedAt is also the import time',
+    gotBeast?.addedAt >= Date.now() - 5_000 && gotBeast?.addedAt <= Date.now(),
+    String(gotBeast?.addedAt),
+  );
   t.check('round trip keeps titles', gotMk?.title === 'Marques Brownlee' && gotBeast?.title === 'MrBeast');
   t.check(
     'round trip settings showShorts from the file',
@@ -345,7 +355,11 @@ export default async function run(t) {
   t.check('stale lastError was reset', fresh.lastError === null, JSON.stringify(fresh.lastError));
   t.check('stale seeded was reset', fresh.seeded === false, String(fresh.seeded));
   t.check('favorite still rode along', fresh.favorite === false);
-  t.check('addedAt still rode along', fresh.addedAt === 1_700_000_000_000, String(fresh.addedAt));
+  t.check(
+    'addedAt is the import time, not the file\'s',
+    fresh.addedAt >= Date.now() - 5_000 && fresh.addedAt <= Date.now(),
+    String(fresh.addedAt),
+  );
 
   t.section('imported avatars load only from YouTube');
 
@@ -371,4 +385,52 @@ export default async function run(t) {
     );
   });
   t.check('a dropped avatar still imports the channel', withAvatars.channels.length === avatarCases.length);
+
+  t.section('merge refuses when live plus file would pass the cap');
+
+  const liveMany = {
+    settings: {},
+    channels: Array.from({ length: 1500 }, (_, i) => channel(`UC${String(i).padStart(22, '0')}`)),
+  };
+  const fileMany = {
+    channels: Array.from({ length: 1500 }, (_, i) => ({
+      id: `UC${String(i + 1500).padStart(22, '0')}`,
+    })),
+  };
+  const overMerge = mergeBackup(liveMany, fileMany, 'merge');
+  t.check('merge over the cap is not ok', !!overMerge.error, JSON.stringify({ error: overMerge.error, added: overMerge.added }));
+  t.check('merge over the cap adds none', overMerge.added === 0, String(overMerge.added));
+  t.check(
+    'merge over the cap leaves the live list',
+    overMerge.channels.length === 1500,
+    String(overMerge.channels.length),
+  );
+  t.check(
+    'the merge error is not the file-too-many parse error',
+    overMerge.error !== tooMany.error,
+    String(overMerge.error),
+  );
+  t.check(
+    'the merge error names the cap',
+    typeof overMerge.error === 'string' && overMerge.error.includes(String(MAX_BACKUP_CHANNELS)),
+    String(overMerge.error),
+  );
+
+  const atCap = mergeBackup(
+    { settings: {}, channels: Array.from({ length: 1000 }, (_, i) => channel(`UC${String(i).padStart(22, '0')}`)) },
+    { channels: Array.from({ length: 1000 }, (_, i) => ({ id: `UC${String(i + 1000).padStart(22, '0')}` })) },
+    'merge',
+  );
+  t.check(
+    `merge of exactly ${MAX_BACKUP_CHANNELS} is ok`,
+    !atCap.error && atCap.channels.length === MAX_BACKUP_CHANNELS && atCap.added === 1000,
+    JSON.stringify({ error: atCap.error, length: atCap.channels.length, added: atCap.added }),
+  );
+
+  const overReplace = mergeBackup(liveMany, fileMany, 'replace');
+  t.check(
+    'replace does not use the merge cap',
+    !overReplace.error && overReplace.channels.length === 1500 && overReplace.added === 1500,
+    JSON.stringify({ error: overReplace.error, length: overReplace.channels.length }),
+  );
 }

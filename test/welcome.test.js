@@ -53,6 +53,20 @@ export default async function run(t) {
   t.check('the page never fetches', !/\bfetch\(/.test(js));
   t.check('a large pick is refused before it is read', /takeoutSizeError\(file\.size\)[\s\S]{0,200}return;[\s\S]{0,400}file\.text\(\)/.test(js));
   t.check('a successful import asks for a check', /welcomeImportAdded[\s\S]{0,300}type: 'sweep'/.test(js));
+  t.check(
+    'already running after import is not an error',
+    /already running/.test(js) && /welcomeImportFailed/.test(js)
+      && js.indexOf("res.error === 'already running'") > js.indexOf("type: 'sweep'"),
+  );
+  t.check(
+    'slow down after import uses its own sentence',
+    /slow down/.test(js) && /welcomeImportSlowDown/.test(js) && /welcomeImportSlowDownSkipped/.test(js),
+  );
+  t.check(
+    'welcomeImportSlowDown is in en and ar',
+    'welcomeImportSlowDown' in en && 'welcomeImportSlowDown' in ar
+      && 'welcomeImportSlowDownSkipped' in en && 'welcomeImportSlowDownSkipped' in ar,
+  );
   t.check('the shortcut lines hide when Chrome bound nothing', /\.hidden = !keys/.test(js));
   t.check('pinning is detected from the toolbar setting', /getUserSettings\(\)/.test(js) && /isOnToolbar/.test(js));
 
@@ -86,6 +100,13 @@ export default async function run(t) {
   const siteLoads = [...siteHtml.matchAll(/<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
   t.check('it loads nothing from anywhere else', JSON.stringify(siteLoads) === JSON.stringify(['uninstall.js']), JSON.stringify(siteLoads));
   t.check('it sends nothing by itself', !/\bfetch\(|XMLHttpRequest|sendBeacon|new Image/.test(siteJs));
+  t.check(
+    'it offers Chrome and Edge store links',
+    /chromewebstore\.google\.com\/detail\/hpajekcplhidhjidohfmebpeianbhcgd/.test(siteHtml)
+      && /microsoftedge\.microsoft\.com\/addons\/detail\/companion-for-youtube\/neaandgimpffglakmlbmmkmmmlahibfh/.test(siteHtml)
+      && /data-text="storeChrome"/.test(siteHtml)
+      && /data-text="storeEdge"/.test(siteHtml),
+  );
   t.check('its answers go to a GitHub issue the person posts', /github\.com\/ashahinL\/Youtube-Companion\/issues\/new/.test(siteJs) && /window\.open\(/.test(siteJs));
   t.check('a version that is not a version is dropped', /\^\\d\+\(\\\.\\d\+\)\{0,3\}\$/.test(siteJs));
   const siteKeys = [...siteHtml.matchAll(/data-text="([^"]+)"/g)].map((m) => m[1]);

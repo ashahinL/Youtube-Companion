@@ -2,6 +2,8 @@
 
 _Effective 13 September 2026._
 
+_Changes for 2.0 take effect when 2.0 is published._
+
 Companion for YouTube is a browser extension for Chrome and Edge. It has no
 server, no account and no analytics. This page says exactly what it touches.
 
@@ -9,7 +11,8 @@ server, no account and no analytics. This page says exactly what it touches.
 
 Everything stays in your browser's extension storage, on your device:
 
-- the channels you add, and which ones you starred;
+- the channels you add, which ones you starred, and which ones you muted
+  (mute turns off that channel's alerts; backups keep it);
 - the recent videos from those channels (title, publish time, length, view
   count), capped at the number you choose in Settings;
 - your settings;
@@ -40,10 +43,10 @@ It sends nothing to any other server, and it never sends your channel list,
 settings or listening totals anywhere.
 
 **When you remove the extension**, your browser opens a short page at
-`ashahinl.github.io`, hosted by GitHub, that asks why. Its address carries
-only the extension's language and version. The page sends nothing: its
-button opens a GitHub issue with your answers filled in, which is posted only
-if you post it. GitHub, like any website, can see that the page was visited.
+`ashahinl.github.io` on GitHub Pages. Visiting it is a normal GitHub Pages
+visit: GitHub may log the address, which carries only the extension's
+language and version. Nothing is sent unless you post the GitHub issue the
+page fills in for you.
 
 ## On YouTube pages
 

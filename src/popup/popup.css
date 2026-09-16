@@ -259,7 +259,7 @@ body {
 .add-row__clear:focus-visible,
 .menu__item:focus-visible,
 .channel-row__main:focus-visible,
-.feed-row:focus-visible,
+.feed-row__open:focus-visible,
 .feed-row__channel:focus-visible,
 .swatch:focus-visible,
 .audio-shortcut:focus-visible,
@@ -376,9 +376,17 @@ body {
 
 .follow-card__row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 30px;
+}
+
+.follow-card__error {
+  flex: 1 0 100%;
+  margin: 0;
+  color: var(--accent);
+  font-size: 12px;
 }
 
 .follow-card__name {
@@ -673,6 +681,7 @@ body {
 }
 
 .feed-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -681,6 +690,20 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  cursor: pointer;
+}
+
+/* Stretches over thumb and title so a click there opens the video
+ * without wrapping the channel name in another control. */
+.feed-row__open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
   cursor: pointer;
 }
 
@@ -720,6 +743,8 @@ body {
 .feed-row__open-alt {
   flex: none;
   align-self: center;
+  position: relative;
+  z-index: 2;
 }
 
 .feed-row__open-alt svg {
@@ -761,6 +786,8 @@ body {
 }
 
 .feed-row__channel {
+  position: relative;
+  z-index: 2;
   margin: 0;
   padding: 0;
   border: 0;
@@ -1346,7 +1373,14 @@ body {
 .audio-player__title-wrap {
   overflow: hidden;
   min-width: 0;
+  /* Gradients have no `to inline-end`. The title scrolls toward
+   * inline-end (updateTitleScroll), so RTL paints this the other way. */
   mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
+}
+
+:dir(rtl) .audio-player__title-wrap,
+[dir="rtl"] .audio-player__title-wrap {
+  mask-image: linear-gradient(to left, transparent, black 8px, black calc(100% - 8px), transparent);
 }
 
 .audio-player__title {
@@ -1376,7 +1410,9 @@ body {
  * stop. It wraps to two lines instead, so the whole name is still readable
  * in most cases, and the fade at the edges goes with the slide. */
 @media (prefers-reduced-motion: reduce) {
-  .audio-player__title-wrap {
+  .audio-player__title-wrap,
+  :dir(rtl) .audio-player__title-wrap,
+  [dir="rtl"] .audio-player__title-wrap {
     mask-image: none;
   }
 
@@ -1450,9 +1486,21 @@ body {
   gap: 4px;
 }
 
+.audio-player__transport .icon-btn {
+  height: 32px;
+}
+
 .audio-player__play {
   width: 32px;
   height: 32px;
+}
+
+.audio-player__transport #audio-back,
+.audio-player__transport #audio-forward {
+  width: auto;
+  min-width: 32px;
+  padding-inline: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Speed, volume and the sleep timer share one row with the transport; the

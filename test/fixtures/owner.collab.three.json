@@ -1,0 +1,84 @@
+{
+  "attributedTitle": {
+    "content": "Oligence AI and 2 more"
+  },
+  "navigationEndpoint": {
+    "showDialogCommand": {
+      "panelLoadingStrategy": {
+        "inlineContent": {
+          "dialogViewModel": {
+            "customContent": {
+              "listViewModel": {
+                "listItems": [
+                  {
+                    "listItemViewModel": {
+                      "title": {
+                        "content": "Oligence AI",
+                        "commandRuns": [
+                          {
+                            "startIndex": 0,
+                            "length": 11,
+                            "onTap": {
+                              "innertubeCommand": {
+                                "browseEndpoint": {
+                                  "browseId": "UC5HBA5awLB0LPr-a3pZV3IA"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      "subtitle": {
+                        "content": "\u200e\u2068@oligenceai\u2069 \u2022 \u20681.67K subscribers\u2069"
+                      }
+                    }
+                  },
+                  {
+                    "listItemViewModel": {
+                      "title": {
+                        "content": "Omar El-Shenety (\u202Bعمر الشنيطي\u202C\u200E)",
+                        "commandRuns": [
+                          {
+                            "startIndex": 0,
+                            "length": 32,
+                            "onTap": {
+                              "innertubeCommand": {
+                                "browseEndpoint": {
+                                  "browseId": "UCafZLto98Oot6ZXjd5eXKkQ"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "listItemViewModel": {
+                      "title": {
+                        "content": "BnSamy",
+                        "commandRuns": [
+                          {
+                            "startIndex": 0,
+                            "length": 6,
+                            "onTap": {
+                              "innertubeCommand": {
+                                "browseEndpoint": {
+                                  "browseId": "UCNu8-f_GI4n0vLWG4Gj3Z5A"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

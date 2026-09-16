@@ -26,6 +26,29 @@ const AT = {
   older: Date.parse('2026-09-12T10:00:00Z'),
 };
 
+function backupJson(channels) {
+  return JSON.stringify({
+    app: 'youtube-companion',
+    version: 1,
+    settings: {},
+    channels,
+  });
+}
+
+function hoursAgo(n) {
+  return Date.now() - n * 60 * 60_000;
+}
+
+function daysAgo(n) {
+  return Date.now() - n * 24 * 60 * 60_000;
+}
+
+function feedIdsOf(calls) {
+  return calls
+    .filter((c) => String(c.url).includes('/feeds/videos.xml'))
+    .map((c) => decodeURIComponent((c.url.match(/channel_id=([^&]+)/) || [])[1] || ''));
+}
+
 function jsonRes(body, { status = 200 } = {}) {
   return {
     ok: status >= 200 && status < 300,
@@ -61,12 +84,14 @@ function headRes({ status = 200, redirected = false, url = '' } = {}) {
 
 function rssXml(channelId, title, entries) {
   const blocks = entries.map((e) => {
-    const published = e.published || new Date(e.at).toISOString();
+    const published = e.omitPublished
+      ? ''
+      : `<published>${e.published || new Date(e.at).toISOString()}</published>`;
     return `<entry>
       <yt:videoId>${e.v}</yt:videoId>
       <yt:channelId>${channelId}</yt:channelId>
       <title>${e.t || e.v}</title>
-      <published>${published}</published>
+      ${published}
       <media:group>
         <media:statistics views="${e.views ?? 0}"/>
       </media:group>
@@ -259,6 +284,28 @@ async function putChannel(entry) {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitUntil(pred, tries = 150) {
+  for (let i = 0; i < tries; i++) {
+    if (await pred()) return true;
+    await wait(10);
+  }
+  return false;
+}
+
+async function waitForIdle() {
+  await wait(20);
+  await waitUntil(async () => !(await readPollState()).running);
+  await wait(10);
+}
+
+function keyNames(keys) {
+  if (keys == null) return [];
+  if (typeof keys === 'string') return [keys];
+  if (Array.isArray(keys)) return keys;
+  if (typeof keys === 'object') return Object.keys(keys);
+  return [];
 }
 
 export default async function run(t) {
@@ -502,6 +549,61 @@ export default async function run(t) {
     mock.commandListeners.length = listenerCounts.command;
     mock.storageChangedListeners.length = listenerCounts.storage;
 
+    t.section('a failed first reconcile does not freeze polling');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await writePollState({ running: true, lastPollAt: 9 });
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'afterfail01', t: 'After failed reconcile', at: AT.newest },
+        ]),
+      },
+    });
+    let pollWrites = 0;
+    const origPollSet = globalThis.chrome.storage.local.set.bind(globalThis.chrome.storage.local);
+    globalThis.chrome.storage.local.set = async (items) => {
+      if (items && Object.prototype.hasOwnProperty.call(items, 'pollState')) {
+        pollWrites++;
+        if (pollWrites === 1) throw new Error('reconcile write failed');
+      }
+      return origPollSet(items);
+    };
+    const failListenerCounts = {
+      alarm: mock.alarmListeners.length,
+      notify: mock.notificationClickListeners.length,
+      installed: mock.runtimeListeners.onInstalled.length,
+      startup: mock.runtimeListeners.onStartup.length,
+      message: mock.runtimeListeners.onMessage.length,
+      command: mock.commandListeners.length,
+      storage: mock.storageChangedListeners.length,
+    };
+    let afterFailReconcile;
+    try {
+      const freshFail = await import(`${workerHref}?boot=${Date.now()}-fail`);
+      afterFailReconcile = await freshFail.runSweep({ scope: 'all' });
+    } finally {
+      globalThis.chrome.storage.local.set = origPollSet;
+    }
+    t.check(
+      'sweep still runs after a failed first reconcile',
+      afterFailReconcile && afterFailReconcile.ok === true,
+      JSON.stringify(afterFailReconcile),
+    );
+    t.check(
+      'and stored the video',
+      (await readFeed()).some((row) => row.v === 'afterfail01'),
+    );
+    t.check('running is false after that sweep', (await readPollState()).running === false);
+    mock.alarmListeners.length = failListenerCounts.alarm;
+    mock.notificationClickListeners.length = failListenerCounts.notify;
+    mock.runtimeListeners.onInstalled.length = failListenerCounts.installed;
+    mock.runtimeListeners.onStartup.length = failListenerCounts.startup;
+    mock.runtimeListeners.onMessage.length = failListenerCounts.message;
+    mock.commandListeners.length = failListenerCounts.command;
+    mock.storageChangedListeners.length = failListenerCounts.storage;
+
     t.section('sweep refuses while running');
 
     await wipe();
@@ -534,6 +636,200 @@ export default async function run(t) {
     const firstResult = await first;
     t.check('first sweep completes ok', firstResult.ok === true);
     t.check('running is false after the sweep', (await readPollState()).running === false);
+
+    t.section('a skipped poll-all runs after the current sweep');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let releaseOverlap;
+    const overlapHang = new Promise((resolve) => { releaseOverlap = resolve; });
+    let overlapInFeed = false;
+    const overlapFetch = installFetch({
+      async hook(u) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD && !overlapInFeed) {
+            overlapInFeed = true;
+            await overlapHang;
+          }
+        }
+        return undefined;
+      },
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'ovlfav00001', t: 'Fav', at: AT.newest }]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'ovlall00001', t: 'All', at: AT.mid }]),
+      },
+    });
+    const favSweep = runSweep({ scope: 'favorites' });
+    for (let i = 0; i < 80 && !overlapInFeed; i++) await wait(5);
+    t.check('the favourite check reached the feed', overlapInFeed === true);
+    const skippedAll = await mock.fireAlarm('poll-all');
+    t.check(
+      'poll-all during a favourite check is already running',
+      [].concat(skippedAll).some((r) => r && r.error === 'already running'),
+      JSON.stringify(skippedAll),
+    );
+    t.check(
+      'poll-all did not fetch the non-favourite while the favourite check ran',
+      !feedIdsOf(overlapFetch.calls).includes(BEAST),
+      JSON.stringify(feedIdsOf(overlapFetch.calls)),
+    );
+    releaseOverlap();
+    await favSweep;
+    t.check(
+      'the favourite check replied before the skipped all-check',
+      !feedIdsOf(overlapFetch.calls).includes(BEAST),
+      JSON.stringify(feedIdsOf(overlapFetch.calls)),
+    );
+    t.check(
+      'the skipped all-check fetched the non-favourite',
+      await waitUntil(() => feedIdsOf(overlapFetch.calls).includes(BEAST)),
+      JSON.stringify(feedIdsOf(overlapFetch.calls)),
+    );
+    t.check(
+      'and stored its video',
+      await waitUntil(async () => (await readFeed()).some((row) => row.v === 'ovlall00001')),
+    );
+    await waitForIdle();
+
+    t.section('an all-check already covers a skipped favourite alarm');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let releaseAllHang;
+    const allHang = new Promise((resolve) => { releaseAllHang = resolve; });
+    let allInFeed = false;
+    const allCoverFetch = installFetch({
+      async hook(u) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD && !allInFeed) {
+            allInFeed = true;
+            await allHang;
+          }
+        }
+        return undefined;
+      },
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'coverall001', t: 'A', at: AT.newest }]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'coverall002', t: 'B', at: AT.mid }]),
+      },
+    });
+    const coveringAll = runSweep({ scope: 'all' });
+    for (let i = 0; i < 80 && !allInFeed; i++) await wait(5);
+    t.check('the all-check reached the feed', allInFeed === true);
+    await mock.fireAlarm('poll-fav');
+    releaseAllHang();
+    await coveringAll;
+    await waitForIdle();
+    const mkbhdCovered = feedIdsOf(allCoverFetch.calls).filter((id) => id === MKBHD).length;
+    t.check(
+      'the favourite alarm did not start a second check',
+      mkbhdCovered === 1,
+      String(mkbhdCovered),
+    );
+
+    t.section('a skipped all-check covers a skipped favourite check');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let releasePartial;
+    const partialHang = new Promise((resolve) => { releasePartial = resolve; });
+    let partialInFeed = false;
+    const partialFetch = installFetch({
+      async hook(u) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD && !partialInFeed) {
+            partialInFeed = true;
+            await partialHang;
+          }
+        }
+        return undefined;
+      },
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'partseed01', t: 'A', at: AT.newest }]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'partseed02', t: 'B', at: AT.mid }]),
+      },
+    });
+    const partialSweep = runSweep({ scope: 'all', onlyIds: [MKBHD] });
+    for (let i = 0; i < 80 && !partialInFeed; i++) await wait(5);
+    t.check('the partial check reached the feed', partialInFeed === true);
+    await mock.fireAlarm('poll-all');
+    await mock.fireAlarm('poll-all');
+    await mock.fireAlarm('poll-fav');
+    releasePartial();
+    await partialSweep;
+    t.check(
+      'the skipped all-check fetched the other channel',
+      await waitUntil(() => feedIdsOf(partialFetch.calls).includes(BEAST)),
+      JSON.stringify(feedIdsOf(partialFetch.calls)),
+    );
+    await waitForIdle();
+    const partialIds = feedIdsOf(partialFetch.calls);
+    t.check(
+      'one follow-up all-check fetched the other channel once',
+      partialIds.filter((id) => id === BEAST).length === 1,
+      JSON.stringify(partialIds),
+    );
+    t.check(
+      'the favourite alarm was folded into the all-check',
+      partialIds.filter((id) => id === MKBHD).length === 2,
+      JSON.stringify(partialIds),
+    );
+    t.check(
+      'and stored the non-favourite video',
+      (await readFeed()).some((row) => row.v === 'partseed02'),
+    );
+
+    t.section('a manual refresh during a check is not queued');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, favorite: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let releaseManual;
+    const manualHang = new Promise((resolve) => { releaseManual = resolve; });
+    let manualInFeed = false;
+    const manualFetch = installFetch({
+      async hook(u) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD && !manualInFeed) {
+            manualInFeed = true;
+            await manualHang;
+          }
+        }
+        return undefined;
+      },
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'manfav00001', t: 'Fav', at: AT.newest }]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'manall00001', t: 'All', at: AT.mid }]),
+      },
+    });
+    const hungFav = runSweep({ scope: 'favorites' });
+    for (let i = 0; i < 80 && !manualInFeed; i++) await wait(5);
+    t.check('the favourite check reached the feed', manualInFeed === true);
+    const manualRefresh = await handleMessage({ type: 'sweep', scope: 'all' });
+    t.check(
+      'manual refresh is already running',
+      manualRefresh.ok === false && manualRefresh.error === 'already running',
+      JSON.stringify(manualRefresh),
+    );
+    releaseManual();
+    await hungFav;
+    await waitForIdle();
+    t.check(
+      'the manual refresh did not run after',
+      !feedIdsOf(manualFetch.calls).includes(BEAST),
+      JSON.stringify(feedIdsOf(manualFetch.calls)),
+    );
 
     t.section('sweep throw still lowers running');
 
@@ -1247,6 +1543,44 @@ export default async function run(t) {
       JSON.stringify(mock.badgeText),
     );
 
+    t.section('starring updates the favourites-only badge');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', favorite: false, seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', favorite: true, seeded: true });
+    await saveFeed([
+      { v: 'newmkbhd01', c: MKBHD, t: 'New', at: 100, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'oldbeast01', c: BEAST, t: 'Old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    await writePollState({ lastSeenAt: 50 });
+    await writeSettings({ feed: { showShorts: true, favoritesOnly: true } });
+    await refreshBadge();
+    t.check(
+      'favourites-only badge ignores an unstarred channel with new videos',
+      mock.badgeText === '',
+      JSON.stringify(mock.badgeText),
+    );
+    const fetchCallsBeforeStar = (globalThis.fetch && globalThis.fetch.calls && globalThis.fetch.calls.length) || 0;
+    const starred = await handleMessage({ type: 'setFavorite', id: MKBHD, on: true });
+    t.check('setFavorite reports ok', starred.ok === true, JSON.stringify(starred));
+    t.check(
+      'starring updates the badge without a check',
+      mock.badgeText === '1',
+      JSON.stringify(mock.badgeText),
+    );
+    t.check(
+      'starring does not fetch',
+      !globalThis.fetch?.calls || globalThis.fetch.calls.length === fetchCallsBeforeStar,
+      String(globalThis.fetch?.calls?.length),
+    );
+    const unstarred = await handleMessage({ type: 'setFavorite', id: MKBHD, on: false });
+    t.check('unstarring reports ok', unstarred.ok === true, JSON.stringify(unstarred));
+    t.check(
+      'unstarring updates the badge without a check',
+      mock.badgeText === '',
+      JSON.stringify(mock.badgeText),
+    );
+
     t.section('audio mode leaves the badge count alone');
 
     await wipe();
@@ -1481,6 +1815,13 @@ export default async function run(t) {
       viaWatch.ok === true && viaWatch.channel?.id === VIA,
       JSON.stringify(viaWatch),
     );
+    t.check('addChannel replies unseeded', viaWatch.channel?.seeded === false, JSON.stringify(viaWatch.channel));
+    t.check('addChannel reply carries state', Array.isArray(viaWatch.state?.channels), JSON.stringify(viaWatch.state?.channels?.map((c) => c.id)));
+    t.check(
+      'awaited the background seed',
+      await waitUntil(async () => (await readChannels()).find((c) => c.id === VIA)?.seeded === true),
+    );
+    await waitForIdle();
 
     installFetch({
       resolveId: BEAST,
@@ -1496,7 +1837,13 @@ export default async function run(t) {
     t.check('addChannel reports ok', added.ok === true, JSON.stringify(added));
     t.check('returned channel id', added.channel?.id === BEAST, added.channel?.id);
     t.check('returned channel title', added.channel?.title === 'MrBeast', added.channel?.title);
-    t.check('addChannel seeds silently', added.channel?.seeded === true);
+    t.check('addChannel replies before the seed', added.channel?.seeded === false, JSON.stringify(added.channel));
+    t.check(
+      'the background seed finished',
+      await waitUntil(async () => (await readChannels()).find((c) => c.id === BEAST)?.seeded === true),
+    );
+    await waitForIdle();
+    t.check('addChannel seeds silently', (await readChannels()).find((c) => c.id === BEAST)?.seeded === true);
     t.check(
       'addChannel seed created ZERO notifications',
       mock.notifications.length === 0,
@@ -1522,12 +1869,14 @@ export default async function run(t) {
       throw new Error('badge failed');
     };
     const addedDespiteSweep = await handleMessage({ type: 'addChannel', input: '@LinusTechTips' });
-    globalThis.chrome.action.setBadgeText = badgeFn;
     t.check(
       'addChannel still ok when the seed sweep throws',
       addedDespiteSweep.ok === true && addedDespiteSweep.channel?.id === LTT,
       JSON.stringify(addedDespiteSweep),
     );
+    t.check('replies before the throwing seed', addedDespiteSweep.channel?.seeded === false);
+    await waitForIdle();
+    globalThis.chrome.action.setBadgeText = badgeFn;
     t.check(
       'channel stayed stored after a failed seed',
       (await readChannels()).some((c) => c.id === LTT),
@@ -1551,6 +1900,7 @@ export default async function run(t) {
       }),
     );
 
+    await waitForIdle();
     const onlyFetch = installFetch({
       feeds: {
         [MKBHD]: rssXml(MKBHD, 'MKBHD', [
@@ -1619,6 +1969,121 @@ export default async function run(t) {
     t.check('undo after re-adding the channel does not duplicate it', afterReAdd.ok === false
       && (await readChannels()).filter((c) => c.id === BEAST).length === 1, JSON.stringify(afterReAdd));
     await handleMessage({ type: 'removeChannel', id: BEAST });
+
+    t.section('Follow during a running check is queued and seeded after');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    let releaseQueueHang;
+    const queueHang = new Promise((resolve) => { releaseQueueHang = resolve; });
+    let queueInFeed = false;
+    const queuedA = 'UC000000000000000000000A';
+    const queuedB = 'UC000000000000000000000B';
+    const queueFetch = installFetch({
+      async hook(u, opts) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD) {
+            queueInFeed = true;
+            await queueHang;
+            return textRes(rssXml(MKBHD, 'Marques Brownlee', []));
+          }
+        }
+        if (u.includes('/youtubei/v1/browse')) {
+          const id = bodyOf(opts).browseId;
+          if (id === queuedA) return jsonRes(headerJson(queuedA, 'Queued A', '@a', 'https://yt3.ggpht.com/a'));
+          if (id === queuedB) return jsonRes(headerJson(queuedB, 'Queued B', '@b', 'https://yt3.ggpht.com/b'));
+        }
+        return undefined;
+      },
+      feeds: {
+        [queuedA]: rssXml(queuedA, 'Queued A', [{ v: 'queuedaaa01', t: 'A seed', at: AT.newest }]),
+        [queuedB]: rssXml(queuedB, 'Queued B', [{ v: 'queuedbbb01', t: 'B seed', at: AT.newest }]),
+      },
+    });
+    const hungSweep = runSweep({ scope: 'all' });
+    for (let i = 0; i < 80 && !queueInFeed; i++) await wait(5);
+    t.check('the running check reached the feed', queueInFeed === true);
+    mock.notifications.length = 0;
+    const followA = await handleMessage({ type: 'addChannel', input: queuedA });
+    const followB = await handleMessage({ type: 'addChannel', input: queuedB });
+    t.check(
+      'both Follows reply before the running check ends',
+      followA.ok && followA.channel?.seeded === false && followB.ok && followB.channel?.seeded === false,
+      JSON.stringify({ a: followA, b: followB }),
+    );
+    const feedsDuringHang = queueFetch.calls.filter((c) => String(c.url).includes('/feeds/videos.xml')).length;
+    t.check('neither Follow fetched a feed while the check ran', feedsDuringHang === 1, String(feedsDuringHang));
+    releaseQueueHang();
+    await hungSweep;
+    t.check(
+      'both queued ids seed after the check',
+      await waitUntil(async () => {
+        const list = await readChannels();
+        return list.find((c) => c.id === queuedA)?.seeded === true
+          && list.find((c) => c.id === queuedB)?.seeded === true;
+      }),
+    );
+    t.check(
+      'one follow-up sweep fetched both new feeds',
+      queueFetch.calls.filter((c) => String(c.url).includes('/feeds/videos.xml')
+        && (String(c.url).includes(queuedA) || String(c.url).includes(queuedB))).length === 2,
+    );
+    t.check(
+      'queued seeds are silent',
+      mock.notifications.length === 0
+        && (await readFeed()).some((row) => row.v === 'queuedaaa01')
+        && (await readFeed()).some((row) => row.v === 'queuedbbb01'),
+      JSON.stringify(mock.notifications),
+    );
+
+    t.section('Add during backoff stays unseeded');
+
+    await wipe();
+    await writePollState({ backoffUntil: Date.now() + 60_000, backoffLevel: 1 });
+    const backoffFetch = installFetch({
+      browse: headerJson(VIA, 'Via Watch', '@viawatch', 'https://yt3.ggpht.com/via'),
+      feeds: {
+        [VIA]: rssXml(VIA, 'Via Watch', [{ v: 'backoffvid1', t: 'Should wait', at: AT.newest }]),
+      },
+    });
+    const addedDuringBackoff = await handleMessage({ type: 'addChannel', input: VIA });
+    t.check(
+      'Add during backoff still stores the channel',
+      addedDuringBackoff.ok === true && addedDuringBackoff.channel?.id === VIA,
+      JSON.stringify(addedDuringBackoff),
+    );
+    await wait(40);
+    t.check(
+      'and does not seed-fetch',
+      !backoffFetch.calls.some((c) => String(c.url).includes('/feeds/videos.xml')),
+      JSON.stringify(backoffFetch.calls.map((c) => c.url)),
+    );
+    t.check(
+      'the channel stays unseeded',
+      (await readChannels()).find((c) => c.id === VIA)?.seeded === false,
+    );
+
+    t.section('an unseeded channel left by a killed worker seeds silently');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: false });
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'killedseed1', t: 'After kill', at: AT.newest },
+        ]),
+      },
+    });
+    mock.notifications.length = 0;
+    await runSweep({ scope: 'all' });
+    t.check('the next check seeds it', (await readChannels())[0]?.seeded === true);
+    t.check(
+      'and lands the videos with no alert',
+      (await readFeed()).some((row) => row.v === 'killedseed1') && mock.notifications.length === 0,
+      JSON.stringify(mock.notifications),
+    );
 
     const unknown = await handleMessage({ type: 'nonesuch' });
     t.check(
@@ -1702,6 +2167,30 @@ export default async function run(t) {
     const overLimit = await handleMessage({ type: 'importTakeout', data: takeoutCsv([MKBHD, BEAST, LINUS_ID]) });
     t.check('an import that would take the list past 2,000 is refused', overLimit.ok === false && overLimit.error === 'count', JSON.stringify(overLimit));
     t.check('and adds none of it', (await readChannels()).length === 1998);
+
+    const backupLive = Array.from({ length: 1990 }, (_, i) => ({
+      ...listBefore[0],
+      id: `UC${String(i).padStart(22, '0')}`,
+    }));
+    await globalThis.chrome.storage.local.set({ channels: backupLive });
+    const mergeOver = await handleMessage({
+      type: 'importBackup',
+      mode: 'merge',
+      data: JSON.stringify({
+        app: 'youtube-companion',
+        version: 1,
+        settings: {},
+        channels: Array.from({ length: 20 }, (_, i) => ({
+          id: `UC${String(i + 3000).padStart(22, '0')}`,
+        })),
+      }),
+    });
+    t.check(
+      'a merge backup that would pass 2,000 is refused',
+      mergeOver.ok === false && typeof mergeOver.error === 'string' && mergeOver.error.includes('2000'),
+      JSON.stringify(mergeOver),
+    );
+    t.check('and adds none of it', (await readChannels()).length === 1990);
     await globalThis.chrome.storage.local.set({ channels: listBefore });
     const notTakeout = await handleMessage({ type: 'importTakeout', data: '{"app":"youtube-companion"}' });
     t.check('a file with no channel rows is refused with its reason', notTakeout.ok === false && notTakeout.error === 'empty', JSON.stringify(notTakeout));
@@ -1746,12 +2235,12 @@ export default async function run(t) {
     t.check('and not asked again the same day', browsed.length === 0, JSON.stringify(browsed));
 
     await wipe();
-    const manyImported = Array.from({ length: 21 }, (_, i) => `UC${String(i).padStart(2, '0').repeat(11)}`);
+    const manyImported = Array.from({ length: 11 }, (_, i) => `UC${String(i).padStart(2, '0').repeat(11)}`);
     await handleMessage({ type: 'importTakeout', data: takeoutCsv(manyImported) });
     browsed = [];
     installFetch({ hook: headerHook(browsed) });
     await runSweep({ scope: 'all' });
-    t.check('at most 20 headers are read in one check', browsed.length === 20, String(browsed.length));
+    t.check('at most 10 headers are read in one check', browsed.length === 10, String(browsed.length));
     browsed.length = 0;
     await runSweep({ scope: 'all' });
     t.check('the rest come with the next check', browsed.length === 1, String(browsed.length));
@@ -1763,6 +2252,366 @@ export default async function run(t) {
     t.check('a 429 on a header read is pushback too', headerPush.error === 'slow down', JSON.stringify(headerPush));
     t.check('and the channels still count as filled in', (await readChannels()).every((ch) => ch.seeded === true));
     await writePollState({ backoffUntil: 0, backoffLevel: 0 });
+
+    t.section('Takeout import during a running check seeds after');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    let releaseTakeoutHang;
+    const takeoutHang = new Promise((resolve) => { releaseTakeoutHang = resolve; });
+    let takeoutInFeed = false;
+    const takeoutQueueFetch = installFetch({
+      async hook(u) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD && !takeoutInFeed) {
+            takeoutInFeed = true;
+            await takeoutHang;
+          }
+        }
+        return undefined;
+      },
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', []),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'tqbeast0001', t: 'Beast seed', at: AT.newest }]),
+        [LINUS_ID]: rssXml(LINUS_ID, 'Linus', [{ v: 'tqlinus0001', t: 'Linus seed', at: AT.mid }]),
+      },
+    });
+    const hungTakeoutSweep = runSweep({ scope: 'all' });
+    for (let i = 0; i < 80 && !takeoutInFeed; i++) await wait(5);
+    t.check('the running check reached the feed', takeoutInFeed === true);
+    mock.notifications.length = 0;
+    const takeoutWhileHung = await handleMessage({
+      type: 'importTakeout',
+      data: takeoutCsv([BEAST, LINUS_ID]),
+    });
+    t.check(
+      'Takeout import stores the new channels while the check runs',
+      takeoutWhileHung.ok === true && takeoutWhileHung.added === 2,
+      JSON.stringify(takeoutWhileHung),
+    );
+    t.check(
+      'and does not fetch them yet',
+      !feedIdsOf(takeoutQueueFetch.calls).includes(BEAST)
+        && !feedIdsOf(takeoutQueueFetch.calls).includes(LINUS_ID),
+      JSON.stringify(feedIdsOf(takeoutQueueFetch.calls)),
+    );
+    const welcomeDuringHang = await handleMessage({ type: 'sweep', scope: 'all' });
+    t.check(
+      'the welcome sweep is already running',
+      welcomeDuringHang.error === 'already running',
+      JSON.stringify(welcomeDuringHang),
+    );
+    releaseTakeoutHang();
+    await hungTakeoutSweep;
+    t.check(
+      'both imported ids seed after the check',
+      await waitUntil(async () => {
+        const list = await readChannels();
+        return list.find((c) => c.id === BEAST)?.seeded === true
+          && list.find((c) => c.id === LINUS_ID)?.seeded === true;
+      }),
+    );
+    t.check(
+      'one follow-up sweep fetched both new feeds',
+      feedIdsOf(takeoutQueueFetch.calls).filter((id) => id === BEAST || id === LINUS_ID).length === 2,
+      JSON.stringify(feedIdsOf(takeoutQueueFetch.calls)),
+    );
+    t.check(
+      'queued Takeout seeds are silent',
+      mock.notifications.length === 0
+        && (await readFeed()).some((row) => row.v === 'tqbeast0001')
+        && (await readFeed()).some((row) => row.v === 'tqlinus0001'),
+      JSON.stringify(mock.notifications),
+    );
+    await waitForIdle();
+
+    t.section('a welcome sweep after import is not followed by a second seed');
+
+    await waitForIdle();
+    await wipe();
+    const welcomeFetch = installFetch({
+      feeds: {
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'welcomb0001', t: 'Beast', at: AT.newest }]),
+        [LINUS_ID]: rssXml(LINUS_ID, 'Linus', [{ v: 'welcoml0001', t: 'Linus', at: AT.mid }]),
+      },
+    });
+    await handleMessage({ type: 'importTakeout', data: takeoutCsv([BEAST, LINUS_ID]) });
+    const welcomeSweep = await handleMessage({ type: 'sweep', scope: 'all' });
+    t.check('the welcome sweep ran', welcomeSweep.ok === true, JSON.stringify(welcomeSweep));
+    t.check(
+      'both imported channels are seeded',
+      (await readChannels()).every((ch) => ch.seeded === true),
+    );
+    await waitForIdle();
+    t.check(
+      'each imported channel is fetched once',
+      feedIdsOf(welcomeFetch.calls).filter((id) => id === BEAST || id === LINUS_ID).length === 2,
+      JSON.stringify(feedIdsOf(welcomeFetch.calls)),
+    );
+
+    t.section('backup restore alerts for uploads newer than lastVideoAt');
+
+    async function restoreBackupAndCheck(mode) {
+      await waitForIdle();
+      await wipe();
+      const lastVideoAt = daysAgo(30);
+      installFetch({
+        feeds: {
+          [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+            { v: `bk${mode}new01`, t: 'After backup', at: hoursAgo(1) },
+            { v: `bk${mode}old01`, t: 'Before backup', at: lastVideoAt - 60_000 },
+          ]),
+        },
+      });
+      mock.notifications.length = 0;
+      const imported = await handleMessage({
+        type: 'importBackup',
+        mode,
+        data: backupJson([{ id: MKBHD, title: 'Marques Brownlee', lastVideoAt }]),
+      });
+      const replyCh = (imported.state?.channels || []).find((c) => c.id === MKBHD);
+      t.check(
+        `${mode} restore stored lastVideoAt and left the channel unseeded`,
+        imported.ok === true
+          && imported.added === 1
+          && replyCh?.seeded === false
+          && replyCh?.lastVideoAt === lastVideoAt,
+        JSON.stringify({ ok: imported.ok, added: imported.added, ch: replyCh }),
+      );
+      t.check(
+        `${mode} restore seeds without another message`,
+        await waitUntil(async () => (await readChannels())[0]?.seeded === true),
+      );
+      await waitForIdle();
+      return {
+        notes: mock.notifications.slice(),
+        feed: await readFeed(),
+        channel: (await readChannels())[0],
+      };
+    }
+
+    const mergedRestore = await restoreBackupAndCheck('merge');
+    t.check(
+      'merge restore alerts exactly once',
+      mergedRestore.notes.length === 1 && mergedRestore.notes[0].message === 'After backup',
+      JSON.stringify(mergedRestore.notes),
+    );
+    t.check(
+      'merge restore kept both videos',
+      mergedRestore.feed.some((row) => row.v === 'bkmergenew01')
+        && mergedRestore.feed.some((row) => row.v === 'bkmergeold01'),
+      JSON.stringify(mergedRestore.feed.map((row) => row.v)),
+    );
+    t.check('merge restore seeds the channel', mergedRestore.channel?.seeded === true);
+
+    const replacedRestore = await restoreBackupAndCheck('replace');
+    t.check(
+      'replace restore alerts exactly once',
+      replacedRestore.notes.length === 1 && replacedRestore.notes[0].message === 'After backup',
+      JSON.stringify(replacedRestore.notes),
+    );
+    t.check(
+      'replace restore kept both videos',
+      replacedRestore.feed.some((row) => row.v === 'bkreplacenew01')
+        && replacedRestore.feed.some((row) => row.v === 'bkreplaceold01'),
+      JSON.stringify(replacedRestore.feed.map((row) => row.v)),
+    );
+
+    t.section('an old backup does not alert for uploads from days ago');
+
+    await waitForIdle();
+    await wipe();
+    const oldBackupAt = daysAgo(30);
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'bkhour00001', t: 'An hour ago', at: hoursAgo(1) },
+          { v: 'bkdays00001', t: 'Three days ago', at: daysAgo(3) },
+        ]),
+      },
+    });
+    mock.notifications.length = 0;
+    const oldBackup = await handleMessage({
+      type: 'importBackup',
+      mode: 'replace',
+      data: backupJson([{
+        id: MKBHD,
+        title: 'Marques Brownlee',
+        lastVideoAt: oldBackupAt,
+        addedAt: 1,
+      }]),
+    });
+    t.check(
+      'listing time is the import, not the file',
+      oldBackup.state?.channels?.[0]?.addedAt > oldBackupAt
+        && oldBackup.state?.channels?.[0]?.addedAt !== 1,
+      String(oldBackup.state?.channels?.[0]?.addedAt),
+    );
+    t.check(
+      'an old backup seeds without another message',
+      await waitUntil(async () => (await readChannels())[0]?.seeded === true),
+    );
+    await waitForIdle();
+    t.check(
+      'an upload from 3 days ago after lastVideoAt stays silent',
+      (await readFeed()).some((row) => row.v === 'bkdays00001')
+        && !mock.notifications.some((n) => n.message === 'Three days ago'),
+      JSON.stringify({
+        feed: (await readFeed()).map((row) => row.v),
+        notes: mock.notifications,
+      }),
+    );
+    t.check(
+      'an upload from 1 hour ago alerts once',
+      mock.notifications.length === 1 && mock.notifications[0].message === 'An hour ago',
+      JSON.stringify(mock.notifications),
+    );
+
+    t.section('backup restore with no lastVideoAt stays fully silent');
+
+    await waitForIdle();
+    await wipe();
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'bkzero00001', t: 'New', at: hoursAgo(1) },
+          { v: 'bkzero00002', t: 'Old', at: daysAgo(3) },
+        ]),
+      },
+    });
+    mock.notifications.length = 0;
+    await handleMessage({
+      type: 'importBackup',
+      mode: 'replace',
+      data: backupJson([{ id: MKBHD, title: 'Marques Brownlee', lastVideoAt: 0 }]),
+    });
+    t.check(
+      'a backup with no lastVideoAt seeds without another message',
+      await waitUntil(async () => (await readChannels())[0]?.seeded === true),
+    );
+    await waitForIdle();
+    t.check(
+      'a backup with no lastVideoAt silent-seeds the first check',
+      mock.notifications.length === 0 && (await readFeed()).length === 2,
+      JSON.stringify(mock.notifications),
+    );
+    t.check('and then counts as seeded', (await readChannels())[0]?.seeded === true);
+
+    t.section('backup merge keeps a live channel\'s own state');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Live title', seeded: true, lastVideoAt: AT.older });
+    const liveAddedAt = (await readChannels())[0].addedAt;
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'bklive00001', t: 'Would be quiet if the file won', at: AT.mid },
+        ]),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [
+          { v: 'bknewc00001', t: 'After backup', at: hoursAgo(1) },
+          { v: 'bknewc00002', t: 'Before backup', at: AT.older },
+        ]),
+      },
+    });
+    mock.notifications.length = 0;
+    await handleMessage({
+      type: 'importBackup',
+      mode: 'merge',
+      data: backupJson([
+        { id: MKBHD, title: 'File title', lastVideoAt: AT.newest },
+        { id: BEAST, title: 'MrBeast', lastVideoAt: AT.mid },
+      ]),
+    });
+    const afterMerge = await readChannels();
+    const liveKept = afterMerge.find((c) => c.id === MKBHD);
+    t.check(
+      'the live channel keeps its stamps',
+      liveKept?.title === 'Live title'
+        && liveKept?.seeded === true
+        && liveKept?.lastVideoAt === AT.older
+        && liveKept?.addedAt === liveAddedAt,
+      JSON.stringify(liveKept),
+    );
+    t.check('the new channel is on the list', afterMerge.some((c) => c.id === BEAST));
+    t.check(
+      'the newly merged channel seeds without another message',
+      await waitUntil(async () => (await readChannels()).find((c) => c.id === BEAST)?.seeded === true),
+    );
+    await runSweep({ scope: 'all' });
+    await waitForIdle();
+    t.check(
+      'the live channel still alerts from its own lastVideoAt',
+      mock.notifications.some((n) => n.message === 'Would be quiet if the file won'),
+      JSON.stringify(mock.notifications),
+    );
+    t.check(
+      'the newly merged channel alerts only for the newer upload',
+      mock.notifications.filter((n) => n.message === 'After backup').length === 1
+        && !mock.notifications.some((n) => n.message === 'Before backup'),
+      JSON.stringify(mock.notifications),
+    );
+
+    t.section('backup import during a running check seeds after');
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    let releaseBackupHang;
+    const backupHang = new Promise((resolve) => { releaseBackupHang = resolve; });
+    let backupInFeed = false;
+    const backupQueueFetch = installFetch({
+      async hook(u) {
+        if (u.includes('/feeds/videos.xml')) {
+          const id = decodeURIComponent((u.match(/channel_id=([^&]+)/) || [])[1] || '');
+          if (id === MKBHD && !backupInFeed) {
+            backupInFeed = true;
+            await backupHang;
+          }
+        }
+        return undefined;
+      },
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', []),
+        [BEAST]: rssXml(BEAST, 'MrBeast', [
+          { v: 'bkwait00001', t: 'After backup', at: hoursAgo(1) },
+          { v: 'bkwait00002', t: 'Before backup', at: daysAgo(40) },
+        ]),
+      },
+    });
+    const hungBackupSweep = runSweep({ scope: 'all' });
+    for (let i = 0; i < 80 && !backupInFeed; i++) await wait(5);
+    t.check('the running check reached the feed', backupInFeed === true);
+    mock.notifications.length = 0;
+    const backupWhileHung = await handleMessage({
+      type: 'importBackup',
+      mode: 'merge',
+      data: backupJson([{ id: BEAST, title: 'MrBeast', lastVideoAt: daysAgo(30) }]),
+    });
+    t.check(
+      'backup merge stores the new channel while the check runs',
+      backupWhileHung.ok === true && backupWhileHung.added === 1,
+      JSON.stringify(backupWhileHung),
+    );
+    t.check(
+      'and does not fetch it yet',
+      !feedIdsOf(backupQueueFetch.calls).includes(BEAST),
+      JSON.stringify(feedIdsOf(backupQueueFetch.calls)),
+    );
+    releaseBackupHang();
+    await hungBackupSweep;
+    t.check(
+      'the new backup channel seeds after the check',
+      await waitUntil(async () => (await readChannels()).find((c) => c.id === BEAST)?.seeded === true),
+    );
+    t.check(
+      'and alerts only for the upload newer than lastVideoAt',
+      mock.notifications.length === 1 && mock.notifications[0].message === 'After backup',
+      JSON.stringify(mock.notifications),
+    );
+    await waitForIdle();
 
     t.section('clearing the watchlist');
 
@@ -1812,6 +2661,132 @@ export default async function run(t) {
     t.check('does not get its videos back when the check ends', (await readFeed()).length === 0, JSON.stringify(await readFeed()));
     t.check('or its channels', (await readChannels()).length === 0);
     t.check('or an alert', mock.notifications.length === 0, JSON.stringify(mock.notifications));
+
+    t.section('clear after the listed snapshot does not restore videos');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    let metaWritten = false;
+    let feedReadsAfterMeta = 0;
+    let clearedAfterSnapshot = false;
+    const origGet = globalThis.chrome.storage.local.get.bind(globalThis.chrome.storage.local);
+    const origSet = globalThis.chrome.storage.local.set.bind(globalThis.chrome.storage.local);
+    globalThis.chrome.storage.local.set = async (items) => {
+      if (items && Object.prototype.hasOwnProperty.call(items, 'videoMeta')) metaWritten = true;
+      return origSet(items);
+    };
+    globalThis.chrome.storage.local.get = async (keys) => {
+      const names = keyNames(keys);
+      if (metaWritten && names.includes('feed')) {
+        feedReadsAfterMeta++;
+        if (feedReadsAfterMeta >= 2 && !clearedAfterSnapshot) {
+          clearedAfterSnapshot = true;
+          await handleMessage({ type: 'clearChannels' });
+        }
+      }
+      return origGet(keys);
+    };
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'aftersnap01', t: 'After snapshot', at: AT.newest }]) },
+    });
+    try {
+      await runSweep({ scope: 'all' });
+    } finally {
+      globalThis.chrome.storage.local.get = origGet;
+      globalThis.chrome.storage.local.set = origSet;
+    }
+    t.check('the list was cleared after classification', clearedAfterSnapshot);
+    t.check(
+      'videos written after that snapshot do not come back',
+      (await readFeed()).length === 0,
+      JSON.stringify(await readFeed()),
+    );
+    t.check('the channel list stays empty', (await readChannels()).length === 0);
+    t.check('and no alert fires', mock.notifications.length === 0, JSON.stringify(mock.notifications));
+
+    t.section('clear then re-add during a check is a new listing');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    const addedAtBefore = (await readChannels())[0].addedAt;
+    metaWritten = false;
+    feedReadsAfterMeta = 0;
+    let relisted = false;
+    globalThis.chrome.storage.local.set = async (items) => {
+      if (items && Object.prototype.hasOwnProperty.call(items, 'videoMeta')) metaWritten = true;
+      return origSet(items);
+    };
+    globalThis.chrome.storage.local.get = async (keys) => {
+      const names = keyNames(keys);
+      if (metaWritten && names.includes('feed')) {
+        feedReadsAfterMeta++;
+        if (feedReadsAfterMeta >= 2 && !relisted) {
+          relisted = true;
+          await handleMessage({ type: 'clearChannels' });
+          await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: false });
+        }
+      }
+      return origGet(keys);
+    };
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'readdvid001', t: 'Should stay quiet', at: AT.newest }]) },
+    });
+    mock.notifications.length = 0;
+    try {
+      await runSweep({ scope: 'all' });
+    } finally {
+      globalThis.chrome.storage.local.get = origGet;
+      globalThis.chrome.storage.local.set = origSet;
+    }
+    const afterRelist = (await readChannels()).find((c) => c.id === MKBHD);
+    t.check('the same id was added back during the check', relisted && !!afterRelist);
+    t.check(
+      'the new listing has a new addedAt',
+      Number(afterRelist?.addedAt) > Number(addedAtBefore),
+      String(afterRelist?.addedAt),
+    );
+    t.check(
+      'this check does not write rows for the new listing',
+      !(await readFeed()).some((row) => row.v === 'readdvid001'),
+      JSON.stringify(await readFeed()),
+    );
+    t.check(
+      'and does not stamp lastVideoAt or seeded',
+      afterRelist?.seeded === false && !(afterRelist?.lastVideoAt > 0),
+      JSON.stringify(afterRelist),
+    );
+    t.check('and does not alert', mock.notifications.length === 0, JSON.stringify(mock.notifications));
+
+    t.section('clear during notify does not fire an alert');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    let feedWritten = false;
+    let clearedAtNotify = false;
+    globalThis.chrome.storage.local.set = async (items) => {
+      if (items && Object.prototype.hasOwnProperty.call(items, 'feed')) feedWritten = true;
+      return origSet(items);
+    };
+    globalThis.chrome.storage.local.get = async (keys) => {
+      const names = keyNames(keys);
+      if (feedWritten && names.includes('pollState') && !clearedAtNotify) {
+        clearedAtNotify = true;
+        await handleMessage({ type: 'clearChannels' });
+      }
+      return origGet(keys);
+    };
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'notifysnap1', t: 'Would alert', at: AT.newest }]) },
+    });
+    try {
+      await runSweep({ scope: 'all' });
+    } finally {
+      globalThis.chrome.storage.local.get = origGet;
+      globalThis.chrome.storage.local.set = origSet;
+    }
+    t.check('the list was cleared at notify time', clearedAtNotify);
+    t.check('the feed stays empty', (await readFeed()).length === 0, JSON.stringify(await readFeed()));
+    t.check('no desktop alert', mock.notifications.length === 0, JSON.stringify(mock.notifications));
 
     t.section('only videos that can stay in the feed are looked up');
 
@@ -1863,6 +2838,37 @@ export default async function run(t) {
     installFetch({ feeds: { [MKBHD]: retryFeed } });
     await runSweep({ scope: 'all' });
     t.check('so it still alerts when the lookup works', mock.notifications.length === 1 && mock.notifications[0].message === 'Try again', JSON.stringify(mock.notifications));
+
+    t.section('RSS without published uses the player time');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    const noPubXml = rssXml(MKBHD, 'Marques Brownlee', [
+      { v: 'nopub000001', t: 'No published', at: AT.newest, omitPublished: true },
+    ]);
+    t.check('the test feed omits published', !noPubXml.includes('<published>'));
+    installFetch({
+      feeds: { [MKBHD]: noPubXml },
+      players: {
+        nopub000001: playerJson('nopub000001', {
+          title: 'No published',
+          publishDate: '2026-09-12T12:00:00+00:00',
+        }),
+      },
+    });
+    mock.notifications.length = 0;
+    await runSweep({ scope: 'all' });
+    const noPubRow = (await readFeed()).find((row) => row.v === 'nopub000001');
+    t.check(
+      'the row uses the player time',
+      noPubRow?.at === AT.newest,
+      JSON.stringify(noPubRow),
+    );
+    t.check(
+      'videoMeta stored the player time, not 0',
+      (await readVideoMeta()).nopub000001?.at === AT.newest,
+      JSON.stringify((await readVideoMeta()).nopub000001),
+    );
 
     t.section('a long check keeps the worker awake');
 
@@ -1938,7 +2944,8 @@ export default async function run(t) {
     t.check('the welcome page may send what the popup sends', Array.isArray(fromWelcome.res.channels), JSON.stringify(fromWelcome.res));
 
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
-      'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode', 'importBackup', 'importTakeout', 'undoRemove']) {
+      'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
+      'importBackup', 'importTakeout', 'undoRemove']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }

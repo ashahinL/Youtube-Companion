@@ -42,6 +42,7 @@ import {
   markNotified,
   hasNotified,
   backoffDelayMs,
+  isSameListing,
 } from '../lib/store.js';
 
 const ALARM_ALL = 'poll-all';
@@ -65,7 +66,7 @@ const CHANNEL_FETCH_DELAY_MS = 250;
 // A channel imported from a file has a name but no picture or handle, and
 // filling one in is a Videos-tab browse of about 35 KB. A few per check keeps
 // an import of hundreds from doubling the requests of the checks after it.
-const HEADER_FILLS_PER_SWEEP = 20;
+const HEADER_FILLS_PER_SWEEP = 10;
 const HEADER_RETRY_MS = 24 * 60 * 60_000;
 
 // Chrome stops a worker after 30 seconds without an event or an extension
@@ -84,6 +85,31 @@ const CONTENT_SCRIPT_MESSAGES = new Set(['audioMode.boot', 'audioMode.shortcut']
 // In-memory latch so two overlapping calls in the same worker cannot both
 // pass the storage read. The durable twin is pollState.running.
 let sweepActive = false;
+
+// A poll-all or poll-fav that fired while another sweep was in flight.
+// Memory only: a killed worker just waits for the next period.
+let skippedScheduled = null;
+let activeCoverage = null;
+
+// Channel ids added while a check is running, or after Add replies and
+// before their silent seed. One follow-up sweep covers the whole set.
+const pendingSeeds = new Set();
+let seeding = false;
+
+function sweepCoverage({ scope, onlyId, onlyIds }) {
+  if (onlyId || (onlyIds && onlyIds.length)) return 'partial';
+  return scope === 'favorites' ? 'favorites' : 'all';
+}
+
+function scheduledCoveredBy(running, incoming) {
+  if (running === 'all') return incoming === 'all' || incoming === 'favorites';
+  return running === incoming;
+}
+
+function rememberSkipped(scope) {
+  if (scope === 'all') skippedScheduled = 'all';
+  else if (scope === 'favorites' && skippedScheduled !== 'all') skippedScheduled = 'favorites';
+}
 
 // Fast path for the video that was announced. MV3 kills the worker shortly
 // after idle, so the click handler must also rebuild from storage.
@@ -191,7 +217,9 @@ export async function reconcileRunning() {
 
 // Alarm and popup-message wakes do not fire onStartup. Reconcile before
 // any sweep reads the flag, including one delivered in this same wake.
-const reconciled = reconcileRunning().catch(() => {});
+// The rejection is not swallowed here: runSweep still recovers a leftover
+// running flag when this worker is not sweeping.
+const reconciled = reconcileRunning();
 
 let originRulePromise = null;
 
@@ -304,10 +332,22 @@ async function collectState() {
   return { settings, channels, feed, pollState };
 }
 
-function pickChannels(channels, { scope, onlyId }) {
+function pickChannels(channels, { scope, onlyId, onlyIds }) {
+  if (onlyIds && onlyIds.length) {
+    const want = new Set(onlyIds);
+    return channels.filter((ch) => want.has(ch.id));
+  }
   if (onlyId) return channels.filter((ch) => ch.id === onlyId);
   if (scope === 'favorites') return channels.filter((ch) => ch.favorite);
   return channels.slice();
+}
+
+function listingGenerations(channels) {
+  const generations = new Map();
+  for (const ch of channels || []) {
+    if (ch?.id) generations.set(ch.id, Number(ch.addedAt) || 0);
+  }
+  return generations;
 }
 
 /**
@@ -337,8 +377,8 @@ async function classifyIds(ids, videoMeta, fetchImpl, atById) {
       const cls = await classifyVideo(id, { fetch: fetchImpl });
       const at = atById.get(id);
       const rec = { k: cls.k, d: cls.d, st: cls.st };
-      if (Number.isFinite(at)) rec.at = at;
-      else if (Number.isFinite(meta[id]?.at)) rec.at = meta[id].at;
+      if (at > 0) rec.at = at;
+      else if (meta[id]?.at > 0) rec.at = meta[id].at;
       else if (cls.pa > 0) rec.at = cls.pa;
       if (cls.k === 'live' || cls.k === 'premiere') rec.ck = Date.now();
       meta = putVideoMeta(meta, { [id]: rec });
@@ -367,7 +407,7 @@ function feedFloor(feed, atById, maxItems) {
   const times = new Map();
   for (const row of feed || []) {
     const at = Number(row?.at);
-    if (row?.v && Number.isFinite(at)) times.set(row.v, at);
+    if (row?.v && at > 0) times.set(row.v, at);
   }
   for (const [v, at] of atById) times.set(v, at);
   if (!(cap > 0) || times.size <= cap) return -Infinity;
@@ -430,6 +470,7 @@ function channelError(err) {
 }
 
 function shouldNotifyItem(item, channel, settings, poll) {
+  if (!channel) return false;
   if (!settings.alerts.enabled) return false;
   if (item.k === 'short' && !settings.feed.showShorts) return false;
   if (hasNotified(poll, item.v)) return false;
@@ -455,9 +496,17 @@ async function notifyChannel(channel, items, settings) {
   });
 }
 
-async function notifyNewItems({ added, channels, unseeded, quiet, settings }) {
+async function notifyNewItems({ added, unseeded, quiet, settings, generations }) {
   let poll = await readPollState();
-  const byId = new Map(channels.map((ch) => [ch.id, ch]));
+  const liveChannels = await readChannels();
+  const live = new Map();
+  const byId = new Map();
+  for (const ch of liveChannels) {
+    if (!ch?.id) continue;
+    live.set(ch.id, Number(ch.addedAt) || 0);
+    if (!isSameListing(ch.id, live, generations)) continue;
+    byId.set(ch.id, ch);
+  }
   const silent = (item) => unseeded.has(item.c) || quiet.has(item.v);
 
   const seedIds = [];
@@ -498,12 +547,21 @@ async function notifyNewItems({ added, channels, unseeded, quiet, settings }) {
   }
 }
 
-async function performSweep({ scope, onlyId }) {
+async function performSweep({ scope, onlyId, onlyIds }) {
   const settings = await readSettings();
   const fetchImpl = globalThis.fetch;
   const allChannels = await readChannels();
-  const list = pickChannels(allChannels, { scope, onlyId });
-  const unseeded = new Set(list.filter((ch) => !ch.seeded).map((ch) => ch.id));
+  const generations = listingGenerations(allChannels);
+  const list = pickChannels(allChannels, { scope, onlyId, onlyIds });
+  const unseeded = new Set();
+  const silentNew = new Set();
+  for (const ch of list) {
+    if (ch.seeded) continue;
+    unseeded.add(ch.id);
+    // lastVideoAt from a backup already quiets old rows; a full silent
+    // seed would also hide uploads posted after the file was written.
+    if (!(Number(ch.lastVideoAt) > 0)) silentNew.add(ch.id);
+  }
   const incoming = [];
   let pushedBack = false;
 
@@ -536,7 +594,7 @@ async function performSweep({ scope, onlyId }) {
   const atById = new Map();
   for (const { entries } of succeeded) {
     for (const entry of entries) {
-      if (entry?.v && Number.isFinite(entry.at)) atById.set(entry.v, entry.at);
+      if (entry?.v && entry.at > 0) atById.set(entry.v, entry.at);
     }
   }
   const floor = feedFloor(await readFeed(), atById, settings.feed.maxItems);
@@ -574,15 +632,21 @@ async function performSweep({ scope, onlyId }) {
     // made room, or a Videos-tab row reaching past the feed's window because
     // that tab leaves out shorts. Either would alert for old videos.
     const newestBefore = Math.max(Number(channel.lastVideoAt) || 0, newestAt(feedNow, channel.id));
+    // A restored backup can be months old. lastVideoAt only quiets rows the
+    // file already knew; anything posted after it but long before this
+    // listing would otherwise fire one alert per channel.
+    const restoreFloor = (!channel.seeded && Number(channel.lastVideoAt) > 0)
+      ? (Number(channel.addedAt) || 0) - 24 * 60 * 60_000
+      : -Infinity;
     let newest = 0;
     for (const entry of entries) {
       if (tooOld.has(entry.v)) newest = Math.max(newest, atById.get(entry.v));
       const rec = videoMeta[entry.v];
       if (!rec || !rec.k) continue;
-      const at = Number.isFinite(entry.at) ? entry.at : Number(rec.at);
+      const at = entry.at > 0 ? entry.at : Number(rec.at);
       if (!(at > 0)) continue;
       newest = Math.max(newest, at);
-      if (at <= newestBefore) quiet.add(entry.v);
+      if (at <= newestBefore || at < restoreFloor) quiet.add(entry.v);
       incoming.push(itemFromEntry({ ...entry, at }, channel.id, rec));
       incomingIds.add(entry.v);
     }
@@ -600,13 +664,10 @@ async function performSweep({ scope, onlyId }) {
     incoming.push({ ...existing, k: rec.k, d: rec.d, st: rec.st });
   }
 
-  // A check takes minutes on a long list, and the list can change meanwhile.
-  // Rows from a channel removed, or a list cleared, mid-check would come back
-  // into the feed with no channel behind them.
-  const listed = new Set((await readChannels()).map((ch) => ch.id));
   const { feed, added } = await applyFeedMerge(
-    incoming.filter((item) => listed.has(item.c)),
+    incoming,
     settings.feed.maxItems,
+    generations,
   );
 
   for (const { channel } of succeeded) {
@@ -627,9 +688,9 @@ async function performSweep({ scope, onlyId }) {
   if (!pushedBack) {
     pushedBack = await fillHeaders(succeeded.map((s) => s.channel), patchChannel, fetchImpl);
   }
-  const channels = await updateChannels(patches);
+  await updateChannels(patches, generations);
 
-  await notifyNewItems({ added, channels, unseeded, quiet, settings });
+  await notifyNewItems({ added, unseeded: silentNew, quiet, settings, generations });
 
   const now = Date.now();
   if (pushedBack) {
@@ -642,7 +703,7 @@ async function performSweep({ scope, onlyId }) {
     return { ok: false, error: 'slow down', until, added: added.length };
   }
   const patch = { backoffLevel: 0, backoffUntil: 0 };
-  if (!onlyId) {
+  if (!onlyId && !(onlyIds && onlyIds.length)) {
     if (scope === 'favorites') patch.lastFavPollAt = now;
     else patch.lastPollAt = now;
   }
@@ -656,14 +717,33 @@ async function performSweep({ scope, onlyId }) {
  * One worker, one sweep. Overlapping passes would both treat the same
  * upload as new and fire duplicate alerts.
  */
-export async function runSweep({ scope = 'all', onlyId = null } = {}) {
-  await reconciled;
+export async function runSweep({
+  scope = 'all',
+  onlyId = null,
+  onlyIds = null,
+  scheduled = false,
+} = {}) {
+  try {
+    await reconciled;
+  } catch {
+    // Boot write failed. A leftover running flag is cleared below when this
+    // worker is not sweeping.
+  }
   await ensureYtOriginRule().catch(() => {});
-  if (sweepActive) return { ok: false, error: 'already running' };
+  if (sweepActive) {
+    if (scheduled && !onlyId && !(onlyIds && onlyIds.length)) {
+      const incoming = scope === 'favorites' ? 'favorites' : 'all';
+      if (!scheduledCoveredBy(activeCoverage, incoming)) rememberSkipped(incoming);
+    }
+    return { ok: false, error: 'already running' };
+  }
   sweepActive = true;
+  activeCoverage = sweepCoverage({ scope, onlyId, onlyIds });
   try {
     const state = await readPollState();
-    if (state.running) return { ok: false, error: 'already running' };
+    if (state.running) {
+      await writePollState({ running: false });
+    }
     // A manual refresh waits too: a tap during a block is still a request.
     const until = Number(state.backoffUntil) || 0;
     if (until > Date.now()) return { ok: false, error: 'slow down', until };
@@ -674,13 +754,66 @@ export async function runSweep({ scope = 'all', onlyId = null } = {}) {
       chromeApi().runtime.getPlatformInfo?.().catch?.(() => {});
     }, KEEPALIVE_MS);
     try {
-      return await performSweep({ scope, onlyId });
+      return await performSweep({ scope, onlyId, onlyIds });
     } finally {
       clearInterval(keepAlive);
       await writePollState({ running: false });
     }
   } finally {
     sweepActive = false;
+    const next = skippedScheduled;
+    skippedScheduled = null;
+    activeCoverage = null;
+    if (next) {
+      // Do not await: the caller (Refresh, a seed follow-up) would sit on
+      // the reply until this extra check finishes. The follow-up has its
+      // own keepalive; its finally flushes pendingSeeds.
+      void runSweep({ scope: next, scheduled: true }).catch(() => {});
+    } else {
+      void flushSeeds();
+    }
+  }
+}
+
+function queueSeed(id) {
+  if (!id) return;
+  pendingSeeds.add(id);
+  void flushSeeds();
+}
+
+async function flushSeeds() {
+  if (seeding) return;
+  seeding = true;
+  try {
+    while (pendingSeeds.size) {
+      if (sweepActive) return;
+      const poll = await readPollState();
+      const until = Number(poll.backoffUntil) || 0;
+      if (until > Date.now()) {
+        pendingSeeds.clear();
+        return;
+      }
+      const ids = [...pendingSeeds];
+      pendingSeeds.clear();
+      const listed = await readChannels();
+      const want = new Set(ids);
+      const targets = listed.filter((ch) => want.has(ch.id) && !ch.seeded).map((ch) => ch.id);
+      if (!targets.length) continue;
+      let result;
+      try {
+        result = await runSweep({ scope: 'all', onlyIds: targets });
+      } catch {
+        // Stored unseeded; the next check retries.
+        continue;
+      }
+      if (result && result.error === 'already running') {
+        for (const id of targets) pendingSeeds.add(id);
+        return;
+      }
+    }
+  } finally {
+    seeding = false;
+    if (pendingSeeds.size && !sweepActive) void flushSeeds();
   }
 }
 
@@ -697,20 +830,21 @@ export async function addChannelByInput(input) {
     avatar: header.avatar || '',
   });
   if (!added) return { ok: false, error: 'already added', id };
-  try {
-    await runSweep({ scope: 'all', onlyId: id });
-  } catch {
-    // The channel is already stored. A failed seed must not look like
-    // "could not add" — the next poll retries it.
-  }
   const channel = (await readChannels()).find((ch) => ch.id === id);
-  return { ok: true, channel };
+  const state = await collectState();
+  // Reply first. The silent seed runs after; if MV3 kills the worker, the
+  // row stays unseeded and the next check fills it without alerts.
+  queueSeed(id);
+  return { ok: true, channel, state };
 }
 
 /**
  * Adds the channels of a Takeout subscriptions.csv that are not on the list
- * yet, in one write, as long as the list stays within MAX_TAKEOUT_CHANNELS. They start unseeded, so their first check fills the feed
- * without alerts; the page that sent the file asks for that check.
+ * yet, in one write, as long as the list stays within MAX_TAKEOUT_CHANNELS.
+ * They start unseeded, so their first check fills the feed without alerts.
+ * New ids go on pendingSeeds so a check already in flight follows up;
+ * the page that sent the file also asks for a check, which covers them
+ * when nothing is running.
  */
 export async function importTakeout(text) {
   const parsed = parseTakeoutCsv(text);
@@ -738,7 +872,12 @@ export async function importTakeout(text) {
   // The limit is on the list, not the file: every channel is a request on
   // every check.
   if (channels.length + fresh.length > MAX_TAKEOUT_CHANNELS) return { ok: false, error: 'count' };
-  if (fresh.length) await writeChannels([...channels, ...fresh]);
+  if (fresh.length) {
+    await writeChannels([...channels, ...fresh]);
+    // Do not flushSeeds here: that would race the welcome page's own
+    // all-check. A live sweep's finally picks the ids up.
+    for (const ch of fresh) pendingSeeds.add(ch.id);
+  }
   return { ok: true, added: fresh.length, skipped: parsed.channels.length - fresh.length };
 }
 
@@ -847,6 +986,7 @@ export async function handleMessage(msg, sender) {
       case 'setFavorite': {
         await setFavorite(msg.id, msg.on);
         await syncAlarms();
+        await refreshBadge();
         return { ok: true };
       }
       case 'setMuted':
@@ -914,6 +1054,7 @@ export async function handleMessage(msg, sender) {
           parsed.data,
           mode,
         );
+        if (result.error) return { ok: false, error: result.error };
         await writeSettings(result.settings);
         await writeChannels(result.channels);
         // The file has no feed. Rows whose channel is gone would otherwise
@@ -923,11 +1064,25 @@ export async function handleMessage(msg, sender) {
         await saveFeed(feed);
         await syncAlarms();
         await refreshBadge();
+        // Same as Takeout: a live check already snapshotted the list.
+        const had = new Set(current.channels.map((ch) => ch.id));
+        let queued = false;
+        for (const ch of result.channels) {
+          if (!ch?.id) continue;
+          if (mode === 'replace' || !had.has(ch.id)) {
+            pendingSeeds.add(ch.id);
+            queued = true;
+          }
+        }
+        const state = await collectState();
+        // The popup does not send a sweep after a backup. Start one when
+        // nothing is already running; a live check's finally covers the rest.
+        if (queued && !sweepActive) void flushSeeds();
         return {
           ok: true,
           added: result.added,
           skipped: result.skipped,
-          state: await collectState(),
+          state,
         };
       }
       default:
@@ -959,8 +1114,8 @@ export async function onNotificationClicked(id) {
 }
 
 function onAlarm(alarm) {
-  if (alarm?.name === ALARM_ALL) return runSweep({ scope: 'all' }).catch(() => {});
-  if (alarm?.name === ALARM_FAV) return runSweep({ scope: 'favorites' }).catch(() => {});
+  if (alarm?.name === ALARM_ALL) return runSweep({ scope: 'all', scheduled: true }).catch(() => {});
+  if (alarm?.name === ALARM_FAV) return runSweep({ scope: 'favorites', scheduled: true }).catch(() => {});
 }
 
 /**
@@ -1069,6 +1224,6 @@ chromeApi().commands?.onCommand?.addListener((command, tab) => {
 });
 
 export const ready = Promise.all([
-  reconciled,
+  reconciled.catch(() => {}),
   ensureYtOriginRule().catch(() => {}),
 ]);

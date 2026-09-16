@@ -302,6 +302,18 @@ export default async function run(t) {
   }
   t.check('garbage XML throws YtError parse', feedThrew);
 
+  const noPublished = parseFeedXml(rssMkbhd.replace(/<published>[\s\S]*?<\/published>/gi, ''));
+  t.check(
+    'a feed with no published tags still has the entries',
+    noPublished.entries.length === mkbhdFeed.entries.length,
+    String(noPublished.entries.length),
+  );
+  t.check(
+    'a missing published is at 0, not a real time',
+    noPublished.entries.every((e) => e.at === 0),
+    JSON.stringify(noPublished.entries.slice(0, 2).map((e) => e.at)),
+  );
+
   const beastFeed = parseFeedXml(rssBeast);
   const beastIds = beastFeed.entries.map((e) => e.v);
   t.check('MrBeast feed has 15 entries', beastIds.length === 15, String(beastIds.length));

@@ -31,6 +31,7 @@ const ERR = {
   id: 'A channel in that file has no valid channel id.',
   size: 'That file is too large to be a backup.',
   count: `That backup has more than ${MAX_BACKUP_CHANNELS} channels.`,
+  merge: `Merging that backup would go past ${MAX_BACKUP_CHANNELS} channels.`,
 };
 
 function isPlainObject(value) {
@@ -95,10 +96,14 @@ function exportChannel(raw) {
   };
 }
 
+/**
+ * A restore is a new listing, so addedAt is the import time — the first
+ * check quiets uploads older than 24 hours before that. lastVideoAt is
+ * kept so rows the file already knew stay quiet.
+ */
 function normalizeChannel(raw, now) {
   const id = usableId(raw?.id);
   if (!isChannelId(id)) return null;
-  const addedAt = Number(raw.addedAt);
   const lastVideoAt = Number(raw.lastVideoAt);
   return {
     id,
@@ -109,7 +114,7 @@ function normalizeChannel(raw, now) {
     avatar: isAvatarUrl(raw.avatar) ? raw.avatar : '',
     favorite: !!raw.favorite,
     muted: !!raw.muted,
-    addedAt: Number.isFinite(addedAt) ? addedAt : now,
+    addedAt: now,
     lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
     lastFetchAt: 0,
     lastError: null,
@@ -207,6 +212,19 @@ export function mergeBackup(current, incoming, mode) {
     seen.add(row.id);
     next.push(row);
     added++;
+  }
+
+  // Replace is already capped by parseBackup. Merge keeps every live
+  // channel, so live + new can pass the ceiling even when the file itself
+  // is under it. Refuse the whole file; adding a prefix would hide that.
+  if (!replace && next.length > MAX_BACKUP_CHANNELS) {
+    return {
+      settings,
+      channels: currentList.slice(),
+      added: 0,
+      skipped: 0,
+      error: ERR.merge,
+    };
   }
 
   return { settings, channels: next, added, skipped };

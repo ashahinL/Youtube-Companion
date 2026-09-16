@@ -10,3 +10,4 @@ The parser suite runs against these; it must never touch the network.
 | player.live.json | a live stream: isLive true, lengthSeconds "0", liveBroadcastDetails present |
 | player.normal-video.json | a normal video, captured with NO ?key= parameter |
 | player.premiere.synthetic.json | SYNTHETIC, not captured — upcoming premiere player response, derived from player.live.json |
+| owner.collab.three.json | videoOwnerRenderer `.data` for a 3-channel collab (`LR9Ou1eXjnA`, 2026-09-16); trimmed to attributedTitle + Collaborators listItems |

@@ -198,6 +198,22 @@ Measured in a browser on 2026-09-14. The line is
 - The player's `videoDetails.channelId` is the first channel listed
   (`UCGq-a57w-aPwyi3pW7XLiHw`), so adding a collab video by its watch URL adds
   that one.
+- **Three or more channels shorten the line.** Measured 2026-09-16 on
+  `LR9Ou1eXjnA`, English UI. `attributedTitle.content` was
+  `"Oligence AI and 2 more"` — one run covering the whole line, opening the
+  Collaborators dialog. That is the owner-line text the content script reads
+  from the DOM. The dialog still listed three `listItemViewModel` rows, each
+  `title.commandRuns.length === 1` with
+  `onTap.innertubeCommand.browseEndpoint.browseId`:
+  `"Oligence AI"` → `UC5HBA5awLB0LPr-a3pZV3IA` (subtitle
+  `"@oligenceai • 1.67K subscribers"`, each part wrapped in U+200E, U+2068
+  and U+2069), `"Omar El-Shenety (عمر الشنيطي)"` with U+202B, U+202C and
+  U+200E around the Arabic → `UCafZLto98Oot6ZXjd5eXKkQ`, `"BnSamy"` →
+  `UCNu8-f_GI4n0vLWG4Gj3Z5A`. `videoDetails.author` / `ownerChannelName`
+  was the first row (`"Oligence AI"`). The two-channel shape above keeps
+  both names on the line (`"A and B"`). The first name is always on the
+  line; names after it are not. The "and N more" words follow the UI
+  language. Trimmed renderer data: `test/fixtures/owner.collab.three.json`.
 - **On an in-page move the address changes first.** Collab to normal
   (`sL6OWsT47zc`) and back: the owner text, its links, the data, the avatar
   stack and `ytd-watch-flexy`'s `video-id` attribute all changed together,

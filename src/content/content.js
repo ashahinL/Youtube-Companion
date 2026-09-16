@@ -570,6 +570,13 @@
     return String(text || '').replace(/\s+/g, ' ').trim();
   }
 
+  // LRM/RLM, embeddings, isolates. A name or the owner line can wrap an
+  // RTL run in these; they are not part of the name and would make a
+  // collapsed indexOf miss.
+  function stripMarks(text) {
+    return String(text || '').replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
+  }
+
   /*
    * The owner line under the video. A normal video's is a link to the
    * channel; a collab video's is one link with no address, "A and B", beside
@@ -644,22 +651,32 @@
 
   /**
    * The bridge's answer is page data, so it is checked here: real channel ids,
-   * short names, each name on the owner line. Right after an in-page move the
-   * renderer can still hold the previous video's list; the line on screen
-   * is what rules that out.
+   * short names, more than one row. Right after an in-page move the renderer
+   * can still hold the previous video's list; the line on screen is what
+   * rules that out. Only the first name has to appear in it. Two-channel
+   * lines read "A and B"; three or more read "<first> and N more", and those
+   * last words follow the UI language, so later names are often absent.
+   * Direction marks on a name or on the line are ignored for that check;
+   * the returned name is still only collapsed.
    */
   function cleanCollaborators(list, ownerText) {
     if (!Array.isArray(list)) return [];
     const line = collapse(ownerText);
+    const lineKey = stripMarks(line);
     const seen = Object.create(null);
     const out = [];
+    let checkedFirst = false;
     for (let i = 0; i < list.length && out.length < MAX_COLLABORATORS; i++) {
       const row = list[i];
       if (!row || typeof row !== 'object') continue;
       const id = typeof row.id === 'string' ? row.id : '';
       const name = typeof row.name === 'string' ? collapse(row.name) : '';
-      if (!CHANNEL_ID_RE.test(id) || !name || name.length > 200 || seen[id]) continue;
-      if (line && line.indexOf(name) < 0) return [];
+      if (!name) continue;
+      if (!checkedFirst) {
+        checkedFirst = true;
+        if (line && lineKey.indexOf(stripMarks(name)) < 0) return [];
+      }
+      if (!CHANNEL_ID_RE.test(id) || name.length > 200 || seen[id]) continue;
       seen[id] = true;
       const handle = typeof row.handle === 'string' && HANDLE_RE.test(row.handle) ? row.handle : '';
       out.push({ id: id, handle: handle, name: name });

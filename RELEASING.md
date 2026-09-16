@@ -45,10 +45,12 @@ and wait in line again. Do that only for a fix that cannot wait.
 
 ## The number
 
-- New things or changes: next minor. `1.1.0` → `1.2.0`.
-- Only bug fixes: next patch. `1.1.0` → `1.1.1`.
-- `2.0.0` is kept for the listen-later queue and the launch.
-- Numbers go up by one and never skip.
+- The next ship is `2.0.0`. It jumps from the store's `1.0.0`. The files
+  still say `1.1.0` from an earlier plan; that number never shipped, and it
+  changes to `2.0.0` on ship day, not before.
+- After `2.0.0`, new things or changes: next minor. `2.0.0` → `2.1.0`.
+- After `2.0.0`, only bug fixes: next patch. `2.0.0` → `2.0.1`.
+- After `2.0.0`, numbers go up by one and never skip.
 - `manifest.json` takes numbers and dots only. No `-beta`.
 
 ## Ship day
@@ -56,8 +58,9 @@ and wait in line again. Do that only for a fix that cannot wait.
 1. **Check `dev`.** Clean `git status`, `npm run check` and `npm test` green,
    and the last GitHub Actions run on `dev` green. Steps 2 to 6 happen on
    `dev`.
-2. **Test by hand on youtube.com.** Reload the extension first (reloading
-   YouTube is not enough; check `data-am-beacon` on `<html>`). Then:
+2. **Test by hand on youtube.com.** Reload the extension on
+   `chrome://extensions` first, then reload the YouTube tab (reloading
+   YouTube alone does not load the new script). Then:
    - audio mode on and off
    - a feed video opened in audio mode
    - add a channel, remove it, undo

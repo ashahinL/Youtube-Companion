@@ -32,9 +32,13 @@ import {
   audioVolumeSelectValue,
   channelProblem,
   followView,
+  followActionState,
+  backupImportMessage,
   pageChannelsView,
   sleepMinutesLeft,
+  menuNavIndex,
 } from '../src/lib/view.js';
+import { MAX_BACKUP_CHANNELS } from '../src/lib/backup.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -782,6 +786,64 @@ export default async function run(t) {
     JSON.stringify(listless),
   );
 
+  t.section('follow button pending');
+
+  const followRows = [
+    { input: VERITASIUM, followed: false, name: 'Veritasium' },
+    { input: STARTALK, followed: false, name: 'StarTalk' },
+    { input: MK, followed: true, name: 'Marques Brownlee' },
+  ];
+  const idleFollow = followActionState(followRows, []);
+  t.check(
+    'nothing pending, unfollowed buttons stay enabled',
+    idleFollow[0].disabled === false && idleFollow[1].disabled === false
+      && idleFollow[0].pending === false && idleFollow[1].pending === false,
+    JSON.stringify(idleFollow),
+  );
+  const onePending = followActionState(followRows, [VERITASIUM]);
+  t.check(
+    'only the pending row is disabled',
+    onePending[0].disabled === true && onePending[0].pending === true
+      && onePending[1].disabled === false && onePending[1].pending === false,
+    JSON.stringify(onePending),
+  );
+  t.check(
+    'a followed row has no pending button',
+    onePending[2].followed === true && onePending[2].pending === false && onePending[2].disabled === false,
+    JSON.stringify(onePending[2]),
+  );
+  const twoPending = followActionState(followRows, [VERITASIUM, STARTALK]);
+  t.check(
+    'two pending rows can wait at once',
+    twoPending[0].pending && twoPending[1].pending && !twoPending[2].pending,
+    JSON.stringify(twoPending),
+  );
+  t.check(
+    'an empty pending list does not disable anyone',
+    followActionState(followRows, null).every((row) => !row.disabled),
+  );
+
+  t.section('backup import error');
+
+  t.check(
+    'merge past the cap maps to settingsImportTooMany',
+    same(backupImportMessage(`Merging that backup would go past ${MAX_BACKUP_CHANNELS} channels.`, MAX_BACKUP_CHANNELS), {
+      key: 'settingsImportTooMany',
+      subs: [String(MAX_BACKUP_CHANNELS)],
+    }),
+  );
+  t.check(
+    'any other backup error stays as the worker text',
+    same(backupImportMessage('That file is not valid JSON.', MAX_BACKUP_CHANNELS), {
+      key: '',
+      text: 'That file is not valid JSON.',
+    }),
+  );
+  t.check(
+    'an empty error is empty text, not the cap key',
+    same(backupImportMessage('', MAX_BACKUP_CHANNELS), { key: '', text: '' }),
+  );
+
   t.section('credited channels');
 
   const credited = pageChannelsView({
@@ -815,6 +877,18 @@ export default async function run(t) {
   t.check('minutes round up', sleepMinutesLeft(1000 + 61_000, 1000) === 2);
   t.check('a full minute left is one', sleepMinutesLeft(1000 + 60_000, 1000) === 1);
   t.check('a timer in the past is none', sleepMinutesLeft(500, 1000) === 0);
+
+  t.section('⋯ menu keyboard');
+
+  t.check('ArrowDown steps forward', menuNavIndex('ArrowDown', 0, 3) === 1);
+  t.check('ArrowDown wraps', menuNavIndex('ArrowDown', 2, 3) === 0);
+  t.check('ArrowUp steps back', menuNavIndex('ArrowUp', 1, 3) === 0);
+  t.check('ArrowUp wraps', menuNavIndex('ArrowUp', 0, 3) === 2);
+  t.check('Home is the first item', menuNavIndex('Home', 2, 3) === 0);
+  t.check('End is the last item', menuNavIndex('End', 0, 3) === 2);
+  t.check('other keys stay put', menuNavIndex('Enter', 1, 3) === 1);
+  t.check('one item stays on 0', menuNavIndex('ArrowDown', 0, 1) === 0);
+  t.check('no items is 0', menuNavIndex('ArrowDown', 0, 0) === 0);
 
   t.section('audio player control sync');
 

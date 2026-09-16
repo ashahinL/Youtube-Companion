@@ -7,12 +7,15 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- A clearer name in the stores: **Companion for YouTube: Audio Only & Feeds**.
 - Undo after removing a channel. The channel comes back with its star, its
   place in the list and its videos.
 - A Follow button. Open the popup on a YouTube channel or video you don't
   follow yet, and the Audio tab shows that channel with one button to add it.
   A video made by several channels lists each one with its own button, and a
-  ✔ on the ones you already follow.
+  ✔ on the ones you already follow. Follow and Add return right away; the
+  channel's videos load in the background with no alerts, so you can press
+  Follow on every channel of a collab video one after another.
 - The player card in the Audio tab shows a ✔ before a channel you follow.
 - A sleep timer in the Audio tab: pause after 15, 30 or 60 minutes. It keeps
   counting after you close the popup.
@@ -24,26 +27,32 @@ shipped yet waits under Unreleased. How a version ships:
   Takeout and pick it on the welcome page (or with **Import from YouTube** in
   the popup). The file is read on your device, nothing signs in, and the
   channels fill in without alerts. Their pictures arrive over the next few
-  checks.
+  checks. If a check is already running, imported channels load right after
+  it instead of waiting for the next one.
 - **Clear watchlist** in Settings → Backup removes every channel and its
   videos in one go, after asking. Handy after importing the wrong list, or
   before restoring a backup.
 - A welcome page on first install, in three steps: bring your channels, try
   audio mode, pin the icon. It never opens on an update.
-- Removing the extension opens a short page that asks why. Nothing is sent
-  unless you post the answers as a GitHub issue yourself.
+- Removing the extension opens a short page that asks why. It links to both
+  the Chrome Web Store and Edge Add-ons. Nothing is sent unless you post the
+  answers as a GitHub issue yourself.
 
 **Safer**
 - Only the popup can change your channels and settings. The script on YouTube
   pages can only ask the two audio-mode questions it needs.
 - Backup files are checked: real channel ids only, channel pictures only from
-  YouTube's image servers, at most 2,000 channels and 2 MB.
+  YouTube's image servers, at most 2,000 channels and 2 MB. Merging a backup
+  that would take the list past 2,000 channels is refused, with a clear
+  message.
 - When YouTube answers "too many requests" or shows its unusual-traffic page,
   checking stops and waits (15 minutes, then 30, up to 6 hours) instead of
-  carrying on. The Feeds tab says when the next check is.
+  carrying on. The Feeds tab says when the next check is. After an import,
+  the welcome page says so too.
 - Stricter page rules for the popup: it loads pictures only from YouTube's
   image servers, runs no plugins, and cannot be pointed at another base
   address.
+- Channel pictures and handles fill in 10 per check instead of 20.
 
 **Fixes**
 - The scrolling title in the Audio tab stays still, on two lines, when your
@@ -59,16 +68,16 @@ shipped yet waits under Unreleased. How a version ships:
 - The popup stays quick with a big feed. Feeds shows 50 videos at a time and
   adds more as you scroll, thumbnails load as they come into view, and typing
   in a box redraws only the tab you are on.
-- On a video made by several channels, the Follow card showed no name. It now
-  lists each channel.
+- On a video made by several channels, the Follow card showed no name — and
+  with three or more, no list at all. It now lists each channel.
 - A premiere days away is looked at a few times a day, not on every check.
 - A long list of channels no longer makes every check ask YouTube about
   thousands of videos: only the ones new enough to stay in the feed are looked
   up.
 - Removing a channel no longer lets older videos from your other channels
   back into the feed as alerts.
-- A channel removed while a check is running no longer has its videos come
-  back into Feeds when the check ends.
+- Removing, clearing or re-adding channels while a check is running no
+  longer brings old videos or alerts back when the check ends.
 - Adding a channel names it: "Added Marques Brownlee to your watchlist."
   instead of "Channel added successfully".
 - Removing a channel low in the Watchlist no longer jumps you to the top.
@@ -76,6 +85,18 @@ shipped yet waits under Unreleased. How a version ships:
 - A check of hundreds of channels keeps going to the end instead of stopping
   when the browser puts the extension to sleep.
 - Requests to YouTube carry its current web client version.
+- The −10 and +10 buttons in the Audio tab fit their labels.
+- Starring or unstarring a channel updates the toolbar badge right away.
+- A check that was cut off can no longer leave checks stuck until the
+  browser restarts.
+- A video whose upload time is missing from YouTube's feed no longer
+  disappears.
+- A scheduled check that comes due while another is running now runs right
+  after it.
+- Restoring a backup alerts for uploads made after the backup was saved.
+- The seek slider and Follow list are named for screen readers. The ⋯ menu
+  works with the arrow keys and Escape. Feed rows no longer nest buttons
+  inside a focusable row.
 
 **For contributors**
 - Tests run on every push (GitHub Actions). Node 22.2 or newer is needed.

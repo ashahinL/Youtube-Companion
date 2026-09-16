@@ -446,6 +446,17 @@ export default async function run(t) {
     JSON.stringify(collabBridge.posts[0]?.data),
   );
   t.check('collaborators takes no arguments', bridge.isAllowedCall('collaborators', ['x']) === false);
+  const threeOwnerData = JSON.parse(read('test/fixtures/owner.collab.three.json'));
+  const threeFromBridge = loadBridge(null, { owner: { data: threeOwnerData } }).bridge.readCollaborators();
+  t.check(
+    'collaborators reads three channels when the line names only the first',
+    JSON.stringify(threeFromBridge) === JSON.stringify([
+      { id: 'UC5HBA5awLB0LPr-a3pZV3IA', name: 'Oligence AI', handle: '@oligenceai' },
+      { id: 'UCafZLto98Oot6ZXjd5eXKkQ', name: 'Omar El-Shenety (\u202Bعمر الشنيطي\u202C\u200E)', handle: '' },
+      { id: 'UCNu8-f_GI4n0vLWG4Gj3Z5A', name: 'BnSamy', handle: '' },
+    ]),
+    JSON.stringify(threeFromBridge),
+  );
   t.check('a normal video has no list to read', loadBridge(null, { owner: { data: { title: {} } } }).bridge.readCollaborators().length === 0);
   t.check('no owner renderer, no list', loadBridge(null).bridge.readCollaborators().length === 0);
   const many = { data: JSON.parse(JSON.stringify(collabOwner.data)) };
@@ -1442,6 +1453,17 @@ export default async function run(t) {
   const MKBHD_ID = 'UCBJycsmduvYEL83R_U4JriQ';
   const DOAC_ID = 'UCGq-a57w-aPwyi3pW7XLiHw';
   const STARTALK_ID = 'UCqoAEDirJPjEUFcF2FklnBA';
+  const OLIGENCE_ID = 'UC5HBA5awLB0LPr-a3pZV3IA';
+  const OMAR_ID = 'UCafZLto98Oot6ZXjd5eXKkQ';
+  const BNSAMY_ID = 'UCNu8-f_GI4n0vLWG4Gj3Z5A';
+  const threeLine = 'Oligence AI and 2 more';
+  const omarName = 'Omar El-Shenety (\u202Bعمر الشنيطي\u202C\u200E)';
+  const threeRows = [
+    { id: OLIGENCE_ID, name: 'Oligence AI', handle: '@oligenceai' },
+    { id: OMAR_ID, name: omarName, handle: '' },
+    { id: BNSAMY_ID, name: 'BnSamy', handle: '' },
+  ];
+  const threeExpected = threeRows.map(({ id, handle, name }) => ({ id, handle, name }));
 
   const normalOwner = bootPage({ owner: { links: [{ href: '/@mkbhd', text: '' }, { href: '/@mkbhd', text: ' Marques Brownlee\n' }] } });
   const normalRead = await normalOwner.ask({ type: 'audioMode.player' });
@@ -1538,6 +1560,51 @@ export default async function run(t) {
       { id: STARTALK_ID, handle: '', name: 'StarTalk' },
     ]),
     JSON.stringify(cleaned),
+  );
+
+  const three = bootPage({
+    owner: { collab: true, links: [{ text: '' }, { text: threeLine }] },
+    collaborators: threeRows,
+  });
+  const threeRead = await three.ask({ type: 'audioMode.player' });
+  t.check(
+    'a three-channel line credits every channel from the bridge',
+    threeRead.collab === true && JSON.stringify(threeRead.channels) === JSON.stringify(threeExpected),
+    JSON.stringify(threeRead.channels),
+  );
+  t.check('the shortened line stands in as the channel name', threeRead.channel === threeLine, threeRead.channel);
+
+  const threeCleaned = normalOwner.sandbox.AudioModeContent.cleanCollaborators(threeRows, threeLine);
+  t.check(
+    'cleaning a shortened three-channel line keeps every row, in order, with ids and handles',
+    JSON.stringify(threeCleaned) === JSON.stringify(threeExpected),
+    JSON.stringify(threeCleaned),
+  );
+
+  const staleFirst = normalOwner.sandbox.AudioModeContent.cleanCollaborators(threeRows, 'Veritasium and 2 more');
+  t.check(
+    'a list whose first name is not on the line is the last video\'s, and dropped',
+    staleFirst.length === 0,
+    JSON.stringify(staleFirst),
+  );
+
+  const markedName = '\u200e\u2068Oligence AI\u2069';
+  const markedFirst = normalOwner.sandbox.AudioModeContent.cleanCollaborators([
+    { id: OLIGENCE_ID, name: markedName, handle: '@oligenceai' },
+    { id: OMAR_ID, name: omarName, handle: '' },
+    { id: BNSAMY_ID, name: 'BnSamy', handle: '' },
+  ], threeLine);
+  t.check(
+    'a first name wrapped in direction marks still matches the line',
+    markedFirst.length === 3 && markedFirst[0].id === OLIGENCE_ID && markedFirst[0].name === markedName,
+    JSON.stringify(markedFirst),
+  );
+
+  const markedLine = normalOwner.sandbox.AudioModeContent.cleanCollaborators(threeRows, '\u200e\u2068Oligence AI\u2069 and 2 more');
+  t.check(
+    'direction marks on the owner line still match the first name',
+    JSON.stringify(markedLine) === JSON.stringify(threeExpected),
+    JSON.stringify(markedLine),
   );
 
   const scaled = bootPage({

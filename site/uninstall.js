@@ -25,7 +25,8 @@
       send: 'Send on GitHub',
       sendNote: 'Nothing is sent from this page. The button opens a new GitHub issue with your answers filled in, and you post it yourself. That needs a GitHub account.',
       again: 'Changed your mind?',
-      store: 'Get it again from the Chrome Web Store',
+      storeChrome: 'Get it again from the Chrome Web Store',
+      storeEdge: 'Get it again from Edge Add-ons',
       switchTo: 'العربية',
     },
     ar: {
@@ -43,7 +44,8 @@
       send: 'أرسل عبر GitHub',
       sendNote: 'لا يُرسَل شيء من هذه الصفحة. يفتح الزر بلاغًا جديدًا على GitHub فيه إجاباتك، وأنت من ينشره. يتطلب ذلك حسابًا على GitHub.',
       again: 'غيّرت رأيك؟',
-      store: 'ثبّتها مجددًا من سوق Chrome الإلكتروني',
+      storeChrome: 'ثبّتها مجددًا من سوق Chrome الإلكتروني',
+      storeEdge: 'ثبّتها مجددًا من إضافات Microsoft Edge',
       switchTo: 'English',
     },
   };

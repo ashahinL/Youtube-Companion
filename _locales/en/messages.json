@@ -1,7 +1,11 @@
 {
   "extName": {
+    "message": "Companion for YouTube: Audio Only & Feeds",
+    "description": "Extension name in chrome://extensions and the store listing. It says what the extension does. YouTube describes what it is for and is never the name itself."
+  },
+  "appName": {
     "message": "Companion for YouTube",
-    "description": "Extension name in chrome://extensions, the store listing, and the popup title. YouTube describes what it is for and is never the name itself."
+    "description": "Short name in the popup header, the popup page title and the welcome page. The full store name does not fit the 400px popup."
   },
   "extDescription": {
     "message": "Follow YouTube channels without an account: one merged feed, alerts on new uploads, and a low-data audio mode.",
@@ -675,6 +679,16 @@
       }
     }
   },
+  "settingsImportTooMany": {
+    "message": "Merging that backup would go past $MAX$ channels.",
+    "description": "Error when a Merge import, with the channels already on the list, would pass the cap. $MAX$ is the limit.",
+    "placeholders": {
+      "max": {
+        "content": "$1",
+        "example": "2000"
+      }
+    }
+  },
   "settingsExportDone": {
     "message": "Exported $COUNT$ channels.",
     "description": "Status after a backup file is downloaded. $COUNT$ is the number of channels written.",
@@ -864,6 +878,24 @@
       "title": {
         "content": "$1",
         "example": "A lecture"
+      }
+    }
+  },
+  "audioSeek": {
+    "message": "Seek",
+    "description": "Accessible name of the player-card seek slider."
+  },
+  "audioSeekValue": {
+    "message": "$CURRENT$ of $DURATION$",
+    "description": "Spoken position of the seek slider. $CURRENT$ is elapsed time and $DURATION$ is the video length, both as m:ss or h:mm:ss.",
+    "placeholders": {
+      "current": {
+        "content": "$1",
+        "example": "1:23"
+      },
+      "duration": {
+        "content": "$2",
+        "example": "10:05"
       }
     }
   },
@@ -1141,6 +1173,27 @@
   "welcomeImportAddedSkipped": {
     "message": "Added $ADDED$ channels; $SKIPPED$ were already on your list. Their latest videos arrive over the next few minutes, with no alerts.",
     "description": "Status after an import. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
+    "placeholders": {
+      "added": {
+        "content": "$1"
+      },
+      "skipped": {
+        "content": "$2"
+      }
+    }
+  },
+  "welcomeImportSlowDown": {
+    "message": "Added $COUNT$ channels. YouTube asked us to slow down, so their latest videos arrive after the pause, with no alerts.",
+    "description": "Status after an import when a check could not start because YouTube answered 429 or sent its unusual-traffic page. $COUNT$ is the number of channels added.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "welcomeImportSlowDownSkipped": {
+    "message": "Added $ADDED$ channels; $SKIPPED$ were already on your list. YouTube asked us to slow down, so their latest videos arrive after the pause, with no alerts.",
+    "description": "Status after an import, with some channels already on the list, when a check could not start because YouTube asked us to slow down. $ADDED$ is new channels; $SKIPPED$ were already on the list.",
     "placeholders": {
       "added": {
         "content": "$1"

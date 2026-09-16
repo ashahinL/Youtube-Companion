@@ -3,8 +3,10 @@
  * rows show, whether Add is live, which empty state applies, which
  * YouTube tab the player drives, when the player card may sync a
  * control, how audioStats fold into the four cards, how a failed channel
- * is described, when the Follow card shows, and which credited channels
- * are followed. Pure — no DOM, no chrome, no clock.
+ * is described, when the Follow card shows, which credited channels
+ * are followed, which Follow buttons wait, how a backup merge-over-cap
+ * error is named, and which ⋯ menu item Arrow/Home/End would select.
+ * Pure — no DOM, no chrome, no clock.
  */
 
 import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
@@ -319,10 +321,57 @@ export function followView({ tab, page, channels, feed, core }) {
   return { show: true, kind: 'channel', rows: [{ name, input: url, followed: false }] };
 }
 
+/**
+ * Which Follow buttons wait, given the inputs already in flight.
+ * Only a pending row is disabled; a followed row has no button.
+ */
+export function followActionState(rows, pendingInputs) {
+  const pending = new Set(
+    pendingInputs instanceof Set
+      ? pendingInputs
+      : (Array.isArray(pendingInputs) ? pendingInputs : []),
+  );
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const input = row?.input || '';
+    const followed = !!row?.followed;
+    const waiting = !followed && input !== '' && pending.has(input);
+    return { input, followed, pending: waiting, disabled: waiting };
+  });
+}
+
+/**
+ * Backup merge past the channel cap is an English sentence from the worker.
+ * Map that one; every other backup error is already a sentence to show as-is.
+ */
+export function backupImportMessage(error, maxChannels) {
+  const max = Number(maxChannels);
+  const code = String(error || '');
+  if (Number.isFinite(max) && code === `Merging that backup would go past ${max} channels.`) {
+    return { key: 'settingsImportTooMany', subs: [String(max)] };
+  }
+  return { key: '', text: code };
+}
+
 /** Whole minutes left on a sleep timer, rounded up; 0 when none runs. */
 export function sleepMinutesLeft(sleepAt, now) {
   const left = Number(sleepAt) - Number(now);
   return Number.isFinite(left) && left > 0 ? Math.ceil(left / 60000) : 0;
+}
+
+/**
+ * Next ⋯-menu item for Arrow/Home/End. Wraps at both ends so Down
+ * from the last item is the first, matching what a role=menu does.
+ */
+export function menuNavIndex(key, current, count) {
+  const n = Math.max(0, Number(count) || 0);
+  if (n === 0) return 0;
+  const raw = Number(current);
+  const i = Number.isFinite(raw) ? Math.min(Math.max(0, Math.trunc(raw)), n - 1) : 0;
+  if (key === 'Home') return 0;
+  if (key === 'End') return n - 1;
+  if (key === 'ArrowDown') return (i + 1) % n;
+  if (key === 'ArrowUp') return (i - 1 + n) % n;
+  return i;
 }
 
 export function watchlistView({ channels, feed, query }) {

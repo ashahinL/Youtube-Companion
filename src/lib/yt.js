@@ -380,7 +380,9 @@ export function parseFeedXml(xml) {
     entries.push({
       v,
       title: tagText(block, 'title'),
-      at: Number.isFinite(at) ? at : 0,
+      // Missing or invalid <published> is 0. Only at > 0 is a real time;
+      // treating 0 as one overwrites the player and that id is never classified again.
+      at: at > 0 ? at : 0,
       views,
       description: tagText(block, 'media:description'),
     });
