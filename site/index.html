@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Companion for YouTube</title>
+    <meta name="description" content="Follow YouTube channels without a Google account: one merged feed, alerts on new uploads, and a low-data audio mode." />
+    <link rel="icon" href="images/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="canonical" href="https://ashahinl.github.io/Youtube-Companion/" />
+    <meta property="og:title" content="Companion for YouTube" />
+    <meta property="og:description" content="Follow YouTube channels without a Google account: one merged feed, alerts on new uploads, and a low-data audio mode." />
+    <meta property="og:image" content="https://ashahinl.github.io/Youtube-Companion/images/home-feeds.png" />
+    <meta property="og:url" content="https://ashahinl.github.io/Youtube-Companion/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://ashahinl.github.io/Youtube-Companion/images/home-feeds.png" />
+    <!-- One page, no analytics, nothing loaded from anywhere else. -->
+    <style>
+      :root {
+        --bg: #0f0f14;
+        --surface: #17171f;
+        --border: rgba(255, 255, 255, 0.1);
+        --text: #f1f1f4;
+        --text-dim: rgba(241, 241, 244, 0.64);
+        --accent: #7c5cf0;
+        --accent-text: #a58cff;
+        --on-accent: #ffffff;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #ffffff;
+          --surface: #f6f6f8;
+          --border: rgba(0, 0, 0, 0.12);
+          --text: #16161a;
+          --text-dim: rgba(22, 22, 26, 0.66);
+          --accent: #6d4ae8;
+          --accent-text: #5534d6;
+          --on-accent: #ffffff;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 400 15px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+
+      a {
+        color: var(--accent-text);
+      }
+
+      a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .wrap {
+        max-width: 760px;
+        margin-inline: auto;
+        padding-inline: 20px;
+      }
+
+      header.wrap {
+        display: flex;
+        padding-block-start: 20px;
+      }
+
+      #switch-lang {
+        margin-inline-start: auto;
+      }
+
+      main.wrap {
+        padding-block-end: 8px;
+      }
+
+      h1,
+      h2 {
+        text-wrap: balance;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 650;
+        line-height: 1.25;
+      }
+
+      h2 {
+        margin-block: 0 8px;
+        margin-inline: 0;
+        font-size: 20px;
+        font-weight: 650;
+        line-height: 1.3;
+      }
+
+      p {
+        margin-block: 0 16px;
+        margin-inline: 0;
+      }
+
+      .dim {
+        color: var(--text-dim);
+        font-size: 14px;
+      }
+
+      .hero {
+        display: grid;
+        gap: 28px;
+        align-items: center;
+        margin-block: 28px 8px;
+      }
+
+      .lede {
+        margin-block-start: 12px;
+        font-size: 17px;
+        line-height: 1.5;
+      }
+
+      .install {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-block: 20px 12px;
+      }
+
+      .btn {
+        display: inline-block;
+        padding-block: 10px;
+        padding-inline: 18px;
+        border-radius: 9px;
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--accent-text);
+        box-shadow: inset 0 0 0 1px var(--border);
+      }
+
+      .mark {
+        display: block;
+        width: 48px;
+        height: 48px;
+        margin-block: 0 14px;
+        margin-inline: 0;
+        border-radius: 11px;
+      }
+
+      .shot {
+        display: block;
+        width: min(240px, 100%);
+        height: auto;
+        margin-inline: auto;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+
+      section {
+        margin-block: 40px;
+      }
+
+      .split {
+        display: grid;
+        gap: 24px;
+        align-items: center;
+      }
+
+      footer.wrap {
+        padding-block: 24px 56px;
+        border-block-start: 1px solid var(--border);
+      }
+
+      .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 20px;
+        margin-block-end: 16px;
+      }
+
+      .legal {
+        margin-block: 0;
+        margin-inline: 0;
+        color: var(--text-dim);
+        font-size: 13px;
+      }
+
+      @media (min-width: 720px) {
+        .hero {
+          grid-template-columns: minmax(0, 1fr) 300px;
+          gap: 40px;
+        }
+
+        .hero .shot {
+          width: 300px;
+          margin-inline: 0;
+        }
+
+        .split {
+          grid-template-columns: minmax(0, 1fr) 240px;
+          gap: 40px;
+          align-items: stretch;
+        }
+
+        .split > div {
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .split .shot {
+          margin-inline: 0;
+          min-height: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="wrap">
+      <a id="switch-lang" href="?lang=ar" lang="ar">العربية</a>
+    </header>
+    <main class="wrap">
+      <section class="hero">
+        <div>
+          <img class="mark" src="images/icon-192.png" width="48" height="48" alt="" />
+          <h1 data-text="title">Companion for YouTube</h1>
+          <p class="lede" data-text="lede">Follow YouTube channels without a Google account: one merged feed, alerts on new uploads, and a low-data audio mode.</p>
+          <p class="install">
+            <a class="btn" href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd" data-text="storeChrome">Chrome Web Store</a>
+            <a class="btn btn-ghost" href="https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh" data-text="storeEdge">Edge Add-ons</a>
+          </p>
+          <p class="dim" data-text="free">Free, open source, no account.</p>
+        </div>
+        <img
+          class="shot"
+          src="images/home-feeds.png"
+          width="400"
+          height="600"
+          decoding="async"
+          data-text="heroAlt"
+          data-src="heroSrc"
+          alt="The Feeds tab, with every new video from your channels in one list."
+        />
+      </section>
+
+      <section aria-labelledby="feeds-title">
+        <h2 id="feeds-title" data-text="feedsTitle">Feeds</h2>
+        <p data-text="feedsBody">Every new video from the channels you follow, in one list, newest first. Named groups narrow it. Live streams and premieres are tagged. Shorts stay hidden unless you want them. A small dot marks what arrived since you last opened the popup.</p>
+      </section>
+
+      <section class="split" aria-labelledby="watchlist-title">
+        <div>
+          <h2 id="watchlist-title" data-text="watchlistTitle">Watchlist</h2>
+          <p data-text="watchlistBody">Add a channel by pasting its link or @handle, or press Add on the tab you are on. Import your YouTube subscriptions from a Google Takeout file; it is read on your device and nothing signs in. Star favourites. Mute alerts for one channel from its menu; its videos still show in the feed.</p>
+        </div>
+        <img
+          class="shot"
+          src="images/home-watchlist.png"
+          width="400"
+          height="600"
+          loading="lazy"
+          decoding="async"
+          data-text="watchlistAlt"
+          data-src="watchlistSrc"
+          alt="The Watchlist tab, with channels added by link."
+        />
+      </section>
+
+      <section class="split" aria-labelledby="player-title">
+        <div>
+          <h2 id="player-title" data-text="playerTitle">Player</h2>
+          <p data-text="playerBody">Audio mode pins the video to 144p and covers it, so you keep the sound and use about 8× less data than 720p. Seek, skip 10 seconds, speed and volume sit in the popup. A sleep timer pauses after 15, 30 or 60 minutes. Switch it off and the quality you were watching comes back.</p>
+        </div>
+        <img
+          class="shot"
+          src="images/home-player.png"
+          width="400"
+          height="600"
+          loading="lazy"
+          decoding="async"
+          data-text="playerAlt"
+          data-src="playerSrc"
+          alt="The Player tab, with audio mode on."
+        />
+      </section>
+
+      <section aria-labelledby="private-title">
+        <h2 id="private-title" data-text="privateTitle">Private by design</h2>
+        <p data-text="privateBody">No account, no Google sign-in, no API key. It reads only public youtube.com pages, without your YouTube cookies. Your channels, feed and settings stay in the browser. Export them to a file, and import them back.</p>
+      </section>
+    </main>
+    <footer class="wrap">
+      <nav class="footer-links">
+        <a href="https://github.com/ashahinL/Youtube-Companion" data-text="footerRepo">GitHub</a>
+        <a href="https://github.com/ashahinL/Youtube-Companion/blob/main/PRIVACY.md" data-text="footerPrivacy">Privacy policy</a>
+        <a href="https://github.com/ashahinL/Youtube-Companion/issues" data-text="footerSupport">Support</a>
+      </nav>
+      <p class="legal" data-text="trademark">Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTube or Google. YouTube is a trademark of Google LLC.</p>
+    </footer>
+    <script src="index.js"></script>
+  </body>
+</html>

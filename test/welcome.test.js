@@ -134,4 +134,67 @@ export default async function run(t) {
     const missing = siteKeys.filter((key) => !new RegExp(`\\b${key}:`).test(textBlock(lang)));
     t.check(`every sentence has ${lang} words`, siteKeys.length > 10 && missing.length === 0, JSON.stringify(missing));
   }
+
+  t.section('the home page');
+
+  const homeHtml = read('site/index.html');
+  const homeJs = read('site/index.js');
+  const shotsJs = read('scripts/shots.js');
+  t.check('the page exists', fs.existsSync(path.join(ROOT, 'site/index.html')) && fs.existsSync(path.join(ROOT, 'site/index.js')));
+  const homeLoads = [...homeHtml.matchAll(/<(?:script|link|img)\b[^>]*\s(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
+  const homeAllowed = (href) => href === 'index.js'
+    || href.startsWith('images/')
+    || href === 'https://ashahinl.github.io/Youtube-Companion/';
+  t.check('it loads nothing from another origin', homeLoads.length > 0 && homeLoads.every(homeAllowed), JSON.stringify(homeLoads));
+  t.check('it sends nothing by itself', !/\bfetch\(|XMLHttpRequest|sendBeacon|new Image/.test(homeJs));
+  t.check(
+    'it links both stores and the repo',
+    /chromewebstore\.google\.com\/detail\/hpajekcplhidhjidohfmebpeianbhcgd/.test(homeHtml)
+      && /microsoftedge\.microsoft\.com\/addons\/detail\/companion-for-youtube\/neaandgimpffglakmlbmmkmmmlahibfh/.test(homeHtml)
+      && /href="https:\/\/github\.com\/ashahinL\/Youtube-Companion"/.test(homeHtml),
+  );
+  const homeKeys = [
+    ...[...homeHtml.matchAll(/data-text="([^"]+)"/g)].map((m) => m[1]),
+    ...[...homeHtml.matchAll(/data-src="([^"]+)"/g)].map((m) => m[1]),
+  ];
+  const homeText = (lang) => (homeJs.match(new RegExp(`${lang}: \\{([\\s\\S]*?)\\n    \\}`)) || [])[1] || '';
+  for (const lang of ['en', 'ar']) {
+    const missing = homeKeys.filter((key) => !new RegExp(`\\b${key}:`).test(homeText(lang)));
+    t.check(`every sentence has ${lang} words`, homeKeys.length > 10 && missing.length === 0, JSON.stringify(missing));
+  }
+  const usedShots = [...new Set([
+    ...homeHtml.matchAll(/images\/([a-z0-9.-]+\.png)/g),
+    ...homeJs.matchAll(/images\/([a-z0-9.-]+\.png)/g),
+  ].map((m) => m[1]))].sort();
+  const siteShotBlock = (shotsJs.match(/const SITE_SHOTS = \[([\s\S]*?)\];/) || [])[1] || '';
+  const writtenShots = [...new Set([
+    ...[...siteShotBlock.matchAll(/name: '([^']+)'/g)].map((m) => `${m[1]}.png`),
+    ...[...shotsJs.matchAll(/site\/images\/([a-z0-9.-]+\.png)/g)].map((m) => m[1]),
+  ])].sort();
+  t.check(
+    'every image is one shots.js writes',
+    usedShots.length > 0 && JSON.stringify(usedShots) === JSON.stringify(writtenShots),
+    JSON.stringify({ usedShots, writtenShots }),
+  );
+  const docsBlock = (shotsJs.match(/const DOCS_SHOTS = \[([\s\S]*?)\];/) || [])[1] || '';
+  const docsScenes = new Set([...docsBlock.matchAll(/scene: '([^']+)'/g)].map((m) => m[1]));
+  const siteScenes = [...siteShotBlock.matchAll(/scene: '([^']+)'/g)].map((m) => m[1]);
+  t.check(
+    'site shots reuse existing scenes',
+    siteScenes.length > 0 && siteScenes.every((s) => docsScenes.has(s)),
+    JSON.stringify(siteScenes),
+  );
+  const homeCss = (homeHtml.match(/<style>([\s\S]*?)<\/style>/) || [])[1] || '';
+  t.check('layout uses logical CSS', !/(^|[^-])(?:left|right)\s*:/.test(homeCss));
+  t.check(
+    'it is indexable',
+    !/noindex/.test(homeHtml)
+      && /<meta name="description" content="[^"]+"/.test(homeHtml)
+      && /<link rel="canonical" href="https:\/\/ashahinl\.github\.io\/Youtube-Companion\/"/.test(homeHtml)
+      && /property="og:title"/.test(homeHtml)
+      && /property="og:description"/.test(homeHtml)
+      && /property="og:image"/.test(homeHtml)
+      && /property="og:url"/.test(homeHtml)
+      && /name="twitter:card"/.test(homeHtml),
+  );
 }

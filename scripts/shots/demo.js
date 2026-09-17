@@ -49,6 +49,7 @@
       maxItems: 500,
       showShorts: false,
       favoritesOnly: false,
+      group: '',
     },
     ui: {
       locale: 'auto',
@@ -59,7 +60,6 @@
       preset: 'midnight',
       backgroundType: 'color',
       customColor: '#0f0f14',
-      imageUrl: '',
     },
   };
 
@@ -72,6 +72,7 @@
       avatar:
         'https://yt3.googleusercontent.com/qu4TmIaYUlS41-dJ9gZ7DUR3nilvmB5_11i6OKSdvNnBNiyOusZP1bMN6ICnuxtjFBb6ioKgRQ=s88-c-k-c0x00ffffff-no-rj',
       favorite: true,
+      groups: ['Tech'],
       addedAt: ago(30 * D),
       lastFetchAt: ago(12 * 60 * 1000),
       lastVideoAt: ago(2 * H),
@@ -85,6 +86,7 @@
       avatar:
         'https://yt3.googleusercontent.com/nxYrc_1_2f77DoBadyxMTmv7ZpRZapHR5jbuYe7PlPd5cIRJxtNNEYyOC0ZsxaDyJJzXrnJiuDE=s120-c-k-c0x00ffffff-no-rj',
       favorite: false,
+      groups: ['Fun'],
       addedAt: ago(20 * D),
       lastFetchAt: ago(12 * 60 * 1000),
       lastVideoAt: ago(1 * D),
@@ -97,10 +99,10 @@
   // videos in the demo feed; their ids are the canonical ones and their
   // avatars are what each youtube.com/@handle page serves.
   [
-    ['UCLA_DiR1FfKNvjuUpBHmylQ', '@NASA', 'NASA', 'eIf5fNPcIcj9ig-wZBeq4stFy1lgjWTW1nLT5dYlFkHZprZ03QBiMcbpwNMB6XSBjrSFGtAGQg', 5 * H],
-    ['UCHnyfMqiRRG1u-2MsSQLbXA', '@veritasium', 'Veritasium', '7vCbvtCqtjQ3YLgsJt7Y952MQV1sBvhllSCSxHP8_sVZdcPCBrITfhkN2RdyCuwPnsByq-1GoA', 4 * D],
-    ['UCsXVk37bltHxD1rDPwtNM8Q', '@kurzgesagt', 'Kurzgesagt – In a Nutshell', 'ytc/AIdro_n1Ribd7LwdP_qKtqWL3ZDfIgv9M1d6g78VwpHGXVR2Ir4', 9 * D],
-    ['UCXuqSBlHAE6Xw-yeJA0Tunw', '@LinusTechTips', 'Linus Tech Tips', 'gnvYLhXy8FAlPXZ2RTrkrgj-5kyt0vdE2FUGVOiKGdEZIa-wN5A-7nwZBlWJLzUMmoh1NWAU', 14 * H],
+    ['UCLA_DiR1FfKNvjuUpBHmylQ', '@NASA', 'NASA', 'eIf5fNPcIcj9ig-wZBeq4stFy1lgjWTW1nLT5dYlFkHZprZ03QBiMcbpwNMB6XSBjrSFGtAGQg', 5 * H, ['Science']],
+    ['UCHnyfMqiRRG1u-2MsSQLbXA', '@veritasium', 'Veritasium', '7vCbvtCqtjQ3YLgsJt7Y952MQV1sBvhllSCSxHP8_sVZdcPCBrITfhkN2RdyCuwPnsByq-1GoA', 4 * D, ['Science']],
+    ['UCsXVk37bltHxD1rDPwtNM8Q', '@kurzgesagt', 'Kurzgesagt – In a Nutshell', 'ytc/AIdro_n1Ribd7LwdP_qKtqWL3ZDfIgv9M1d6g78VwpHGXVR2Ir4', 9 * D, ['Science', 'Fun']],
+    ['UCXuqSBlHAE6Xw-yeJA0Tunw', '@LinusTechTips', 'Linus Tech Tips', 'gnvYLhXy8FAlPXZ2RTrkrgj-5kyt0vdE2FUGVOiKGdEZIa-wN5A-7nwZBlWJLzUMmoh1NWAU', 14 * H, ['Tech']],
   ].forEach(function (c, i) {
     channels.push({
       id: c[0],
@@ -108,6 +110,7 @@
       title: c[2],
       avatar: 'https://yt3.googleusercontent.com/' + c[3] + '=s88-c-k-c0x00ffffff-no-rj',
       favorite: i === 0,
+      groups: c[5],
       addedAt: ago((10 - i) * D),
       lastFetchAt: ago(12 * 60 * 1000),
       lastVideoAt: ago(c[4]),
@@ -178,7 +181,9 @@
       running: false,
       lastPollAt: ago(12 * 60 * 1000),
       lastFavPollAt: ago(5 * 60 * 1000),
-      lastSeenAt: now,
+      // Hours ago, not now: isNewSince is a strict `at > lastSeenAt`, and the
+      // popup holds that value for the whole open.
+      lastSeenAt: ago(12 * H),
       notified: [],
     },
     audioStats: {

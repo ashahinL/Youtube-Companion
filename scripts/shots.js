@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Headless screenshots of the real popup for docs/screenshots and
- * store/images. Serves the repo read-only, drives a system Chromium,
- * no extra packages.
+ * Headless screenshots of the real popup for docs/screenshots,
+ * store/images, and site/images. Serves the repo read-only, drives a
+ * system Chromium, no extra packages.
  */
 
 import fs from 'node:fs';
@@ -24,9 +24,10 @@ const TYPES = {
   '.svg': 'image/svg+xml',
 };
 
-const DOCS_SHOTS = [
-  { name: 'audio', scene: 'audio', locale: 'en' },
+export const DOCS_SHOTS = [
+  { name: 'audio', scene: 'player', locale: 'en' },
   { name: 'feeds', scene: 'feeds', locale: 'en' },
+  { name: 'groups', scene: 'groups', locale: 'en' },
   { name: 'watchlist', scene: 'watchlist', locale: 'en' },
   { name: 'sheet', scene: 'sheet', locale: 'en' },
   { name: 'settings', scene: 'settings', locale: 'en' },
@@ -34,7 +35,7 @@ const DOCS_SHOTS = [
   { name: 'support', scene: 'support', locale: 'en' },
 ];
 
-const STORE_SHOTS = [
+export const STORE_SHOTS = [
   {
     name: 'screenshot-1-feeds',
     img: 'feeds.png',
@@ -43,34 +44,54 @@ const STORE_SHOTS = [
     dir: 'ltr',
   },
   {
-    name: 'screenshot-2-audio',
+    name: 'screenshot-2-player',
     img: 'audio.png',
     title: 'Listen with less data',
     sub: 'Audio mode drops the video to 144p and covers it. About 8× less data than 720p.',
     dir: 'ltr',
   },
   {
-    name: 'screenshot-3-watchlist',
-    img: 'watchlist.png',
-    title: 'Add by link or @handle',
-    sub: 'Star favourites to check them more often and keep them on top.',
+    name: 'screenshot-3-groups',
+    img: 'groups.png',
+    title: 'Group your channels',
+    sub: 'Tech, music, news — show one group at a time, in the feed and on the badge.',
     dir: 'ltr',
   },
   {
-    name: 'screenshot-4-sheet',
+    name: 'screenshot-4-watchlist',
+    img: 'watchlist.png',
+    title: 'Add by link or @handle',
+    sub: 'Or bring your subscriptions over from a Google Takeout file.',
+    dir: 'ltr',
+  },
+  {
+    name: 'screenshot-5-sheet',
     img: 'sheet.png',
     title: 'A channel at a glance',
     sub: 'Open any channel to see its latest videos without leaving the popup.',
     dir: 'ltr',
   },
   {
-    name: 'screenshot-5-arabic',
+    name: 'screenshot-6-arabic',
     img: 'feeds-ar.png',
     title: 'بالعربية أيضًا',
     sub: 'واجهة كاملة من اليمين إلى اليسار.',
     dir: 'rtl',
   },
 ];
+
+export const SITE_SHOTS = [
+  { name: 'home-feeds', scene: 'feeds', locale: 'en' },
+  { name: 'home-watchlist', scene: 'watchlist', locale: 'en' },
+  { name: 'home-player', scene: 'player', locale: 'en' },
+  { name: 'home-feeds-ar', scene: 'feeds', locale: 'ar' },
+  { name: 'home-watchlist-ar', scene: 'watchlist', locale: 'ar' },
+  { name: 'home-player-ar', scene: 'player', locale: 'ar' },
+];
+
+// A blank 1280×800 store frame compresses to tens of KB; a real one is
+// hundreds. Half the median of this run is the cut.
+export const STORE_FRAME_MIN_RATIO = 0.5;
 
 function virtualPopup() {
   let html = fs.readFileSync(path.join(ROOT, 'src/popup/popup.html'), 'utf8');
@@ -251,6 +272,29 @@ function assertPngSize(file, width, height) {
   return size;
 }
 
+export function assertStoreFrameBytes(files, minRatio = STORE_FRAME_MIN_RATIO) {
+  if (!Array.isArray(files) || files.length < 2) return;
+  const rows = files.map((file) => {
+    if (!fs.existsSync(file)) {
+      throw new Error(`screenshot was not written: ${file}`);
+    }
+    return { file, bytes: fs.statSync(file).size };
+  });
+  const sorted = rows.map((row) => row.bytes).slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+  const floor = median * minRatio;
+  for (const row of rows) {
+    if (row.bytes < floor) {
+      throw new Error(
+        `${row.file} is ${row.bytes} bytes, far smaller than the other store frames (median ${Math.round(median)} bytes)`,
+      );
+    }
+  }
+}
+
 function runChrome(browser, args) {
   return new Promise((resolve, reject) => {
     execFile(browser, args, { timeout: 60_000 }, (err, _stdout, stderr) => {
@@ -267,6 +311,8 @@ function runChrome(browser, args) {
 async function capture(browser, url, outAbs, width, height, scale) {
   fs.mkdirSync(path.dirname(outAbs), { recursive: true });
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'yc-shots-'));
+  // Write into this run's temp dir so a leftover PNG at outAbs cannot pass.
+  const tmpOut = path.join(profile, 'shot.png');
   try {
     await runChrome(browser, [
       '--headless=new',
@@ -278,16 +324,17 @@ async function capture(browser, url, outAbs, width, height, scale) {
       `--force-device-scale-factor=${scale}`,
       `--window-size=${width},${height}`,
       '--virtual-time-budget=8000',
-      `--screenshot=${outAbs}`,
+      `--screenshot=${tmpOut}`,
       url,
     ]);
+    if (!fs.existsSync(tmpOut)) {
+      throw new Error(`screenshot was not written: ${outAbs}`);
+    }
+    assertPngSize(tmpOut, width * scale, height * scale);
+    fs.copyFileSync(tmpOut, outAbs);
   } finally {
     fs.rmSync(profile, { recursive: true, force: true });
   }
-  if (!fs.existsSync(outAbs)) {
-    throw new Error(`screenshot was not written: ${outAbs}`);
-  }
-  assertPngSize(outAbs, width * scale, height * scale);
   console.log(outAbs);
 }
 
@@ -310,8 +357,10 @@ async function run() {
   const known = [
     ...DOCS_SHOTS.map((s) => s.name),
     ...STORE_SHOTS.map((s) => s.name),
+    ...SITE_SHOTS.map((s) => s.name),
     'promo-440x280',
     'logo-300',
+    'icon-192',
   ];
   for (const name of names) {
     if (!known.includes(name)) {
@@ -331,11 +380,21 @@ async function run() {
       await capture(browser, url, out, 400, 600, 2);
     }
 
+    for (const shot of SITE_SHOTS) {
+      if (!wanted(names, shot.name)) continue;
+      const out = path.join(ROOT, 'site/images', `${shot.name}.png`);
+      const url = `${origin}/__shots/frame.html?scene=${encodeURIComponent(shot.scene)}&locale=${shot.locale}`;
+      await capture(browser, url, out, 400, 600, 1);
+    }
+
+    const storeOuts = [];
     for (const shot of STORE_SHOTS) {
       if (!wanted(names, shot.name)) continue;
       const out = path.join(ROOT, 'store/images', `${shot.name}.png`);
       await capture(browser, storeUrl(port, shot), out, 1280, 800, 1);
+      storeOuts.push(out);
     }
+    assertStoreFrameBytes(storeOuts);
 
     if (wanted(names, 'promo-440x280')) {
       const out = path.join(ROOT, 'store/images/promo-440x280.png');
@@ -347,6 +406,14 @@ async function run() {
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, renderIcon(300));
       assertPngSize(out, 300, 300);
+      console.log(out);
+    }
+
+    if (wanted(names, 'icon-192')) {
+      const out = path.join(ROOT, 'site/images/icon-192.png');
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      fs.writeFileSync(out, renderIcon(192));
+      assertPngSize(out, 192, 192);
       console.log(out);
     }
   } finally {

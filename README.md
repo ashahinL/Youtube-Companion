@@ -103,6 +103,8 @@
 **Edge:** get it from
 [Edge Add-ons](https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh).
 
+The project site is [ashahinl.github.io/Youtube-Companion](https://ashahinl.github.io/Youtube-Companion/).
+
 **From source**, which can be newer than the store version:
 
 1. Download this repo (**Code → Download ZIP**) and unzip it, or clone it.

@@ -18,7 +18,7 @@
   }
 
   var params = new URLSearchParams(root.location.search);
-  var scene = params.get('scene') || 'audio';
+  var scene = params.get('scene') || 'player';
   var locale = params.get('locale') === 'ar' ? 'ar' : 'en';
 
   function demo() {
@@ -79,7 +79,14 @@
 
   function handleRuntime(message) {
     var type = message && message.type;
-    if (type === 'getState' || type === 'popupOpened') return snapshot();
+    if (type === 'getState') return snapshot();
+    if (type === 'popupOpened') {
+      var opened = snapshot();
+      // Same field the worker sends: lastSeenAt is not overwritten here, so
+      // the previous value is the snapshot's own lastSeenAt.
+      opened.previousLastSeenAt = Number((opened.pollState && opened.pollState.lastSeenAt) || 0);
+      return opened;
+    }
     if (type === 'updateSettings') {
       settings = merge(settings, message.patch || {});
       return snapshot();
@@ -91,6 +98,10 @@
 
   function playerFor(tabId) {
     var d = demo();
+    // A channel page with no video: content.js returns ok:false, on:false.
+    if (scene === 'follow' || tabId === 103) {
+      return { ok: false, on: false };
+    }
     if (tabId === 102) {
       return {
         ok: true,
@@ -107,6 +118,26 @@
       };
     }
     return clone(d.player);
+  }
+
+  function demoTabs() {
+    var d = demo();
+    if (scene === 'follow') {
+      // Channel page whose handle is not on the demo list, so followView
+      // shows the card the same way a real focused tab would.
+      return [{
+        id: 103,
+        url: 'https://www.youtube.com/@vsauce',
+        title: 'Vsauce - YouTube',
+        active: true,
+        audible: false,
+        status: 'complete',
+        windowId: 1,
+        index: 0,
+        lastAccessed: Date.now(),
+      }];
+    }
+    return clone(d.tabs || []);
   }
 
   function matchUrl(tab, pattern) {
@@ -164,7 +195,7 @@
     },
     tabs: {
       query: function (info) {
-        var tabs = (demo().tabs || []).slice();
+        var tabs = demoTabs();
         info = info || {};
         if (info.active) tabs = tabs.filter(function (tab) { return !!tab.active; });
         if (info.url) tabs = tabs.filter(function (tab) { return matchUrl(tab, info.url); });
@@ -212,8 +243,22 @@
   }
 
   function applyScene(name) {
+    if (name === 'player' || name === 'audio') {
+      click('#tab-audio');
+      return;
+    }
     if (name === 'feeds') {
       click('#tab-feeds');
+      return;
+    }
+    if (name === 'groups') {
+      click('#tab-feeds');
+      whenPresent('#feed-groups [data-group="Tech"]', function (chip) {
+        if (!chip) return;
+        if (chip.getAttribute('aria-pressed') === 'true') return;
+        chip.click();
+        whenPresent('#feed-groups [data-group="Tech"][aria-pressed="true"]', function () {});
+      });
       return;
     }
     if (name === 'watchlist') {
@@ -238,6 +283,11 @@
       var qr = document.querySelector('#support-methods [aria-controls="support-qr-instapay"]')
         || document.querySelector('#support-methods .support-method__qr-toggle');
       if (qr) qr.click();
+      return;
+    }
+    if (name === 'follow') {
+      click('#tab-audio');
+      whenPresent('#follow-card:not([hidden]) .follow-card__btn', function () {});
     }
   }
 
@@ -253,13 +303,14 @@
     })();
   }
 
-  // The popup draws only its open tab, Audio at first; a title there means the
-  // first draw is done and switching tabs will find data to draw.
+  // Tabs stay unselected while body.is-opening; a selected tab means the
+  // opening choice is done and a click will land on a drawn panel.
   function whenPopupReady(done) {
     var start = Date.now();
     (function tick() {
-      var title = document.getElementById('audio-title');
-      if ((title && title.textContent) || Date.now() - start >= 3000) {
+      var opening = document.body.classList.contains('is-opening');
+      var chosen = document.querySelector('[role="tab"][aria-selected="true"]');
+      if ((!opening && chosen) || Date.now() - start >= 3000) {
         done();
         return;
       }

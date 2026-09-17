@@ -90,10 +90,12 @@ and wait in line again. Do that only for a fix that cannot wait.
 
    If `site/` changed, the push publishes it to GitHub Pages
    (`.github/workflows/pages.yml`). Check that run is green and that
-   <https://ashahinl.github.io/Youtube-Companion/uninstall.html> opens: every
-   installed copy sends people there when they remove the extension. Pages
-   must be on in the repository settings (Source: GitHub Actions) before the
-   first such push.
+   <https://ashahinl.github.io/Youtube-Companion/> and
+   <https://ashahinl.github.io/Youtube-Companion/uninstall.html> open: the
+   home page is what the stores and the README link to, and every installed
+   copy sends people to the uninstall page when they remove the extension.
+   Pages must be on in the repository settings (Source: GitHub Actions)
+   before the first such push.
 8. **Pack and release.** `npm run pack` from `main` at the tag, then make the
    GitHub release `vX.Y.Z`, titled "Companion for YouTube X.Y.Z", with that
    version's changelog section as the notes and
