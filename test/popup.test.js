@@ -70,10 +70,15 @@ export default async function run(t) {
   const audioTab = tabButtons.find((a) => a['data-tab'] === 'audio') || {};
   const feedsTab = tabButtons.find((a) => a['data-tab'] === 'feeds') || {};
   t.check(
-    'Audio is selected at rest',
-    audioTab.class === 'tab tab--active'
-      && audioTab['aria-selected'] === 'true'
-      && audioTab.tabindex === '0',
+    'no tab is selected at rest',
+    tabButtons.every((a) => a.class === 'tab' && a['aria-selected'] === 'false' && a.tabindex === '-1'),
+    JSON.stringify(tabButtons.map((a) => ({ class: a.class, sel: a['aria-selected'], tab: a.tabindex }))),
+  );
+  t.check(
+    'the Player tab is not hard-coded as open',
+    audioTab.class === 'tab'
+      && audioTab['aria-selected'] === 'false'
+      && !/\btab--active\b/.test(html.match(/id="tab-audio"[^>]*>/)?.[0] || ''),
     JSON.stringify(audioTab),
   );
   t.check(
@@ -82,6 +87,17 @@ export default async function run(t) {
       && feedsTab['aria-selected'] === 'false'
       && feedsTab.tabindex === '-1',
     JSON.stringify(feedsTab),
+  );
+  t.check(
+    'the popup starts in the opening state',
+    /<body\b[^>]*\bclass="is-opening"/.test(html) && /role="tablist"[^>]*aria-busy="true"/.test(html),
+  );
+  t.check(
+    'the Player tab fallback label is Player, not Audio',
+    /data-i18n="tabAudio"[^>]*>\s*Player\s*</.test(html)
+      && !/data-i18n="tabAudio"[^>]*>\s*Audio\s*</.test(html)
+      && en.tabAudio.message === 'Player',
+    en.tabAudio.message,
   );
 
   t.section('panels');
@@ -101,8 +117,8 @@ export default async function run(t) {
   }
   const audioPanelTag = html.match(/<section\b[^>]*\bid="audio"[^>]*>/);
   t.check(
-    'audio panel is visible at rest',
-    !!audioPanelTag && !/\bhidden\b/.test(audioPanelTag[0]),
+    'audio panel is hidden at rest',
+    !!audioPanelTag && /\bhidden\b/.test(audioPanelTag[0]),
     audioPanelTag ? audioPanelTag[0] : 'missing',
   );
   const feedsPanelTag = html.match(/<section\b[^>]*\bid="feeds"[^>]*>/);
@@ -197,6 +213,20 @@ export default async function run(t) {
   t.check(
     'menu mutes and unmutes a channel\'s alerts',
     /watchlistMuteAdd/.test(js) && /watchlistMuteRemove/.test(js) && /type:\s*'setMuted'/.test(js),
+  );
+  t.check(
+    'menu opens Groups… next to favourite and mute',
+    /watchlistGroups/.test(js)
+      && /list\.append\(\s*fav,\s*mute,\s*groups,\s*remove\s*\)/.test(js)
+      && /openGroupsSheet\(\s*ch\.id\s*\)/.test(js),
+  );
+  t.check(
+    'Groups… is not a danger item',
+    /buttonEl\(\s*'menu__item',\s*t\('watchlistGroups'\)/.test(js),
+  );
+  t.check(
+    'a watchlist row lists the channel\'s groups in footnote text',
+    /channel-row__groups/.test(js) && /\.channel-row__groups\s*\{/.test(css),
   );
   t.check('a muted row says so', /ch\.muted\)[\s\S]{0,80}watchlistMuted'/.test(js));
   t.check(
@@ -324,6 +354,52 @@ export default async function run(t) {
     'favourites-only writes feed.favoritesOnly',
     /feed\.favoritesOnly/.test(js) && /favOnly/.test(js),
   );
+  t.check('has a group chip row', /id="feed-groups"/.test(f));
+  t.check(
+    'the chip row sits between the add form and Favourites only',
+    f.indexOf('id="feed-add-form"') < f.indexOf('id="feed-groups"')
+      && f.indexOf('id="feed-groups"') < f.indexOf('id="feed-favorites-only"'),
+  );
+  const groupsTag = f.match(/<[^>]*\bid="feed-groups"[^>]*>/);
+  t.check(
+    'the chip row starts hidden',
+    !!groupsTag && /\bhidden\b/.test(groupsTag[0]),
+    groupsTag ? groupsTag[0] : 'missing',
+  );
+  t.check(
+    'chips are buttons with aria-pressed',
+    /feed-groups__chip/.test(js)
+      && /setAttribute\(\s*'aria-pressed'/.test(js)
+      && /btn\.type = 'button'/.test(js),
+  );
+  t.check(
+    'the chip row writes feed.group',
+    /feed\.group/.test(js) && /data-group/.test(js),
+  );
+  const chipRowRule = css.match(/\.feed-groups\s*\{[^}]*\}/);
+  t.check('chip row rule exists', !!chipRowRule, 'missing .feed-groups');
+  t.check(
+    'the chip row scrolls sideways, not the page',
+    !!chipRowRule
+      && /overflow-x:\s*auto/.test(chipRowRule[0])
+      && /max-width:\s*100%/.test(chipRowRule[0]),
+    chipRowRule ? chipRowRule[0] : '',
+  );
+  t.check(
+    'chip row CSS uses no left/right',
+    !!chipRowRule && !/\b(?:left|right)\s*:/.test(chipRowRule[0]),
+    chipRowRule ? chipRowRule[0] : '',
+  );
+  const chipRule = css.match(/\.feed-groups__chip\s*\{[^}]*\}/);
+  t.check(
+    'chip CSS uses no left/right',
+    !!chipRule && !/\b(?:left|right)\s*:/.test(chipRule[0]),
+    chipRule ? chipRule[0] : '',
+  );
+  t.check(
+    'the selected chip uses the accent token',
+    /\.feed-groups__chip\[aria-pressed='true'\]\s*\{[^}]*var\(--accent\)/.test(css),
+  );
   t.check(
     'the channel sheet does not use favourites-only',
     /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts\s*\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
@@ -331,18 +407,25 @@ export default async function run(t) {
 
   const emptyIds = [...f.matchAll(/id="(feed-empty-[^"]+)"/g)].map((m) => m[1]);
   t.check(
-    'has four empty-state elements',
-    emptyIds.length === 4,
+    'has five empty-state elements',
+    emptyIds.length === 5,
     JSON.stringify(emptyIds),
   );
   t.check(
     'empty states are distinct',
-    new Set(emptyIds).size === 4 &&
+    new Set(emptyIds).size === 5 &&
       emptyIds.includes('feed-empty-no-channels') &&
       emptyIds.includes('feed-empty-no-items') &&
       emptyIds.includes('feed-empty-filter') &&
-      emptyIds.includes('feed-empty-favorites'),
+      emptyIds.includes('feed-empty-favorites') &&
+      emptyIds.includes('feed-empty-group'),
     JSON.stringify(emptyIds),
+  );
+  t.check(
+    'the group empty state has a button back to All',
+    /id="feed-empty-group"[\s\S]{0,400}id="feed-group-all"/.test(f)
+      && /emptyFeedGroup/.test(f)
+      && /feedGroupAll/.test(f),
   );
   const feedEmptyTag = html.match(/<[^>]*\bid="feed-empty-no-channels"[^>]*>/);
   t.check(
@@ -758,7 +841,7 @@ export default async function run(t) {
   t.section('follow card');
 
   const audioPanel = html.slice(html.indexOf('<section id="audio"'), html.indexOf('</section>', html.indexOf('<section id="audio"')));
-  t.check('the Follow card sits in the Audio tab', /id="follow-card"/.test(audioPanel));
+  t.check('the Follow card sits in the Player tab', /id="follow-card"/.test(audioPanel));
   t.check(
     'it comes before the audio mode switch',
     audioPanel.indexOf('id="follow-card"') >= 0 && audioPanel.indexOf('id="follow-card"') < audioPanel.indexOf('class="audio-head"'),
@@ -819,6 +902,111 @@ export default async function run(t) {
   t.check(
     'a redraw keeps focus on a Follow button',
     /card\.dataset\.sig !== sig/.test(js) && /\[data-input=/.test(js),
+  );
+
+  t.section('opening tab');
+
+  t.check('openingTab decides the first tab', /openingTab\(/.test(js) && /function openingTab/.test(viewJs));
+  t.check(
+    'the player probe is given about 250 ms',
+    /OPENING_TAB_MS = 250/.test(js) && /Promise\.race\(/.test(js),
+  );
+  t.check(
+    'a late probe does not move the user off the tab they are on',
+    /openingChosen/.test(js) && /kind === 'timeout'/.test(js) === false
+      && /kind: 'timeout'/.test(js),
+  );
+  t.check(
+    'the first paint does not draw a tab',
+    /function openTabName[\s\S]{0,120}\|\| ''/.test(js),
+  );
+
+  t.section('new since last visit');
+
+  t.check('isNewSince decides the dot', /isNewSince\(/.test(js) && /function isNewSince/.test(viewJs));
+  t.check(
+    'popupOpened keeps the previous lastSeenAt',
+    /previousLastSeenAt/.test(js) && /previousLastSeenAt/.test(worker),
+  );
+  t.check(
+    'the popup holds lastSeenAt for this open',
+    /view\.feedSeenAt/.test(js) && /previousLastSeenAt/.test(js),
+  );
+  t.check('a new row draws an accent dot', /feed-row__new/.test(js) && /\.feed-row__new\s*\{/.test(css));
+  t.check(
+    'the dot uses the accent and logical sides',
+    /\.feed-row__new\s*\{[^}]*background:\s*var\(--accent\)/.test(css)
+      && /\.feed-row__new\s*\{[^}]*margin-block-start/.test(css)
+      && !/\.feed-row__new\s*\{[^}]*(?:margin-left|margin-right|left:|right:)/.test(css),
+  );
+  t.check(
+    'a new row has a spoken New marker',
+    /visually-hidden/.test(js) && /feedItemNew/.test(js)
+      && 'feedItemNew' in en && /\.visually-hidden\s*\{/.test(css),
+  );
+
+  t.section('groups sheet');
+
+  t.check('has groups sheet overlay', /id="groups-sheet"/.test(html));
+  t.check(
+    'groups sheet is a dialog overlay',
+    /id="groups-sheet"[\s\S]*?role="dialog"/.test(html),
+  );
+  t.check('groups sheet has a close control', /id="groups-sheet-close"/.test(html));
+  t.check('groups sheet has a new-group field', /id="groups-sheet-input"/.test(html));
+  t.check('groups sheet has an add control', /id="groups-sheet-add"/.test(html));
+  t.check(
+    'opening Groups… does not send until a tick or add',
+    /function openGroupsSheet[\s\S]{0,400}render\(\)/.test(js)
+      && !/function openGroupsSheet[\s\S]{0,500}\bsend\s*\(/.test(js),
+  );
+  t.check(
+    'Escape closes the groups sheet',
+    /if \(view\.groupsSheetId\)[\s\S]{0,80}closeGroupsSheet/.test(js),
+  );
+  t.check(
+    'ticking a group box sends setChannelGroup',
+    /type:\s*'setChannelGroup'/.test(js),
+  );
+  const applyStart = js.indexOf('async function applyGroup');
+  const applyEnd = applyStart >= 0 ? js.indexOf('\nasync function', applyStart + 1) : -1;
+  const applyFn = applyStart >= 0
+    ? js.slice(applyStart, applyEnd > applyStart ? applyEnd : applyStart + 800)
+    : '';
+  t.check(
+    'group ticks are not gated on view.busy and do not take withBusy',
+    /async function applyGroup/.test(applyFn) && !/view\.busy/.test(applyFn) && !/withBusy/.test(applyFn),
+    applyFn.slice(0, 240),
+  );
+  t.check(
+    'group ticks serialise through chainSerial',
+    /chainSerial\(groupWrite/.test(applyFn),
+    applyFn.slice(0, 240),
+  );
+  t.check(
+    'a group error is drawn on the groups sheet, not the Watchlist banner',
+    /view\.groupsError/.test(applyFn) && !/view\.error\s*=/.test(applyFn),
+    applyFn.slice(0, 240),
+  );
+  t.check(
+    'an empty groups sheet has a quiet hint',
+    /id="groups-sheet-empty"/.test(html) && /groupsEmptyHint/.test(html) && 'groupsEmptyHint' in en,
+  );
+  const groupsEmptyTag = html.match(/<[^>]*\bid="groups-sheet-empty"[^>]*>/);
+  t.check(
+    'the empty groups hint starts hidden',
+    !!groupsEmptyTag && /\bhidden\b/.test(groupsEmptyTag[0]),
+    groupsEmptyTag ? groupsEmptyTag[0] : 'missing',
+  );
+  t.check(
+    'the empty hint uses the footnote style',
+    /id="groups-sheet-empty"[^>]*class="[^"]*footnote/.test(html)
+      && /#groups-sheet-empty\s*\{/.test(css),
+  );
+  t.check(
+    'the chip row only scrolls when the selected group changed',
+    /selected !== feedGroupsScrolledTo[\s\S]{0,120}scrollIntoView/.test(js)
+      && /feedGroupsScrolledTo = selected/.test(js),
   );
 
   t.section('support sheet');

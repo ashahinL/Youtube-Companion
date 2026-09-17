@@ -84,6 +84,17 @@ export default async function run(t) {
   t.check('the steps use logical sides for right-to-left', /padding-inline-start/.test(css) && !/padding-left|margin-left|\bleft:/.test(css));
   t.check('keyboard focus is visible', /\.btn:focus-visible/.test(css));
 
+  t.section('Player tab name');
+
+  t.check(
+    'the popup tab is named Player, not Audio',
+    en.tabAudio.message === 'Player'
+      && ar.tabAudio.message === 'مشغّل'
+      && /data-i18n="tabAudio"[^>]*>\s*Player\s*</.test(popupHtml)
+      && !/data-i18n="tabAudio"[^>]*>\s*Audio\s*</.test(popupHtml),
+    JSON.stringify({ en: en.tabAudio.message, ar: ar.tabAudio.message }),
+  );
+
   t.section('from the popup');
 
   for (const id of ['feed-import-youtube', 'watchlist-import-youtube', 'settings-import-youtube']) {

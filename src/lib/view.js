@@ -1,12 +1,15 @@
 /**
- * Popup view decisions for the Feeds, Watchlist and Audio tabs: which
+ * Popup view decisions for the Feeds, Watchlist and Player tabs: which
  * rows show, whether Add is live, which empty state applies, which
- * YouTube tab the player drives, when the player card may sync a
+ * tab the popup opens on, which videos are newer than the last visit,
+ * which YouTube tab the player drives, when the player card may sync a
  * control, how audioStats fold into the four cards, when the 1 GB
  * rating note shows, how a failed channel is described, when the Follow
  * card shows, which credited channels are followed, which Follow buttons
- * wait, how a backup merge-over-cap error is named, and which ⋯ menu
- * item Arrow/Home/End would select.
+ * wait, how a backup merge-over-cap error is named, which ⋯ menu
+ * item Arrow/Home/End would select, channel-group names, caps, and
+ * the Feeds group filter, and how group writes queue so two ticks
+ * cannot interleave.
  * Pure — no DOM, no chrome, no clock.
  */
 
@@ -14,6 +17,171 @@ import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
 
 export function fold(value) {
   return String(value || '').normalize('NFKC').toLowerCase();
+}
+
+export const GROUP_NAME_MAX = 24;
+export const GROUP_MAX_PER_CHANNEL = 8;
+export const GROUP_MAX_DISTINCT = 20;
+
+/** Trim, collapse inner whitespace, drop empty, cap at GROUP_NAME_MAX. */
+export function normalizeGroupName(raw) {
+  const collapsed = String(raw ?? '').trim().replace(/\s+/g, ' ');
+  if (!collapsed) return '';
+  const chars = [...collapsed];
+  return chars.length > GROUP_NAME_MAX ? chars.slice(0, GROUP_NAME_MAX).join('') : collapsed;
+}
+
+function groupKey(name) {
+  const normalised = normalizeGroupName(name);
+  return normalised ? fold(normalised) : '';
+}
+
+/** Unique normalised names on one channel, first spelling kept, at most 8. */
+export function sanitizeChannelGroups(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const name = normalizeGroupName(item);
+    if (!name) continue;
+    const key = fold(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= GROUP_MAX_PER_CHANNEL) break;
+  }
+  return out;
+}
+
+/**
+ * Distinct group names on the list, first spelling kept, sorted for the
+ * UI language. `locale` is `en` / `ar` / omitted.
+ */
+export function groupNamesInList(channels, locale) {
+  const names = [];
+  const seen = new Set();
+  for (const ch of channels || []) {
+    for (const name of sanitizeChannelGroups(ch?.groups)) {
+      const key = fold(name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+  }
+  const loc = locale === 'ar' ? 'ar' : locale === 'en' ? 'en' : undefined;
+  names.sort((a, b) => a.localeCompare(b, loc, { sensitivity: 'base' }));
+  return names;
+}
+
+/**
+ * Drop junk names and enforce both caps across a whole list. Used on
+ * backup import so a file cannot grow past 20 groups or 8 per channel.
+ */
+export function sanitizeListGroups(channels) {
+  const list = Array.isArray(channels) ? channels : [];
+  const allowed = [];
+  const seen = new Set();
+  for (const ch of list) {
+    for (const name of sanitizeChannelGroups(ch?.groups)) {
+      const key = fold(name);
+      if (seen.has(key)) continue;
+      if (allowed.length >= GROUP_MAX_DISTINCT) continue;
+      seen.add(key);
+      allowed.push(name);
+    }
+  }
+  const canonical = new Map(allowed.map((name) => [fold(name), name]));
+  return list.map((ch) => {
+    const groups = [];
+    const have = new Set();
+    for (const name of sanitizeChannelGroups(ch?.groups)) {
+      const key = fold(name);
+      if (!canonical.has(key) || have.has(key)) continue;
+      have.add(key);
+      groups.push(canonical.get(key));
+    }
+    return { ...ch, groups };
+  });
+}
+
+export function channelInGroup(ch, groupName) {
+  const key = groupKey(groupName);
+  if (!key) return false;
+  return sanitizeChannelGroups(ch?.groups).some((name) => fold(name) === key);
+}
+
+/**
+ * Run `job` after `prev` settles, even if `prev` rejected. Group ticks
+ * share one chain so two read-modify-writes cannot skip a tick.
+ */
+export function chainSerial(prev, job) {
+  return Promise.resolve(prev).then(() => job(), () => job());
+}
+
+/** Canonical spelling if that group still exists, otherwise '' (All). */
+export function resolvedFeedGroup(channels, raw) {
+  const key = fold(String(raw || '').trim());
+  if (!key) return '';
+  return groupNamesInList(channels).find((name) => fold(name) === key) || '';
+}
+
+/**
+ * Channel ids the Feeds tab (and the badge) count. `null` means every
+ * channel — favourites-only and an unknown group both fall through.
+ */
+export function feedChannelIds(channels, settings) {
+  const favOnly = !!settings?.feed?.favoritesOnly;
+  const group = resolvedFeedGroup(channels, settings?.feed?.group);
+  if (!favOnly && !group) return null;
+  const ids = new Set();
+  for (const ch of channels || []) {
+    if (!ch?.id) continue;
+    if (favOnly && !ch.favorite) continue;
+    if (group && !channelInGroup(ch, group)) continue;
+    ids.add(ch.id);
+  }
+  return ids;
+}
+
+/**
+ * Add or remove `rawName` on one channel. Caps refuse the change and
+ * leave the list as it was. Error is `empty` | `missing` | `channelCap`
+ * | `listCap` | ''.
+ */
+export function applyChannelGroup(channels, channelId, rawName, on) {
+  const list = Array.isArray(channels) ? channels : [];
+  const name = normalizeGroupName(rawName);
+  if (!name) return { channels: list, error: 'empty' };
+  const key = fold(name);
+  const idx = list.findIndex((ch) => ch && ch.id === channelId);
+  if (idx < 0) return { channels: list, error: 'missing' };
+
+  const current = sanitizeChannelGroups(list[idx].groups);
+  const already = current.findIndex((g) => fold(g) === key);
+
+  if (!on) {
+    if (already < 0) return { channels: list, error: '' };
+    const groups = current.filter((_, i) => i !== already);
+    const next = list.slice();
+    next[idx] = { ...list[idx], groups };
+    return { channels: next, error: '' };
+  }
+
+  if (already >= 0) return { channels: list, error: '' };
+  if (current.length >= GROUP_MAX_PER_CHANNEL) {
+    return { channels: list, error: 'channelCap' };
+  }
+
+  const existing = groupNamesInList(list);
+  const known = existing.find((g) => fold(g) === key);
+  if (!known && existing.length >= GROUP_MAX_DISTINCT) {
+    return { channels: list, error: 'listCap' };
+  }
+
+  const next = list.slice();
+  next[idx] = { ...list[idx], groups: [...current, known || name] };
+  return { channels: next, error: '' };
 }
 
 export function isChannelRef(input) {
@@ -118,16 +286,18 @@ export function feedsView({ feed, channels, settings, query }) {
   const addable = !q || (isChannelRef(q) && !onList);
   const showShorts = !!settings?.feed?.showShorts;
   const favOnly = !!settings?.feed?.favoritesOnly;
+  const group = resolvedFeedGroup(channels, settings?.feed?.group);
   const channelsById = new Map(channels.map((ch) => [ch.id, ch]));
+  const channelIds = feedChannelIds(channels, settings);
   const items = visibleFeedItems(feed, showShorts).filter((item) => {
-    if (!favOnly) return true;
-    return !!channelsById.get(item.c)?.favorite;
+    if (channelIds && !channelIds.has(item.c)) return false;
+    return true;
   });
   let shown = q
     ? items.filter((item) => matchesFeedFilter(item, channelsById.get(item.c), q))
     : items;
-  // An exact URL / id still surfaces that row when favourites-only (or
-  // hidden shorts) would have dropped it — you asked for that video.
+  // An exact URL / id still surfaces that row when favourites-only, a
+  // group, or hidden shorts would have dropped it — you asked for that video.
   const hit = listedVideo(q, feed);
   let forced = false;
   if (hit && !shown.some((item) => item.v === hit.v)) {
@@ -139,6 +309,8 @@ export function feedsView({ feed, channels, settings, query }) {
   const hasChannels = channels.length > 0;
   const hasAnyFeed = feed.length > 0;
   const hasShown = shown.length > 0;
+  const showEmptyNone = !(hasChannels || hasAnyFeed || searching);
+  const showEmptyGroup = !!group && !hasShown && !q && !showEmptyNone;
 
   return {
     items,
@@ -150,9 +322,11 @@ export function feedsView({ feed, channels, settings, query }) {
     query: q,
     searching,
     favOnly,
-    showEmptyNone: !(hasChannels || hasAnyFeed || searching),
-    showEmptyWait: hasChannels && !hasShown && !q && !favOnly,
-    showEmptyFav: (hasChannels || hasAnyFeed) && !hasShown && !q && favOnly,
+    group,
+    showEmptyNone,
+    showEmptyWait: hasChannels && !hasShown && !q && !favOnly && !group,
+    showEmptyFav: (hasChannels || hasAnyFeed) && !hasShown && !q && favOnly && !group,
+    showEmptyGroup,
     showEmptyFilter: searching && !hasShown,
   };
 }
@@ -390,6 +564,49 @@ export function menuNavIndex(key, current, count) {
   if (key === 'ArrowDown') return (i + 1) % n;
   if (key === 'ArrowUp') return (i - 1 + n) % n;
   return i;
+}
+
+/**
+ * True when `item.at` is a real upload time newer than the last popup
+ * open. `at: 0` is "unknown", not 1970, and a missing/zero `seenAt`
+ * treats every dated row as new — the same rule as the toolbar badge.
+ */
+export function isNewSince(item, seenAt) {
+  const at = Number(item?.at);
+  if (!(at > 0)) return false;
+  const seen = Number(seenAt) || 0;
+  return at > seen;
+}
+
+/**
+ * A player reply counts when it is playing, or paused with a real
+ * position that is not the end. Missing/NaN `currentTime` is not a
+ * position, so that tab does not count.
+ */
+function playerIsActive(player) {
+  if (!player || player.ok === false) return false;
+  const t = Number(player.currentTime);
+  if (!Number.isFinite(t) || t < 0) return false;
+  if (player.ended === true) return false;
+  const d = Number(player.duration);
+  if (Number.isFinite(d) && d > 0 && t >= d) return false;
+  if (player.paused === false) return true;
+  return t > 0;
+}
+
+/**
+ * Which tab the popup opens on, from the YouTube tabs probed at open.
+ * `'audio'` is the Player tab's id. Audio mode on any tab wins;
+ * otherwise a playing or paused-partway player; otherwise Feeds.
+ */
+export function openingTab({ players, audioOn } = {}) {
+  if (audioOn) return 'audio';
+  const list = Array.isArray(players) ? players : [];
+  for (const player of list) {
+    if (player && player.on) return 'audio';
+    if (playerIsActive(player)) return 'audio';
+  }
+  return 'feeds';
 }
 
 export function watchlistView({ channels, feed, query }) {

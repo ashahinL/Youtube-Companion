@@ -1,6 +1,7 @@
 /**
  * Popup view decisions: feed/watchlist filters, row matching, Add-enabled,
- * the exact-URL force-show, Audio-tab target choice, stats folding, how a
+ * the exact-URL force-show, which tab the popup opens on, which rows are
+ * newer than the last visit, Audio-tab target choice, stats folding, how a
  * failed channel is described, and the Follow card.
  * Hand-made rows; no fixtures, no network.
  */
@@ -24,6 +25,18 @@ import {
   audioWatchUrl,
   rowOpenModes,
   feedsView,
+  GROUP_NAME_MAX,
+  GROUP_MAX_PER_CHANNEL,
+  GROUP_MAX_DISTINCT,
+  normalizeGroupName,
+  sanitizeChannelGroups,
+  sanitizeListGroups,
+  groupNamesInList,
+  channelInGroup,
+  resolvedFeedGroup,
+  feedChannelIds,
+  applyChannelGroup,
+  chainSerial,
   watchlistView,
   audioTabView,
   audioStatsView,
@@ -42,6 +55,8 @@ import {
   pageChannelsView,
   sleepMinutesLeft,
   menuNavIndex,
+  openingTab,
+  isNewSince,
 } from '../src/lib/view.js';
 import { MAX_BACKUP_CHANNELS } from '../src/lib/backup.js';
 
@@ -79,6 +94,7 @@ function channel(id, extra = {}) {
     title: extra.title || id,
     handle: extra.handle || `@${id}`,
     favorite: !!extra.favorite,
+    groups: extra.groups,
   };
 }
 
@@ -98,8 +114,8 @@ function sample() {
   };
 }
 
-function settings({ showShorts = false, favoritesOnly = false } = {}) {
-  return { feed: { showShorts, favoritesOnly } };
+function settings({ showShorts = false, favoritesOnly = false, group = '' } = {}) {
+  return { feed: { showShorts, favoritesOnly, group } };
 }
 
 function vids(rows) {
@@ -509,7 +525,10 @@ export default async function run(t) {
 
   const none = feedsView({ feed: [], channels: [], settings: settings(), query: '' });
   t.check('no channels and no feed shows the no-channels empty state', none.showEmptyNone);
-  t.check('no-channels hides the other empty states', !none.showEmptyWait && !none.showEmptyFav && !none.showEmptyFilter);
+  t.check(
+    'no-channels hides the other empty states',
+    !none.showEmptyWait && !none.showEmptyFav && !none.showEmptyFilter && !none.showEmptyGroup,
+  );
 
   const waiting = feedsView({ ...base, feed: [], settings: settings(), query: '' });
   t.check(
@@ -972,4 +991,254 @@ export default async function run(t) {
     'Edge UA opens Edge Add-ons',
     storeReviewsUrl('Mozilla/5.0 Chrome/120.0.0.0 Edg/120.0.0.0') === EDGE_ADDONS_URL,
   );
+
+  t.section('group names');
+
+  t.check('empty is rejected', normalizeGroupName('   ') === '');
+  t.check('null is rejected', normalizeGroupName(null) === '');
+  t.check('trims and collapses inner whitespace', normalizeGroupName('  Foo   Bar  ') === 'Foo Bar');
+  t.check(
+    'caps at 24 characters',
+    normalizeGroupName('abcdefghijklmnopqrstuvwxyz') === 'abcdefghijklmnopqrstuvwx'
+      && normalizeGroupName('abcdefghijklmnopqrstuvwxyz').length === GROUP_NAME_MAX,
+  );
+  t.check(
+    'caps by code point so a 24-emoji name fits',
+    normalizeGroupName('😀'.repeat(25)) === '😀'.repeat(GROUP_NAME_MAX),
+  );
+  t.check(
+    'sanitizeChannelGroups keeps the first spelling',
+    same(sanitizeChannelGroups(['Music', 'music', ' MUSIC ']), ['Music']),
+  );
+  t.check(
+    'sanitizeChannelGroups drops junk and caps the channel',
+    sanitizeChannelGroups(['a', 1, '', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']).join() === 'a,b,c,d,e,f,g,h'
+      && sanitizeChannelGroups(['a', 1, '', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i']).length === GROUP_MAX_PER_CHANNEL,
+  );
+  t.check('missing groups is []', same(sanitizeChannelGroups(undefined), []));
+
+  const listed = [
+    channel(FAV, { groups: ['Podcasts', 'music'] }),
+    channel(OTH, { groups: ['Music', 'News'] }),
+  ];
+  t.check(
+    'groupNamesInList keeps the first spelling and sorts in English',
+    same(groupNamesInList(listed, 'en'), ['music', 'News', 'Podcasts']),
+  );
+  t.check(
+    'Arabic localeCompare puts alef before beh',
+    same(
+      groupNamesInList([channel(FAV, { groups: ['ب', 'ا'] })], 'ar'),
+      ['ا', 'ب'],
+    ),
+  );
+  t.check(
+    'resolvedFeedGroup is All when the name is gone',
+    resolvedFeedGroup(listed, 'Gone') === '' && resolvedFeedGroup(listed, 'MUSIC') === 'music',
+  );
+  t.check('channelInGroup folds case', channelInGroup(listed[0], 'MUSIC') && !channelInGroup(listed[0], 'News'));
+  t.check('channelInGroup rejects an empty name', !channelInGroup(listed[0], '   '));
+
+  t.section('chainSerial');
+
+  t.check('chainSerial returns the job result', await chainSerial(null, () => 7) === 7);
+
+  const log = [];
+  let release;
+  const hold = new Promise((resolve) => { release = resolve; });
+  const first = chainSerial(null, async () => { await hold; log.push('a'); });
+  const second = chainSerial(first, async () => { log.push('b'); });
+  t.check('the second job waits for the first', same(log, []));
+  release();
+  await second;
+  t.check('jobs run in enqueue order', same(log, ['a', 'b']));
+
+  const afterFail = [];
+  const failed = chainSerial(null, async () => { afterFail.push('a'); throw new Error('nope'); });
+  const next = chainSerial(failed, async () => { afterFail.push('b'); });
+  await next;
+  t.check('a failed job does not drop the next', same(afterFail, ['a', 'b']));
+
+  t.section('applyChannelGroup caps');
+
+  const only = [channel(FAV, { groups: [] })];
+  const added = applyChannelGroup(only, FAV, '  Music  ', true);
+  t.check('add trims and writes the name', !added.error && same(added.channels[0].groups, ['Music']));
+  const again = applyChannelGroup(added.channels, FAV, 'music', true);
+  t.check('adding the same group by case is a no-op', !again.error && again.channels === added.channels);
+  const other = applyChannelGroup(
+    [channel(FAV, { groups: ['Music'] }), channel(OTH, { groups: [] })],
+    OTH,
+    'MUSIC',
+    true,
+  );
+  t.check(
+    'a second channel reuses the first spelling',
+    !other.error && same(other.channels[1].groups, ['Music']),
+  );
+  const removed = applyChannelGroup(added.channels, FAV, 'music', false);
+  t.check('remove drops the group', !removed.error && same(removed.channels[0].groups, []));
+  t.check('empty name is refused', applyChannelGroup(only, FAV, '   ', true).error === 'empty');
+  t.check('unknown channel is refused', applyChannelGroup(only, 'UCnope', 'Music', true).error === 'missing');
+
+  const eight = namesForCap(GROUP_MAX_PER_CHANNEL);
+  const fullChannel = applyChannelGroup([channel(FAV, { groups: eight })], FAV, 'extra', true);
+  t.check('ninth group on a channel is refused', fullChannel.error === 'channelCap');
+  t.check('the refused add does not mutate', same(fullChannel.channels[0].groups, eight));
+
+  const twenty = namesForCap(GROUP_MAX_DISTINCT);
+  const spread = twenty.map((name, i) => channel(`UC${String(i).padStart(22, '0')}`, { groups: [name] }));
+  const overList = applyChannelGroup(spread, spread[0].id, 'extra', true);
+  t.check('a 21st distinct group is refused', overList.error === 'listCap');
+  const joinExisting = applyChannelGroup(spread, spread[0].id, twenty[1], true);
+  t.check(
+    'joining an existing group is allowed at the list cap',
+    !joinExisting.error && joinExisting.channels[0].groups.includes(twenty[1]),
+  );
+
+  const messy = sanitizeListGroups([
+    channel(FAV, { groups: [' Music ', 'music', ...namesForCap(10, 'x')] }),
+    channel(OTH, { groups: namesForCap(8, 'y') }),
+    channel('UCthird00000000000000001', { groups: namesForCap(8, 'z') }),
+  ]);
+  t.check(
+    'sanitizeListGroups caps the list at 20 and each channel at 8',
+    groupNamesInList(messy).length === GROUP_MAX_DISTINCT
+      && messy[0].groups.length === GROUP_MAX_PER_CHANNEL
+      && messy[1].groups.length === GROUP_MAX_PER_CHANNEL
+      && messy[2].groups.length === 4
+      && messy[0].groups[0] === 'Music',
+  );
+
+  t.section('feedsView group filter');
+
+  const grouped = {
+    channels: [
+      channel(FAV, { title: 'Favourite Channel', handle: '@favchannel', favorite: true, groups: ['Music'] }),
+      channel(OTH, { title: 'Other Channel', handle: '@otherchannel', favorite: false, groups: ['News'] }),
+    ],
+    feed: sample().feed,
+  };
+  const music = feedsView({ ...grouped, settings: settings({ group: 'music' }), query: '' });
+  t.check(
+    'a group chip keeps only that group\'s videos',
+    vids(music.shown) === `${VID_NEW},${VID_MID},${VID_OLD}` && music.group === 'Music',
+    vids(music.shown),
+  );
+  t.check('group total matches the filtered list', music.total === 3, String(music.total));
+
+  const gone = feedsView({ ...grouped, settings: settings({ group: 'Gone' }), query: '' });
+  t.check(
+    'an unknown group is All',
+    gone.group === '' && vids(gone.shown) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}`,
+    vids(gone.shown),
+  );
+
+  const both = feedsView({
+    ...grouped,
+    settings: settings({ group: 'News', favoritesOnly: true }),
+    query: '',
+  });
+  t.check(
+    'group plus favourites-only applies both',
+    both.shown.length === 0 && both.showEmptyGroup && !both.showEmptyFav,
+  );
+
+  const forcedGroup = feedsView({
+    ...grouped,
+    settings: settings({ group: 'Music' }),
+    query: `https://www.youtube.com/watch?v=${VID_OTH}`,
+  });
+  t.check(
+    'an exact URL still surfaces a video the group would hide',
+    forcedGroup.forced && vids(forcedGroup.shown) === VID_OTH,
+    `${forcedGroup.forced} ${vids(forcedGroup.shown)}`,
+  );
+
+  const emptyGroup = feedsView({
+    ...grouped,
+    feed: grouped.feed.filter((row) => row.c === OTH),
+    settings: settings({ group: 'Music' }),
+    query: '',
+  });
+  t.check(
+    'a selected group with nothing to show uses the group empty state',
+    emptyGroup.showEmptyGroup && !emptyGroup.showEmptyWait && !emptyGroup.showEmptyFav,
+  );
+
+  const groupIds = feedChannelIds(grouped.channels, settings({ group: 'News' }));
+  t.check(
+    'feedChannelIds for a group is that group\'s channels',
+    groupIds instanceof Set && groupIds.size === 1 && groupIds.has(OTH),
+  );
+  t.check(
+    'feedChannelIds is null when nothing is filtered',
+    feedChannelIds(grouped.channels, settings()) === null,
+  );
+
+  t.section('openingTab');
+
+  t.check('no players and audio off is Feeds', openingTab({ players: [], audioOn: false }) === 'feeds');
+  t.check('missing args is Feeds', openingTab() === 'feeds');
+  t.check('audio mode on is Player', openingTab({ players: [], audioOn: true }) === 'audio');
+  t.check(
+    'a player with audio mode on is Player',
+    openingTab({ players: [{ ok: false, on: true }], audioOn: false }) === 'audio',
+  );
+  t.check(
+    'playing at zero is Player',
+    openingTab({ players: [{ ok: true, paused: false, currentTime: 0, duration: 100 }] }) === 'audio',
+  );
+  t.check(
+    'playing partway is Player',
+    openingTab({ players: [{ ok: true, paused: false, currentTime: 12, duration: 100 }] }) === 'audio',
+  );
+  t.check(
+    'paused at the start is Feeds',
+    openingTab({ players: [{ ok: true, paused: true, currentTime: 0, duration: 100 }] }) === 'feeds',
+  );
+  t.check(
+    'paused partway is Player',
+    openingTab({ players: [{ ok: true, paused: true, currentTime: 12, duration: 100 }] }) === 'audio',
+  );
+  t.check(
+    'paused at the end is Feeds',
+    openingTab({ players: [{ ok: true, paused: true, currentTime: 100, duration: 100 }] }) === 'feeds',
+  );
+  t.check(
+    'ended is Feeds',
+    openingTab({ players: [{ ok: true, paused: true, currentTime: 40, duration: 100, ended: true }] }) === 'feeds',
+  );
+  t.check(
+    'playing with no position is Feeds',
+    openingTab({ players: [{ ok: true, paused: false }] }) === 'feeds',
+  );
+  t.check(
+    'NaN position is Feeds',
+    openingTab({ players: [{ ok: true, paused: false, currentTime: NaN }] }) === 'feeds',
+  );
+  t.check(
+    'ok:false with no audio mode is Feeds',
+    openingTab({ players: [{ ok: false, on: false }] }) === 'feeds',
+  );
+  t.check(
+    'no YouTube tab is Feeds',
+    openingTab({ players: null, audioOn: false }) === 'feeds',
+  );
+
+  t.section('isNewSince');
+
+  t.check('newer than last visit is new', isNewSince({ at: 100 }, 50) === true);
+  t.check('at last visit is not new', isNewSince({ at: 50 }, 50) === false);
+  t.check('older is not new', isNewSince({ at: 10 }, 50) === false);
+  t.check('at: 0 is never new', isNewSince({ at: 0 }, 50) === false);
+  t.check('at: 0 is not new when lastSeenAt is 0', isNewSince({ at: 0 }, 0) === false);
+  t.check('missing at is not new', isNewSince({}, 0) === false);
+  t.check('missing lastSeenAt treats dated rows as new', isNewSince({ at: 100 }) === true);
+  t.check('zero lastSeenAt treats dated rows as new', isNewSince({ at: 100 }, 0) === true);
+  t.check('null lastSeenAt treats dated rows as new', isNewSince({ at: 100 }, null) === true);
+}
+
+function namesForCap(n, prefix = 'g') {
+  return Array.from({ length: n }, (_, i) => `${prefix}${String(i).padStart(2, '0')}`);
 }

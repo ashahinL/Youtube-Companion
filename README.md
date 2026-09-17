@@ -21,7 +21,7 @@
 
 <table align="center">
   <tr>
-    <td align="center"><img src="docs/screenshots/audio.png" width="260" alt="Audio tab" /><br /><sub>Audio</sub></td>
+    <td align="center"><img src="docs/screenshots/audio.png" width="260" alt="Player tab" /><br /><sub>Player</sub></td>
     <td align="center"><img src="docs/screenshots/feeds.png" width="260" alt="Feeds tab" /><br /><sub>Feeds</sub></td>
     <td align="center"><img src="docs/screenshots/watchlist.png" width="260" alt="Watchlist tab" /><br /><sub>Watchlist</sub></td>
   </tr>
@@ -70,7 +70,7 @@
 - Bring all your YouTube subscriptions at once: download `subscriptions.csv`
   from Google Takeout and pick it in the extension. No sign-in, and the file
   stays on your device. *(coming in 2.0)*
-- On a YouTube channel or video you don't follow yet, the Audio tab shows
+- On a YouTube channel or video you don't follow yet, the Player tab shows
   that channel with a **Follow** button. A video made by several channels
   lists each one, with a ✔ on those you already follow. *(coming in 2.0)*
 - Star your favourites. They sit at the top and are checked more often.

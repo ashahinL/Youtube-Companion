@@ -12,6 +12,7 @@ import {
   removeChannel,
   setFavorite,
   setMuted,
+  setChannelGroup,
   sortChannelsForDisplay,
   readFeed,
   saveFeed,
@@ -115,10 +116,21 @@ export default async function run(t) {
     await setFavorite('UCBJycsmduvYEL83R_U4JriQ', false);
     t.check('setFavorite turns it off', (await readChannels())[0].favorite === false);
     t.check('a new channel is not muted', (await readChannels())[0].muted === false);
+    t.check('a new channel has no groups', same((await readChannels())[0].groups, []));
     await setMuted('UCBJycsmduvYEL83R_U4JriQ', true);
     t.check('setMuted turns it on', (await readChannels())[0].muted === true);
     await setMuted('UCBJycsmduvYEL83R_U4JriQ', false);
     t.check('setMuted turns it off', (await readChannels())[0].muted === false);
+
+    const grouped = await setChannelGroup('UCBJycsmduvYEL83R_U4JriQ', '  Music  ', true);
+    t.check('setChannelGroup adds a trimmed name', !grouped.error && same(grouped.channels[0].groups, ['Music']));
+    t.check('setChannelGroup persists', same((await readChannels())[0].groups, ['Music']));
+    const sameFold = await setChannelGroup('UCBJycsmduvYEL83R_U4JriQ', 'music', true);
+    t.check('setChannelGroup does not duplicate a folded name', !sameFold.error && same(sameFold.channels[0].groups, ['Music']));
+    const cleared = await setChannelGroup('UCBJycsmduvYEL83R_U4JriQ', 'Music', false);
+    t.check('setChannelGroup removes a group', !cleared.error && same(cleared.channels[0].groups, []));
+    const empty = await setChannelGroup('UCBJycsmduvYEL83R_U4JriQ', '   ', true);
+    t.check('setChannelGroup refuses an empty name', empty.error === 'empty');
 
     t.section('updateChannels');
 

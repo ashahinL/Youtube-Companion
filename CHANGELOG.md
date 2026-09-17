@@ -7,21 +7,29 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- The Audio tab is now called **Player**. The popup opens on it only when a
+  YouTube tab has a video playing or paused partway through, or when audio
+  mode is on. Otherwise it opens on Feeds.
+- Videos that arrived since you last opened the popup get a small dot. It
+  means the same thing as the toolbar badge, and it is not a read state:
+  open again and yesterday's dots are gone.
+- Channel groups. From a channel's ⋯ menu you can put it in one or more
+  named groups. Feeds gets a row of chips to show one group at a time.
 - Audio mode's cover is a picture you choose on your device, not a web
   address. It stays on the device and is not in backups.
-- After audio mode has saved over 1 GB, the Audio tab asks once for a
+- After audio mode has saved over 1 GB, the Player tab asks once for a
   rating. Either button hides that for good.
 - A clearer name in the stores: **Companion for YouTube: Audio Only & Feeds**.
 - Undo after removing a channel. The channel comes back with its star, its
   place in the list and its videos.
 - A Follow button. Open the popup on a YouTube channel or video you don't
-  follow yet, and the Audio tab shows that channel with one button to add it.
+  follow yet, and the Player tab shows that channel with one button to add it.
   A video made by several channels lists each one with its own button, and a
   ✔ on the ones you already follow. Follow and Add return right away; the
   channel's videos load in the background with no alerts, so you can press
   Follow on every channel of a collab video one after another.
-- The player card in the Audio tab shows a ✔ before a channel you follow.
-- A sleep timer in the Audio tab: pause after 15, 30 or 60 minutes. It keeps
+- The player card in the Player tab shows a ✔ before a channel you follow.
+- A sleep timer in the Player tab: pause after 15, 30 or 60 minutes. It keeps
   counting after you close the popup.
 - Open the popup with Alt+Shift+Y. Settings lists both keyboard shortcuts
   and opens the page to change them.
@@ -66,7 +74,7 @@ shipped yet waits under Unreleased. How a version ships:
   leaving the feed looking stuck.
 
 **Fixes**
-- The scrolling title in the Audio tab stays still, on two lines, when your
+- The scrolling title in the Player tab stays still, on two lines, when your
   system asks for reduced motion.
 - When YouTube's channel feeds are down, checks still work. A channel whose
   feed fails is read from its Videos tab instead (shorts and live streams wait
@@ -96,7 +104,7 @@ shipped yet waits under Unreleased. How a version ships:
 - A check of hundreds of channels keeps going to the end instead of stopping
   when the browser puts the extension to sleep.
 - Requests to YouTube carry its current web client version.
-- The −10 and +10 buttons in the Audio tab fit their labels.
+- The −10 and +10 buttons in the Player tab fit their labels.
 - Starring or unstarring a channel updates the toolbar badge right away.
 - A check that was cut off can no longer leave checks stuck until the
   browser restarts.

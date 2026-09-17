@@ -29,6 +29,7 @@ import {
   removeChannel,
   setFavorite,
   setMuted,
+  setChannelGroup,
   readFeed,
   saveFeed,
   mergeFeedItems,
@@ -45,6 +46,7 @@ import {
   backoffDelayMs,
   isSameListing,
 } from '../lib/store.js';
+import { feedChannelIds } from '../lib/view.js';
 
 const OVERLAY_MESSAGE_KEYS = ['overlayTitle', 'overlayExit', 'overlayExitShortcut'];
 
@@ -340,12 +342,10 @@ export async function refreshBadge() {
     readPollState(),
   ]);
   let channelIds = null;
-  if (settings.feed.favoritesOnly) {
+  const groupOn = typeof settings.feed.group === 'string' && settings.feed.group.trim() !== '';
+  if (settings.feed.favoritesOnly || groupOn) {
     const channels = await readChannels();
-    channelIds = new Set();
-    for (const ch of channels) {
-      if (ch?.favorite && ch.id) channelIds.add(ch.id);
-    }
+    channelIds = feedChannelIds(channels, settings);
   }
   const n = newSinceCount(feed, poll.lastSeenAt, settings.feed.showShorts, channelIds);
   const text = n > 0 ? String(n) : '';
@@ -1012,9 +1012,14 @@ export async function handleMessage(msg, sender) {
       case 'getState':
         return await collectState();
       case 'popupOpened': {
+        // The popup paints "new" dots from the last visit. Writing
+        // lastSeenAt first would make every row look old by the time
+        // the popup reads the reply.
+        const poll = await readPollState();
+        const previousLastSeenAt = Number(poll.lastSeenAt) || 0;
         await writePollState({ lastSeenAt: Date.now() });
         await refreshBadge();
-        return await collectState();
+        return { ...(await collectState()), previousLastSeenAt };
       }
       case 'sweep':
         return await runSweep({
@@ -1044,6 +1049,12 @@ export async function handleMessage(msg, sender) {
       case 'setMuted':
         await setMuted(msg.id, msg.on);
         return { ok: true };
+      case 'setChannelGroup': {
+        const result = await setChannelGroup(msg.id, msg.name, msg.on);
+        if (result.error) return { ok: false, error: result.error };
+        await refreshBadge();
+        return { ok: true };
+      }
       case 'updateSettings': {
         // Alarms and the badge both derive from settings (poll periods,
         // showShorts). Writing storage from the popup would leave them stale.

@@ -9,6 +9,7 @@
 
 import { DEFAULT_SETTINGS, clampSettings } from './settings.js';
 import { isChannelId, isAvatarUrl } from './yt.js';
+import { sanitizeChannelGroups, sanitizeListGroups } from './view.js';
 
 // The file format's id predates the extension's current name. Changing it
 // would make every backup already on someone's disk unreadable.
@@ -91,6 +92,7 @@ function exportChannel(raw) {
     avatar: typeof raw.avatar === 'string' ? raw.avatar : '',
     favorite: !!raw.favorite,
     muted: !!raw.muted,
+    groups: sanitizeChannelGroups(raw.groups),
     addedAt: Number.isFinite(addedAt) ? addedAt : 0,
     lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
   };
@@ -114,6 +116,7 @@ function normalizeChannel(raw, now) {
     avatar: isAvatarUrl(raw.avatar) ? raw.avatar : '',
     favorite: !!raw.favorite,
     muted: !!raw.muted,
+    groups: sanitizeChannelGroups(raw.groups),
     addedAt: now,
     lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
     lastFetchAt: 0,
@@ -239,5 +242,5 @@ export function mergeBackup(current, incoming, mode) {
     };
   }
 
-  return { settings, channels: next, added, skipped };
+  return { settings, channels: sanitizeListGroups(next), added, skipped };
 }

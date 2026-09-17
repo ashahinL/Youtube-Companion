@@ -172,6 +172,24 @@ export default async function run(t) {
         feed: { ...DEFAULT_SETTINGS.feed, favoritesOnly: 1 },
       }).feed.favoritesOnly === true,
     );
+    t.check(
+      'feed.group defaults to All',
+      DEFAULT_SETTINGS.feed.group === '',
+    );
+    t.check(
+      'feed.group keeps a trimmed name',
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        feed: { ...DEFAULT_SETTINGS.feed, group: '  Music  ' },
+      }).feed.group === 'Music',
+    );
+    t.check(
+      'feed.group junk becomes All',
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        feed: { ...DEFAULT_SETTINGS.feed, group: 1 },
+      }).feed.group === '',
+    );
 
     t.section('clamp: audio.restoreQuality');
 
@@ -385,6 +403,16 @@ export default async function run(t) {
     t.check('siblings in the same group survive',
       patched.alerts.notifyNormal === true && patched.alerts.useAvatarIcon === true);
     t.check('other groups survive', patched.poll.enabled === true && patched.feed.maxItems === 500);
+
+    await writeSettings({ feed: { group: 'Podcasts' } });
+    const grouped = await readSettings();
+    t.check('feed.group survives a write', grouped.feed.group === 'Podcasts');
+    await writeSettings({ feed: { showShorts: true } });
+    const keptGroup = await readSettings();
+    t.check(
+      'a later feed patch keeps group',
+      keptGroup.feed.group === 'Podcasts' && keptGroup.feed.showShorts === true,
+    );
 
     await writeSettings({ poll: { intervalMinutes: 45 } });
     const later = await readSettings();

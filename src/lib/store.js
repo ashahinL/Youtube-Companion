@@ -3,6 +3,8 @@
  * own chrome.storage.local key so a settings reset cannot wipe them.
  */
 
+import { applyChannelGroup, sanitizeChannelGroups } from './view.js';
+
 const DEFAULT_POLL_STATE = {
   running: false,
   lastPollAt: 0,
@@ -68,6 +70,7 @@ export async function addChannel(entry) {
     avatar: entry.avatar ?? '',
     favorite: !!entry.favorite,
     muted: !!entry.muted,
+    groups: sanitizeChannelGroups(entry.groups),
     addedAt: Number.isFinite(entry.addedAt) ? entry.addedAt : Date.now(),
     lastFetchAt: Number.isFinite(entry.lastFetchAt) ? entry.lastFetchAt : 0,
     lastVideoAt: Number.isFinite(entry.lastVideoAt) ? entry.lastVideoAt : 0,
@@ -146,6 +149,14 @@ export async function setFavorite(id, on) {
 
 export async function setMuted(id, on) {
   return updateChannel(id, { muted: !!on });
+}
+
+export async function setChannelGroup(id, name, on) {
+  const channels = await readChannels();
+  const result = applyChannelGroup(channels, id, name, on);
+  if (result.error) return { channels, error: result.error };
+  if (result.channels !== channels) await writeChannels(result.channels);
+  return { channels: result.channels, error: '' };
 }
 
 function newestVideoAt(channel, feed) {

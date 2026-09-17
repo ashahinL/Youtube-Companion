@@ -196,7 +196,7 @@ The same text for Edge's **Notes for certification** and the Chrome Web
 Store's **Test instructions**:
 
 ```text
-No sign-in is needed to test. Add a channel by pasting https://www.youtube.com/@NASA into the Watchlist box and pressing Add; its videos appear under Feeds within a few seconds. Open any YouTube video, then turn on Audio mode in the Audio tab.
+No sign-in is needed to test. Add a channel by pasting https://www.youtube.com/@NASA into the Watchlist box and pressing Add; its videos appear under Feeds within a few seconds. Open any YouTube video, then turn on Audio mode in the Player tab.
 ```
 
 A reviewer opening the extension fresh sees an empty feed, so the steps

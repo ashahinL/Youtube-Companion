@@ -282,6 +282,7 @@ async function putChannel(entry) {
     favorite: !!entry.favorite,
     seeded: !!entry.seeded,
     lastVideoAt: entry.lastVideoAt,
+    groups: entry.groups,
   });
 }
 
@@ -1623,6 +1624,36 @@ export default async function run(t) {
       opened.pollState.lastSeenAt >= beforeOpen,
       String(opened.pollState.lastSeenAt),
     );
+    t.check(
+      'popupOpened returns the previous lastSeenAt',
+      opened.previousLastSeenAt === 0,
+      String(opened.previousLastSeenAt),
+    );
+
+    await writePollState({ lastSeenAt: 50 });
+    await refreshBadge();
+    t.check(
+      'badge still counts items newer than lastSeenAt before the next open',
+      mock.badgeText === '3',
+      JSON.stringify(mock.badgeText),
+    );
+    const openedAgain = await handleMessage({ type: 'popupOpened' });
+    t.check(
+      'popupOpened returns the last visit',
+      openedAgain.previousLastSeenAt === 50,
+      String(openedAgain.previousLastSeenAt),
+    );
+    t.check(
+      'popupOpened still moves lastSeenAt forward',
+      openedAgain.pollState.lastSeenAt > 50
+        && openedAgain.pollState.lastSeenAt >= beforeOpen,
+      String(openedAgain.pollState.lastSeenAt),
+    );
+    t.check('badge still clears on open', mock.badgeText === '', JSON.stringify(mock.badgeText));
+    t.check(
+      'getState does not carry previousLastSeenAt',
+      !('previousLastSeenAt' in (await handleMessage({ type: 'getState' }))),
+    );
 
     t.section('badge honours favoritesOnly');
 
@@ -1657,6 +1688,41 @@ export default async function run(t) {
     t.check(
       'favoritesOnly off counts every channel, still hiding shorts',
       mock.badgeText === '2',
+      JSON.stringify(mock.badgeText),
+    );
+
+    t.section('badge honours feed.group');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', groups: ['Music'], seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', groups: ['News'], seeded: true });
+    await saveFeed([
+      { v: 'musicnew01', c: MKBHD, t: 'Music new', at: 100, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'newsnew001', c: BEAST, t: 'News new', at: 90, d: 1, vw: 0, k: 'video', st: 0 },
+      { v: 'musicold01', c: MKBHD, t: 'Music old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    await writePollState({ lastSeenAt: 50 });
+    await writeSettings({ feed: { showShorts: true, favoritesOnly: false, group: 'Music' } });
+    await refreshBadge();
+    t.check(
+      'a selected group counts only that group\'s new videos',
+      mock.badgeText === '1',
+      JSON.stringify(mock.badgeText),
+    );
+
+    await writeSettings({ feed: { group: 'Gone' } });
+    await refreshBadge();
+    t.check(
+      'an unknown group counts every channel',
+      mock.badgeText === '2',
+      JSON.stringify(mock.badgeText),
+    );
+
+    await writeSettings({ feed: { group: 'News', favoritesOnly: true } });
+    await refreshBadge();
+    t.check(
+      'group plus favourites-only with no favourite in that group is empty',
+      mock.badgeText === '',
       JSON.stringify(mock.badgeText),
     );
 

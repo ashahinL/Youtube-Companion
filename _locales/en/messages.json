@@ -24,8 +24,8 @@
     "description": "Popup tab label for the channel list."
   },
   "tabAudio": {
-    "message": "Audio",
-    "description": "Popup tab label for audio mode."
+    "message": "Player",
+    "description": "Popup tab label for the player."
   },
   "tabSettings": {
     "message": "Settings",
@@ -203,11 +203,11 @@
   },
   "followChannelLabel": {
     "message": "This channel",
-    "description": "Small label on the Follow card at the top of the Audio tab, when the focused tab is a YouTube channel page."
+    "description": "Small label on the Follow card at the top of the Player tab, when the focused tab is a YouTube channel page."
   },
   "followVideoLabel": {
     "message": "Channel of this video",
-    "description": "Small label on the Follow card at the top of the Audio tab, when the focused tab is a YouTube video."
+    "description": "Small label on the Follow card at the top of the Player tab, when the focused tab is a YouTube video."
   },
   "followCollabLabel": {
     "message": "Channels of this video",
@@ -215,7 +215,7 @@
   },
   "followingChannel": {
     "message": "You follow this channel",
-    "description": "Accessible name and tooltip of the check mark before a channel name that is already on the Watchlist, on the Follow card and in the Audio tab's player card."
+    "description": "Accessible name and tooltip of the check mark before a channel name that is already on the Watchlist, on the Follow card and in the Player tab's player card."
   },
   "followButton": {
     "message": "Follow",
@@ -233,7 +233,7 @@
   },
   "followDone": {
     "message": "You're following $NAME$ now.",
-    "description": "Green status on the Audio tab after the Follow button added a channel. $NAME$ is the channel name.",
+    "description": "Green status on the Player tab after the Follow button added a channel. $NAME$ is the channel name.",
     "placeholders": {
       "name": {
         "content": "$1",
@@ -252,6 +252,10 @@
   "watchlistMuteRemove": {
     "message": "Unmute alerts",
     "description": "Menu item that turns desktop alerts for this channel back on."
+  },
+  "watchlistGroups": {
+    "message": "Groups…",
+    "description": "Menu item that opens the sheet for putting this channel in named groups."
   },
   "watchlistMuted": {
     "message": "Alerts muted",
@@ -311,6 +315,14 @@
     "message": "Hide videos from channels that are not favourites.",
     "description": "Tooltip on the Favourites only checkbox on the Feeds tab."
   },
+  "feedGroupsLabel": {
+    "message": "Groups",
+    "description": "Accessible name of the Feeds chip row that filters the feed to one group."
+  },
+  "feedGroupAll": {
+    "message": "All",
+    "description": "Chip and empty-state button that shows every channel's videos, not one group."
+  },
   "feedRefresh": {
     "message": "Refresh",
     "description": "Accessible name of the Feeds refresh control, and the label of the refresh button in the empty-feed state."
@@ -365,6 +377,10 @@
     "message": "No videos from favourite channels",
     "description": "Empty state on the Feeds tab when Favourites only is on and nothing from a favourite channel is visible."
   },
+  "emptyFeedGroup": {
+    "message": "No videos in this group",
+    "description": "Empty state on the Feeds tab when a group chip is selected and nothing from those channels is visible."
+  },
   "emptyFeedFilter": {
     "message": "No videos match \"$QUERY$\"",
     "description": "Empty state on the Feeds tab when the text filter matched nothing. $QUERY$ is the filter text.",
@@ -417,6 +433,10 @@
       }
     }
   },
+  "feedItemNew": {
+    "message": "New",
+    "description": "Accessible marker on a feed row whose upload time is newer than the last time the popup was opened. The same meaning as the toolbar badge. Spoken, not colour alone."
+  },
   "feedOpenVideo": {
     "message": "Open $TITLE$",
     "description": "Accessible name of a feed row. $TITLE$ is the video title.",
@@ -458,6 +478,26 @@
   "sheetClose": {
     "message": "Close",
     "description": "Accessible name of the control that closes the channel sheet."
+  },
+  "groupsSheetTitle": {
+    "message": "Groups",
+    "description": "Title of the sheet that assigns groups to one channel."
+  },
+  "groupsNew": {
+    "message": "New group",
+    "description": "Placeholder and accessible name of the field that creates a group and puts this channel in it."
+  },
+  "groupsChannelCap": {
+    "message": "This channel is already in 8 groups.",
+    "description": "Error in the groups sheet when a channel is already in the per-channel maximum of 8 groups."
+  },
+  "groupsListCap": {
+    "message": "You already have 20 groups.",
+    "description": "Error in the groups sheet when the list already has the maximum of 20 distinct groups."
+  },
+  "groupsEmptyHint": {
+    "message": "No groups yet. Type a name to make one.",
+    "description": "Quiet line on the groups sheet when this channel is in no group and no groups exist yet."
   },
   "channelEmpty": {
     "message": "No videos",
@@ -851,7 +891,7 @@
   },
   "audioModeLabel": {
     "message": "Audio mode",
-    "description": "Label next to the master audio-mode toggle on the Audio tab."
+    "description": "Label next to the master audio-mode toggle on the Player tab."
   },
   "audioModeToggle": {
     "message": "Turn audio mode on or off",
@@ -863,7 +903,7 @@
   },
   "audioPageNotice": {
     "message": "Open a YouTube video to use audio mode.",
-    "description": "Notice on the Audio tab when no controllable YouTube tab is open."
+    "description": "Notice on the Player tab when no controllable YouTube tab is open."
   },
   "audioRestoreQuality": {
     "message": "Restore quality",
@@ -915,7 +955,7 @@
   },
   "audioSleep": {
     "message": "Sleep timer",
-    "description": "Accessible name and tooltip of the Audio tab select that pauses the video after a set time."
+    "description": "Accessible name and tooltip of the Player tab select that pauses the video after a set time."
   },
   "audioSleepOff": {
     "message": "Sleep off",
@@ -945,7 +985,7 @@
   },
   "audioShortcutBound": {
     "message": "Shortcut $SHORTCUT$ — click to change",
-    "description": "Audio tab hint when a keyboard shortcut is bound. $SHORTCUT$ is the real combination from chrome.commands, such as Alt+Shift+A.",
+    "description": "Player tab hint when a keyboard shortcut is bound. $SHORTCUT$ is the real combination from chrome.commands, such as Alt+Shift+A.",
     "placeholders": {
       "shortcut": {
         "content": "$1",
@@ -955,15 +995,15 @@
   },
   "audioShortcutNone": {
     "message": "No shortcut assigned — click to set one",
-    "description": "Audio tab hint when Chrome registered the command with no shortcut. Clicking opens chrome://extensions/shortcuts."
+    "description": "Player tab hint when Chrome registered the command with no shortcut. Clicking opens chrome://extensions/shortcuts."
   },
   "audioShortcutTitle": {
     "message": "Click to set the keyboard shortcut.",
-    "description": "Tooltip on the Audio tab shortcut hint before JavaScript replaces it with the bound or empty copy."
+    "description": "Tooltip on the Player tab shortcut hint before JavaScript replaces it with the bound or empty copy."
   },
   "audioPickerLabel": {
     "message": "Open YouTube tabs",
-    "description": "Accessible name of the row of open YouTube tabs the Audio tab can drive."
+    "description": "Accessible name of the row of open YouTube tabs the Player tab can drive."
   },
   "audioPickerTab": {
     "message": "Play $TITLE$",
@@ -1031,11 +1071,11 @@
   },
   "audioStatsThisMonth": {
     "message": "This Month",
-    "description": "Audio tab statistics filter for the current calendar month."
+    "description": "Player tab statistics filter for the current calendar month."
   },
   "audioStatsAllTime": {
     "message": "All Time",
-    "description": "Audio tab statistics filter for never-pruned running totals."
+    "description": "Player tab statistics filter for never-pruned running totals."
   },
   "audioStatsUsed": {
     "message": "Data used",
@@ -1155,7 +1195,7 @@
   },
   "audioRateNote": {
     "message": "You've saved over 1 GB with audio mode. A rating helps other people find the extension.",
-    "description": "Thank-you on the Audio tab the first time all-time data saved reaches 1 GB."
+    "description": "Thank-you on the Player tab the first time all-time data saved reaches 1 GB."
   },
   "audioRateYes": {
     "message": "Rate it",

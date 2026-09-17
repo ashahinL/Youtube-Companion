@@ -111,6 +111,16 @@ body {
   font: 400 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
+/* No tab is selected until JS picks Player or Feeds. Pin the height so
+ * the popup does not open as a short strip and then jump. */
+body.is-opening {
+  min-height: 600px;
+}
+
+body.is-opening .tabs {
+  pointer-events: none;
+}
+
 .tabs {
   display: flex;
   gap: 2px;
@@ -265,6 +275,7 @@ body {
 .audio-shortcut:focus-visible,
 .audio-picker__tab:focus-visible,
 .audio-stats__filter:focus-visible,
+.feed-groups__chip:focus-visible,
 .audio-rate__actions .btn:focus-visible,
 .audio-seek:focus-visible,
 .switch:has(input:focus-visible) {
@@ -511,6 +522,15 @@ body {
   color: var(--accent);
 }
 
+.channel-row__groups {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .channel-row__actions {
   display: flex;
   flex: none;
@@ -656,6 +676,40 @@ body {
   margin-block-start: 0;
 }
 
+.feed-groups {
+  display: flex;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  margin-block-end: 8px;
+  padding-block: 2px 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.feed-groups__chip {
+  flex: none;
+  padding-block: 5px;
+  padding-inline: 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.feed-groups__chip[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
 .feed-fav-filter {
   margin-block-start: -4px;
   margin-block-end: 10px;
@@ -754,10 +808,32 @@ body {
   display: block;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 .feed-row__headline {
   display: flex;
   align-items: flex-start;
   gap: 6px;
+}
+
+.feed-row__new {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-block-start: 5px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .feed-row__title {
@@ -1126,6 +1202,29 @@ body {
 #support-sheet .footnote {
   margin: 0;
   margin-block-end: 12px;
+}
+
+#groups-sheet-empty {
+  margin: 0;
+  margin-block-end: 10px;
+}
+
+.groups-sheet__list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 40vh;
+  margin-block-end: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.groups-sheet__new {
+  margin-block-end: 8px;
+}
+
+.groups-sheet__new .add-row__input {
+  padding-inline-end: 10px;
 }
 
 #support-methods {

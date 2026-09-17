@@ -28,6 +28,7 @@ function channel(id, extra = {}) {
     avatar: extra.avatar ?? 'https://yt3.ggpht.com/a',
     favorite: !!extra.favorite,
     muted: !!extra.muted,
+    groups: extra.groups,
     addedAt: extra.addedAt ?? 1_700_000_000_000,
     lastFetchAt: extra.lastFetchAt ?? 99,
     lastVideoAt: extra.lastVideoAt ?? 50,
@@ -48,7 +49,7 @@ export default async function run(t) {
     feed: { ...DEFAULT_SETTINGS.feed, showShorts: true, maxItems: 200 },
   });
   const channels = [
-    channel(MKBHD, { title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, muted: true, addedAt: 111 }),
+    channel(MKBHD, { title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, muted: true, addedAt: 111, groups: [' Music ', 'music', 'Podcasts'] }),
     channel(BEAST, { title: 'MrBeast', handle: '@MrBeast', favorite: false, addedAt: 222 }),
   ];
   const built = buildBackup({
@@ -77,6 +78,11 @@ export default async function run(t) {
   const row = built.channels[0];
   t.check('favorite survives', row.favorite === true, String(row.favorite));
   t.check('muted survives', row.muted === true && built.channels[1].muted === false, JSON.stringify(built.channels));
+  t.check(
+    'groups survive sanitised',
+    same(row.groups, ['Music', 'Podcasts']) && same(built.channels[1].groups, []),
+    JSON.stringify(row.groups),
+  );
   t.check('addedAt survives', row.addedAt === 111, String(row.addedAt));
   t.check('lastVideoAt survives', row.lastVideoAt === 50, String(row.lastVideoAt));
   t.check('lastFetchAt is omitted', !('lastFetchAt' in row));
@@ -230,6 +236,8 @@ export default async function run(t) {
   const gotBeast = restored.channels.find((c) => c.id === BEAST);
   t.check('round trip keeps favourite', gotMk?.favorite === true, JSON.stringify(gotMk));
   t.check('round trip keeps muted', gotMk?.muted === true, JSON.stringify(gotMk));
+  t.check('round trip keeps groups', same(gotMk?.groups, ['Music', 'Podcasts']), JSON.stringify(gotMk?.groups));
+  t.check('round trip fills missing groups', same(gotBeast?.groups, []), JSON.stringify(gotBeast?.groups));
   t.check(
     'round trip addedAt is the import time, not the file\'s',
     gotMk?.addedAt >= Date.now() - 5_000 && gotMk?.addedAt <= Date.now(),
@@ -357,6 +365,42 @@ export default async function run(t) {
   t.check('stale lastError was reset', fresh.lastError === null, JSON.stringify(fresh.lastError));
   t.check('stale seeded was reset', fresh.seeded === false, String(fresh.seeded));
   t.check('favorite still rode along', fresh.favorite === false);
+  t.check('a 1.x channel without groups imports as []', same(fresh.groups, []));
+
+  t.section('groups on merge and replace');
+
+  const liveGrouped = {
+    settings: {},
+    channels: [channel(MKBHD, { groups: ['Live'] })],
+  };
+  const fileGrouped = {
+    app: 'youtube-companion',
+    version: 1,
+    settings: { feed: { group: 'Music' } },
+    channels: [
+      { id: MKBHD, groups: ['File'] },
+      { id: BEAST, groups: ['  News  ', 'news', 'x'.repeat(30)] },
+    ],
+  };
+  const mergedGroups = mergeBackup(liveGrouped, fileGrouped, 'merge');
+  t.check(
+    'merge keeps the live channel\'s groups',
+    same(mergedGroups.channels.find((c) => c.id === MKBHD)?.groups, ['Live']),
+  );
+  t.check(
+    'merge sanitises groups on a new channel',
+    same(mergedGroups.channels.find((c) => c.id === BEAST)?.groups, ['News', 'x'.repeat(24)]),
+  );
+  t.check(
+    'merge carries feed.group from the file',
+    mergedGroups.settings.feed.group === 'Music',
+  );
+  const replacedGroups = mergeBackup(liveGrouped, fileGrouped, 'replace');
+  t.check(
+    'replace takes the file groups, sanitised',
+    same(replacedGroups.channels.find((c) => c.id === MKBHD)?.groups, ['File'])
+      && same(replacedGroups.channels.find((c) => c.id === BEAST)?.groups, ['News', 'x'.repeat(24)]),
+  );
   t.check(
     'addedAt is the import time, not the file\'s',
     fresh.addedAt >= Date.now() - 5_000 && fresh.addedAt <= Date.now(),

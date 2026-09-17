@@ -4,6 +4,7 @@
  */
 
 import { AUDIO_COVER_KEY, planAudioCoverMigration } from './cover.js';
+import { normalizeGroupName } from './view.js';
 
 export const DEFAULT_SETTINGS = {
   poll: {
@@ -25,6 +26,8 @@ export const DEFAULT_SETTINGS = {
     maxItems: 500,
     showShorts: false,
     favoritesOnly: false,
+    // '' is All. A name that is not on any channel is treated as All.
+    group: '',
   },
   ui: {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
@@ -154,6 +157,7 @@ export function clampSettings(s) {
       maxItems: clampRange(feed.maxItems, 50, 5000, d.feed.maxItems),
       showShorts: boolOf(feed, 'showShorts', d.feed.showShorts),
       favoritesOnly: boolOf(feed, 'favoritesOnly', d.feed.favoritesOnly),
+      group: typeof feed.group === 'string' ? normalizeGroupName(feed.group) : d.feed.group,
     },
     ui: {
       // Anything outside the shipped locales follows the browser language.

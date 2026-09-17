@@ -1,12 +1,14 @@
 /**
- * Popup: four tabs plus the channel sheet and support sheet overlays.
- * Audio is first and is the tab the popup opens on. Feeds is the merged
- * timeline; its box filters videos, and Add adds a channel the same way
- * the Watchlist box does. The Watchlist tab adds by URL or handle,
- * filters the list as you type, favourites and removes channels. Empty
- * Add reads the focused tab, and on a YouTube channel or video the Audio
- * tab offers that channel with a Follow button. The worker owns all
- * network; this page only renders.
+ * Popup: four tabs plus the channel, groups, and support sheet overlays.
+ * Player is first; the popup opens on it only when a YouTube tab is
+ * playing or paused partway, or audio mode is on, otherwise on Feeds.
+ * That choice is made once at open. Feeds is the merged timeline; its
+ * box filters videos, and Add adds a channel the same way the Watchlist
+ * box does. The Watchlist tab adds by URL or handle, filters the list
+ * as you type, favourites and removes channels. Empty Add reads the
+ * focused tab, and on a YouTube channel or video the Player tab offers
+ * that channel with a Follow button. The worker owns all network; this
+ * page only renders.
  */
 
 import { thumbUrl } from '../lib/yt.js';
@@ -37,7 +39,12 @@ import {
   visibleFeedItems,
   feedItemUrl,
   rowOpenModes,
+  fold,
   feedsView,
+  groupNamesInList,
+  sanitizeChannelGroups,
+  normalizeGroupName,
+  chainSerial,
   watchlistView,
   audioTabView,
   audioStatsView,
@@ -54,12 +61,16 @@ import {
   shouldSyncAudioSeek,
   shouldSyncAudioSelect,
   audioVolumeSelectValue,
+  openingTab,
+  isNewSince,
 } from '../lib/view.js';
 import { SUPPORT_METHODS, supportRows } from '../lib/support.js';
 
 const Core = globalThis.AudioModeCore;
 const LAST_TAB_KEY = 'audioLastSelectedTabId';
 const AUDIO_POLL_MS = 1000;
+// Give the player probe a short window; after that, open on Feeds.
+const OPENING_TAB_MS = 250;
 
 let messages = {};
 let locale = 'en';
@@ -84,6 +95,10 @@ const view = {
   clearOpen: false,
   sheetId: null,
   sheetError: '',
+  groupsSheetId: null,
+  groupsError: '',
+  // fold(name) → desired on/off for ticks that have not landed yet.
+  groupPending: {},
   // { id, title } of the last removed channel while Undo is on offer.
   undo: null,
   supportOpen: false,
@@ -112,6 +127,9 @@ const view = {
   audioCover: '',
   rateNoteDone: false,
   coverError: '',
+  // Previous pollState.lastSeenAt, held for this open so feed dots
+  // do not vanish while the user is looking at them.
+  feedSeenAt: 0,
 };
 
 let audioPollTimer = null;
@@ -125,14 +143,24 @@ let audioSleepPending = false;
 const FEED_PAGE = 50;
 let feedLimit = FEED_PAGE;
 let feedPageKey = '';
+let feedGroupsScrolledTo;
+let groupWrite = Promise.resolve();
 let audioPickerKey = '';
 let supportOpenerId = null;
 const supportCopiedTimers = new WeakMap();
 
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 const panels = [...document.querySelectorAll('[role="tabpanel"]')];
+let openingChosen = false;
+
+function revealOpen() {
+  document.body.classList.remove('is-opening');
+  document.querySelector('.tabs')?.setAttribute('aria-busy', 'false');
+}
 
 function activate(tab) {
+  openingChosen = true;
+  revealOpen();
   for (const t of tabs) {
     const on = t === tab;
     t.classList.toggle('tab--active', on);
@@ -149,7 +177,7 @@ function activate(tab) {
 }
 
 function openTabName() {
-  return panels.find((panel) => !panel.hidden)?.id || 'audio';
+  return panels.find((panel) => !panel.hidden)?.id || '';
 }
 
 for (const tab of tabs) {
@@ -304,15 +332,54 @@ function openUrl(url) {
 function openChannelSheet(id) {
   if (!id) return;
   view.supportOpen = false;
+  view.groupsSheetId = null;
+  view.groupsError = '';
   view.sheetId = id;
   view.sheetError = '';
   render();
   document.getElementById('channel-sheet-close')?.focus?.();
 }
 
+function openGroupsSheet(id) {
+  if (!id) return;
+  view.supportOpen = false;
+  view.sheetId = null;
+  view.sheetError = '';
+  view.groupsSheetId = id;
+  view.groupsError = '';
+  render();
+  const names = groupNamesInList(view.channels, locale);
+  if (!names.length) document.getElementById('groups-sheet-input')?.focus?.();
+  else document.getElementById('groups-sheet-close')?.focus?.();
+}
+
+function closeGroupsSheet() {
+  if (!view.groupsSheetId) return;
+  const returnId = view.groupsSheetId;
+  view.groupsSheetId = null;
+  view.groupsError = '';
+  const input = document.getElementById('groups-sheet-input');
+  if (input) input.value = '';
+  render();
+  focusGroupsOpener(returnId);
+}
+
+function focusGroupsOpener(channelId) {
+  if (channelId) {
+    const btn = document.getElementById(`channel-menu-btn-${channelId}`);
+    if (btn && !btn.closest('[hidden]')) {
+      btn.focus();
+      return;
+    }
+  }
+  focusSheetOpener(channelId);
+}
+
 function openSupportSheet(opener) {
   view.sheetId = null;
   view.sheetError = '';
+  view.groupsSheetId = null;
+  view.groupsError = '';
   view.supportOpen = true;
   supportOpenerId = opener && opener.id ? opener.id : null;
   render();
@@ -364,6 +431,7 @@ function focusSheetOpener(channelId) {
 function openSheetEl() {
   // Only one sheet is shown at a time; Tab must cycle that panel, not both.
   if (view.supportOpen) return document.getElementById('support-sheet');
+  if (view.groupsSheetId) return document.getElementById('groups-sheet');
   if (view.sheetId) return document.getElementById('channel-sheet');
   return null;
 }
@@ -429,6 +497,13 @@ function channelRow(ch, locale) {
     name.appendChild(star);
   }
   text.appendChild(name);
+
+  const groupLabels = sanitizeChannelGroups(ch.groups)
+    .slice()
+    .sort((a, b) => a.localeCompare(b, locale, { sensitivity: 'base' }));
+  if (groupLabels.length) {
+    text.appendChild(textEl('div', 'channel-row__groups', groupLabels.join(', ')));
+  }
 
   const meta = document.createElement('div');
   meta.className = 'channel-row__meta';
@@ -565,16 +640,20 @@ function channelMenu(ch) {
       void toggleMuted(ch.id, !ch.muted);
     },
   );
+  const groups = buttonEl('menu__item', t('watchlistGroups'), () => {
+    closeAllMenus();
+    openGroupsSheet(ch.id);
+  });
   const remove = buttonEl('menu__item menu__item--danger', t('watchlistRemove'), () => {
     closeAllMenus();
     void removeChannel(ch.id);
   });
-  for (const item of [fav, mute, remove]) {
+  for (const item of [fav, mute, groups, remove]) {
     item.setAttribute('role', 'menuitem');
     item.tabIndex = -1;
   }
 
-  list.append(fav, mute, remove);
+  list.append(fav, mute, groups, remove);
   menu.append(toggle, list);
   return menu;
 }
@@ -647,13 +726,15 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   const row = document.createElement('div');
   row.className = 'feed-row';
   const title = item.t || '';
+  const isNew = isNewSince(item, view.feedSeenAt);
+  const openLabel = t(modes.row === 'audio' ? 'feedOpenVideoAudio' : 'feedOpenVideo', [title]);
 
   const openBtn = document.createElement('button');
   openBtn.type = 'button';
   openBtn.className = 'feed-row__open';
   openBtn.setAttribute(
     'aria-label',
-    t(modes.row === 'audio' ? 'feedOpenVideoAudio' : 'feedOpenVideo', [title]),
+    isNew ? `${t('feedItemNew')}. ${openLabel}` : openLabel,
   );
   openBtn.addEventListener('click', () => openFeedItem(item, modes.row));
   row.appendChild(openBtn);
@@ -679,6 +760,13 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
 
   const headline = document.createElement('div');
   headline.className = 'feed-row__headline';
+  if (isNew) {
+    const dot = document.createElement('span');
+    dot.className = 'feed-row__new';
+    dot.setAttribute('aria-hidden', 'true');
+    headline.appendChild(dot);
+    row.appendChild(textEl('span', 'visually-hidden', t('feedItemNew')));
+  }
   headline.appendChild(textEl('span', 'feed-row__title', title));
   const tag = feedTag(item, locale);
   if (tag) headline.appendChild(tag);
@@ -759,6 +847,38 @@ function slowDownText() {
   return t('feedSlowDown', [when]);
 }
 
+function renderFeedGroups(locale, selected) {
+  const row = document.getElementById('feed-groups');
+  if (!row) return;
+  const names = groupNamesInList(view.channels, locale);
+  if (!names.length) {
+    row.hidden = true;
+    row.replaceChildren();
+    feedGroupsScrolledTo = undefined;
+    return;
+  }
+  row.hidden = false;
+  const hadFocus = row.contains(document.activeElement);
+  row.replaceChildren();
+  const chips = [{ name: '', label: t('feedGroupAll') }, ...names.map((name) => ({ name, label: name }))];
+  for (const chip of chips) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'feed-groups__chip';
+    btn.textContent = chip.label;
+    btn.dataset.group = chip.name;
+    const on = chip.name === selected || (chip.name === '' && !selected);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    row.appendChild(btn);
+  }
+  const pressed = row.querySelector('[aria-pressed="true"]');
+  if (selected !== feedGroupsScrolledTo) {
+    pressed?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+    feedGroupsScrolledTo = selected;
+  }
+  if (hadFocus) pressed?.focus();
+}
+
 function renderFeeds(locale) {
   const form = document.getElementById('feed-add-form');
   const filterEl = document.getElementById('feed-filter');
@@ -778,6 +898,7 @@ function renderFeeds(locale) {
   const emptyWait = document.getElementById('feed-empty-no-items');
   const emptyFilter = document.getElementById('feed-empty-filter');
   const emptyFav = document.getElementById('feed-empty-favorites');
+  const emptyGroup = document.getElementById('feed-empty-group');
   const missEl = document.getElementById('feed-filter-miss');
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
   const favBox = document.getElementById('feed-favorites-only');
@@ -859,6 +980,7 @@ function renderFeeds(locale) {
   if (favBox) favBox.checked = favOnly;
   const q = feeds.query;
   const { shown, onList, addable } = feeds;
+  renderFeedGroups(locale, feeds.group);
 
   addBtn.disabled = view.adding || view.busy || !addable;
   addBtn.textContent = onList ? t('watchlistOnList') : t('watchlistAdd');
@@ -867,7 +989,7 @@ function renderFeeds(locale) {
     : (q ? t('feedFilterPlaceholder') : t('watchlistAddFromTab'));
   if (clearBtn) clearBtn.hidden = !q;
 
-  const pageKey = JSON.stringify([q, favOnly, !!view.settings?.feed?.showShorts]);
+  const pageKey = JSON.stringify([q, favOnly, feeds.group, !!view.settings?.feed?.showShorts]);
   if (pageKey !== feedPageKey) {
     feedPageKey = pageKey;
     feedLimit = FEED_PAGE;
@@ -887,6 +1009,7 @@ function renderFeeds(locale) {
   emptyNone.hidden = !feeds.showEmptyNone;
   emptyWait.hidden = !feeds.showEmptyWait;
   emptyFav.hidden = !feeds.showEmptyFav;
+  if (emptyGroup) emptyGroup.hidden = !feeds.showEmptyGroup;
   emptyFilter.hidden = !feeds.showEmptyFilter;
   listEl.hidden = shown.length === 0;
 
@@ -986,6 +1109,7 @@ function render() {
   if (open === 'audio') renderAudio();
   if (open === 'settings') renderSettings(locale);
   renderChannelSheet();
+  renderGroupsSheet();
   renderSupportSheet();
 }
 
@@ -1080,6 +1204,71 @@ function renderChannelSheet() {
   if (!itemsNow.includes(document.activeElement)) {
     // The focused video row was rebuilt, or ↻ was hidden under focus.
     document.getElementById('channel-sheet-close')?.focus?.();
+  }
+}
+
+function renderGroupsSheet() {
+  const sheet = document.getElementById('groups-sheet');
+  if (!sheet) return;
+
+  const id = view.groupsSheetId;
+  const ch = id ? view.channels.find((c) => c.id === id) : null;
+  if (!id || !ch) {
+    const wasShown = !sheet.hidden;
+    view.groupsSheetId = null;
+    sheet.hidden = true;
+    if (wasShown && id) focusGroupsOpener(id);
+    return;
+  }
+
+  sheet.hidden = false;
+
+  const channelEl = document.getElementById('groups-sheet-channel');
+  if (channelEl) channelEl.textContent = ch.title || ch.handle || ch.id;
+
+  const names = groupNamesInList(view.channels, locale);
+  const mine = new Set(sanitizeChannelGroups(ch.groups).map((name) => fold(name)));
+  const pending = view.groupPending || {};
+  const listEl = document.getElementById('groups-sheet-list');
+  const emptyEl = document.getElementById('groups-sheet-empty');
+  if (emptyEl) emptyEl.hidden = names.length > 0;
+  if (listEl) listEl.hidden = names.length === 0;
+  const prevName = document.activeElement?.dataset?.groupName;
+  listEl.replaceChildren();
+  for (const name of names) {
+    const row = document.createElement('label');
+    row.className = 'row';
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    const key = fold(name);
+    const waiting = Object.prototype.hasOwnProperty.call(pending, key);
+    box.checked = waiting ? !!pending[key] : mine.has(key);
+    box.dataset.groupName = name;
+    if (waiting) box.setAttribute('aria-busy', 'true');
+    box.addEventListener('change', () => {
+      void applyGroup(ch.id, name, box.checked);
+    });
+    row.appendChild(box);
+    row.appendChild(textEl('span', '', name));
+    listEl.appendChild(row);
+  }
+
+  const err = document.getElementById('groups-sheet-error');
+  if (err) {
+    if (view.groupsError) {
+      err.hidden = false;
+      err.textContent = view.groupsError;
+    } else {
+      err.hidden = true;
+      err.textContent = '';
+    }
+  }
+
+  if (prevName) {
+    const again = [...listEl.querySelectorAll('input')].find((el) => el.dataset.groupName === prevName);
+    again?.focus();
+  } else if (!sheet.contains(document.activeElement)) {
+    document.getElementById('groups-sheet-close')?.focus?.();
   }
 }
 
@@ -1837,6 +2026,46 @@ async function toggleMuted(id, on) {
   });
 }
 
+function groupsErrorText(error) {
+  const key = error === 'channelCap'
+    ? 'groupsChannelCap'
+    : error === 'listCap'
+      ? 'groupsListCap'
+      : '';
+  return key ? t(key) : formatError(error);
+}
+
+async function applyGroup(id, name, on) {
+  const key = fold(normalizeGroupName(name) || String(name || ''));
+  if (!id || !key) return;
+  const want = !!on;
+  view.groupsError = '';
+  view.groupPending = { ...view.groupPending, [key]: want };
+  render();
+  const write = chainSerial(groupWrite, async () => {
+    try {
+      const res = await send({ type: 'setChannelGroup', id, name, on: want });
+      if (res && res.ok === false) {
+        view.groupsError = groupsErrorText(res.error);
+        return;
+      }
+      view.groupsError = '';
+      await refreshState();
+    } catch (err) {
+      view.groupsError = formatError(err?.message || err);
+    } finally {
+      if (view.groupPending[key] === want) {
+        const next = { ...view.groupPending };
+        delete next[key];
+        view.groupPending = next;
+      }
+      render();
+    }
+  });
+  groupWrite = write;
+  return write;
+}
+
 // Names are often in the other script from the sentence around them; without
 // isolation a Latin name scrambles the full stop in Arabic text.
 function isolate(text) {
@@ -1972,6 +2201,8 @@ function bindFeeds() {
   const emptyRefresh = document.getElementById('feed-waiting-refresh');
   const emptyClear = document.getElementById('feed-filter-clear');
   const favBox = document.getElementById('feed-favorites-only');
+  const groupsRow = document.getElementById('feed-groups');
+  const emptyGroupAll = document.getElementById('feed-group-all');
 
   form.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -2013,6 +2244,15 @@ function bindFeeds() {
   });
   favBox.addEventListener('change', () => {
     void patchSettings(buildPatch('feed.favoritesOnly', favBox.checked));
+  });
+  groupsRow?.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-group]');
+    if (!btn || !groupsRow.contains(btn)) return;
+    const name = btn.getAttribute('data-group') || '';
+    void patchSettings(buildPatch('feed.group', name));
+  });
+  emptyGroupAll?.addEventListener('click', () => {
+    void patchSettings(buildPatch('feed.group', ''));
   });
   gotoWatchlist.addEventListener('click', () => {
     const tab = document.getElementById('tab-watchlist');
@@ -2221,6 +2461,11 @@ async function refreshAudioState() {
     view.audioPlayer = null;
   }
   syncAudioPolling();
+  const players = [...playerById.values()];
+  return {
+    players,
+    audioOn: players.some((p) => p && p.on),
+  };
 }
 
 async function refreshPlayerCard() {
@@ -2844,10 +3089,39 @@ function bindChannelSheet() {
       closeSupportSheet();
       return;
     }
+    if (view.groupsSheetId) {
+      event.preventDefault();
+      closeGroupsSheet();
+      return;
+    }
     if (!view.sheetId) return;
     event.preventDefault();
     closeChannelSheet();
   });
+}
+
+function bindGroupsSheet() {
+  const sheet = document.getElementById('groups-sheet');
+  document.getElementById('groups-sheet-close')?.addEventListener('click', () => {
+    closeGroupsSheet();
+  });
+  document.getElementById('groups-sheet-new')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitNewGroup();
+  });
+  sheet?.addEventListener('click', (event) => {
+    if (event.target === sheet) closeGroupsSheet();
+  });
+}
+
+async function submitNewGroup() {
+  const input = document.getElementById('groups-sheet-input');
+  const id = view.groupsSheetId;
+  const name = normalizeGroupName(input?.value || '');
+  if (!id || !name) return;
+  view.groupsError = '';
+  await applyGroup(id, name, true);
+  if (!view.groupsError && input) input.value = '';
 }
 
 function bindSupportSheet() {
@@ -2887,19 +3161,41 @@ bindAudio();
 bindLookSettings();
 bindSettings();
 bindChannelSheet();
+bindGroupsSheet();
 bindSupportSheet();
 
 void (async () => {
   await applyI18n('auto');
   view.busy = true;
   render();
+  const probe = refreshAudioState().then(
+    (r) => r || { players: [], audioOn: false },
+    () => ({ players: [], audioOn: false }),
+  );
+  let opening = 'feeds';
   try {
     await migrateAudioCover();
     const snap = await send({ type: 'popupOpened' });
     if (!applySnapshot(snap)) view.error = formatError(snap?.error);
+    // popupOpened overwrites lastSeenAt; the previous value rides on
+    // previousLastSeenAt. A reply without that field never overwrote it.
+    view.feedSeenAt = Object.prototype.hasOwnProperty.call(snap || {}, 'previousLastSeenAt')
+      ? Number(snap.previousLastSeenAt) || 0
+      : Number(snap?.pollState?.lastSeenAt) || 0;
     await applyI18n(view.settings?.ui?.locale);
+    const winner = await Promise.race([
+      probe.then((r) => ({ kind: 'probe', r })),
+      new Promise((resolve) => {
+        setTimeout(() => resolve({ kind: 'timeout' }), OPENING_TAB_MS);
+      }),
+    ]);
+    if (winner.kind === 'probe') opening = openingTab(winner.r);
+    if (!openingChosen) {
+      const tab = document.getElementById(`tab-${opening}`)
+        || document.getElementById('tab-feeds');
+      if (tab) activate(tab);
+    }
     await Promise.all([
-      refreshAudioState(),
       refreshAudioShortcut(),
       refreshAudioStats(),
       refreshAudioCover(),
@@ -2907,8 +3203,16 @@ void (async () => {
     ]);
   } catch (err) {
     view.error = formatError(err?.message || err);
+    if (!openingChosen) {
+      const tab = document.getElementById('tab-feeds');
+      if (tab) activate(tab);
+    }
   } finally {
     view.busy = false;
+    revealOpen();
     render();
   }
+  void probe.then(() => {
+    if (openTabName() === 'audio') renderAudio();
+  });
 })();

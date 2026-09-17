@@ -59,12 +59,25 @@ files.
 Agreed with the owner, question by question. Change one only when the owner
 asks.
 
-- **Popup**, 400×600, four tabs in this order: Audio, Feeds, Watchlist,
-  Settings. It opens on Audio.
+- **Popup**, 400×600, four tabs in this order: Player, Feeds, Watchlist,
+  Settings. From 2.0 the first tab reads **Player** (Arabic مشغّل); its ids,
+  classes and message types keep the `audio` spelling, because the tab is
+  still audio mode's home. It opens on Player only when a YouTube tab has a
+  video playing or paused partway, or audio mode is on, and on Feeds
+  otherwise — decided once per open, from a player probe with a 250 ms
+  window, and nothing moves the user afterwards.
 - **One list.** The Watchlist is the subscription list; Feeds is its merged
   timeline, newest first, with **no read state** and no hiding. The newest
   **500** videos are kept (a setting). Feeds draws them 50 at a time; more
-  come with scrolling or **Show more**.
+  come with scrolling or **Show more**. A video newer than the last popup
+  open wears a small accent dot — the same rule as the badge, and still not
+  a read state: nothing is stored per video and nothing hides.
+- **Groups**: a channel can be in several named groups, put there from its ⋯
+  menu; Feeds narrows to one group with a row of chips, alongside the search
+  box and Favourites only, and the badge counts the same way. A group exists
+  only while a channel is in it — there is no rename, no delete and no
+  Settings screen. At most 20 groups, 8 on one channel, 24 characters a name.
+  Groups ride along in backups.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
   tab. **No name search, no bulk paste.** Typing in either box only filters.
@@ -80,11 +93,11 @@ asks.
   fill in a GitHub issue that the person posts themselves; nothing is
   collected.
 - **Follow card**: when the focused tab is a YouTube channel or video whose
-  channel is not on the list, the top of the Audio tab names it with a Follow
+  channel is not on the list, the top of the Player tab names it with a Follow
   button. It is the same add; deciding whether to show it fetches nothing. A
   collab video lists every channel, each with its own Follow button, and a
   check before the ones already followed; the card goes once all are.
-- **Followed mark**: the Audio tab's player card puts the same check before
+- **Followed mark**: the Player tab's player card puts the same check before
   each channel name that is on the list.
 - **A failed channel** reads "Check failed" on its Watchlist row; its sheet
   says why in a translated sentence, with Retry.
@@ -102,13 +115,13 @@ asks.
   same filters the Feeds tab applies. It is always the feed count, audio mode
   or not.
 - **English and Arabic**, full RTL, with a language override in Settings.
-- **Audio mode**: its switch lives only inside the Audio tab. No recorder. The
+- **Audio mode**: its switch lives only inside the Player tab. No recorder. The
   overlay look is a group in Settings; Image uses a picture you pick on the
   device, stored outside settings so it is not in backups. With two or more
   YouTube tabs open, a picker chooses which one the player drives. The
   keyboard command acts on the active tab only. The sleep timer (15, 30 or 60
   minutes) sits in the player card and runs in the YouTube tab, not the popup
-  or the worker. After audio mode has saved 1 GB, the Audio tab offers a
+  or the worker. After audio mode has saved 1 GB, the Player tab offers a
   one-time store rating; either button dismisses it for good, and that flag
   is not in backups.
 - **Backup** exports settings and channels (merge or replace on import), not
@@ -271,7 +284,11 @@ Most live as comments at the line they protect. These span files or tools:
 - **`render()` draws only the open tab.** A hidden tab's DOM is whatever it
   was when it was last open, and `activate()` draws a tab as it opens. Code
   that reads a hidden tab's elements after `render()` reads stale ones, and
-  `scripts/shots/stub.js` waits on the Audio tab's first draw for that reason.
+  `scripts/shots/stub.js` waits on the Player tab's first draw for that reason.
+- **`popupOpened` moves `lastSeenAt` before it replies.** The popup's "new"
+  dots need the value from the previous visit, so the reply carries
+  `previousLastSeenAt` and the popup holds it for as long as it is open.
+  Reading `pollState.lastSeenAt` from that same reply marks nothing as new.
 - **The popup loads images only from hosts in the manifest's `img-src`.**
   A picture from any other host is blocked without an error in the page;
   `test/skeleton.test.js` checks the policy against `thumbUrl` and
