@@ -1,4 +1,9 @@
 :root {
+  /* Without this the browser paints native scrollbars, and form controls,
+   * for a light page: a white track down a dark popup. Nothing here styles
+   * ::-webkit-scrollbar — that switches Chrome off overlay scrollbars, and a
+   * bar that used to float over the list would start taking 8px of 400. */
+  color-scheme: dark;
   --bg: #0f0f14;
   --surface: #17171f;
   --surface-hover: #1e1e28;
@@ -44,6 +49,7 @@
 @media (prefers-color-scheme: light) {
   :root {
     /* badge tokens deliberately do not flip; see :root */
+    color-scheme: light;
     --bg: #ffffff;
     --surface: #f6f6f8;
     --surface-hover: #eeeef2;
@@ -686,7 +692,16 @@ body.is-opening .tabs {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scrollbar-width: thin;
+  /* A bar under one row of chips is taller than the gap below it. The chip
+   * cut off at the edge is what says there is more. scrollbar-width lands in
+   * Chrome 121 and this ships to 111, hence both. Hiding a bar costs no
+   * layout, so the rule above about ::-webkit-scrollbar does not apply. */
+  scrollbar-width: none;
+}
+
+.feed-groups::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .feed-groups__chip {
@@ -827,15 +842,6 @@ body.is-opening .tabs {
   gap: 6px;
 }
 
-.feed-row__new {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  margin-block-start: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-}
-
 .feed-row__title {
   flex: 1;
   min-width: 0;
@@ -851,12 +857,14 @@ body.is-opening .tabs {
 
 .feed-row__meta {
   display: flex;
-  /* One line, always. Wrapping put a leading separator at the start of the
-   * second line, and the parts after the channel name are short and fixed —
-   * so the channel name is the one that gives way. */
-  flex-wrap: nowrap;
   align-items: center;
-  gap: 6px;
+  /* Two parts only: the name, and age-and-views in one box. A line can break
+   * between them and nowhere else, so no separator can strand at the head of
+   * the second line — which is why the gap here stands in for the dot that
+   * used to sit between them. */
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 1px;
   margin-block-start: 2px;
   color: var(--text-dim);
   font-size: 11.5px;
@@ -886,12 +894,25 @@ body.is-opening .tabs {
 }
 
 .feed-row__meta > .feed-row__channel {
-  /* The name is the only part that can be long, so it is the one that gives
-   * way when the row runs out of room. */
-  flex: 0 1 auto;
+  /* Arabic says "قبل ساعتين · 15.8 مليون مشاهدة" where English says
+   * "2h ago · 15.8M views" — half again as long, which on one line left the
+   * name two letters. The basis is the shortest name worth reading: when the
+   * facts cannot sit beside that much, they drop to a line of their own and
+   * the name keeps the whole first one. Flex breaks lines on this basis, not
+   * on the text, so it is kept just under what English needs — English rows
+   * stay on one line and only Arabic takes the second. */
+  flex: 1 1 7ch;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.feed-row__facts {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .feed-row__duration {
@@ -929,7 +950,7 @@ body.is-opening .tabs {
   unicode-bidi: plaintext;
 }
 
-.feed-row__meta > * + *::before {
+.feed-row__facts > * + *::before {
   content: '·';
   margin-inline-end: 6px;
   color: var(--text-dim);
@@ -959,6 +980,13 @@ body.is-opening .tabs {
 .feed-tag--short {
   background: var(--tag-short);
   color: var(--on-tag-short);
+}
+
+.feed-tag--new {
+  background: var(--accent);
+  color: var(--on-accent);
+  /* The Arabic word has no case to change. */
+  text-transform: uppercase;
 }
 
 .group {

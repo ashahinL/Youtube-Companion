@@ -10,9 +10,9 @@ shipped yet waits under Unreleased. How a version ships:
 - The Audio tab is now called **Player**. The popup opens on it only when a
   YouTube tab has a video playing or paused partway through, or when audio
   mode is on. Otherwise it opens on Feeds.
-- Videos that arrived since you last opened the popup get a small dot. It
+- Videos that arrived since you last opened the popup wear a **New** tag. It
   means the same thing as the toolbar badge, and it is not a read state:
-  open again and yesterday's dots are gone.
+  open again and yesterday's tags are gone.
 - Channel groups. From a channel's ⋯ menu you can put it in one or more
   named groups. Feeds gets a row of chips to show one group at a time.
 - Audio mode's cover is a picture you choose on your device, not a web

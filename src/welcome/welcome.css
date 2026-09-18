@@ -1,6 +1,9 @@
 /* The popup's colours and type, so the first page a user sees looks like the
  * extension they just installed. */
 :root {
+  /* Without this the browser paints native scrollbars, and form controls,
+   * for a light page: a white bar down a dark one. */
+  color-scheme: dark;
   --bg: #0f0f14;
   --surface: #17171f;
   --surface-hover: #1e1e28;
@@ -16,6 +19,7 @@
 
 @media (prefers-color-scheme: light) {
   :root {
+    color-scheme: light;
     --bg: #ffffff;
     --surface: #f6f6f8;
     --surface-hover: #eeeef2;

@@ -760,13 +760,9 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
 
   const headline = document.createElement('div');
   headline.className = 'feed-row__headline';
-  if (isNew) {
-    const dot = document.createElement('span');
-    dot.className = 'feed-row__new';
-    dot.setAttribute('aria-hidden', 'true');
-    headline.appendChild(dot);
-    row.appendChild(textEl('span', 'visually-hidden', t('feedItemNew')));
-  }
+  // The marker leads the line and says the word, so it reads as "arrived
+  // since your last visit" rather than as a stray coloured dot.
+  if (isNew) headline.appendChild(textEl('span', 'feed-tag feed-tag--new', t('feedItemNew')));
   headline.appendChild(textEl('span', 'feed-row__title', title));
   const tag = feedTag(item, locale);
   if (tag) headline.appendChild(tag);
@@ -793,26 +789,31 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
     }
   }
 
+  // Age and views travel together in one box. They are short and fixed, so
+  // the only line break the meta can take falls between the name and them —
+  // and their own separator never ends up at the head of a line.
+  const facts = document.createElement('span');
+  facts.className = 'feed-row__facts';
+
   const at = Number(item.at) || 0;
   if (at) {
     const age = textEl('span', '', relativeTime(at, Date.now(), locale));
     const abs = absoluteTime(at, locale);
     if (abs) age.title = abs;
-    metaNodes.push(age);
+    facts.appendChild(age);
   }
 
   const views = Number(item.vw);
   if (Number.isFinite(views) && views > 0) {
     const count = compactCount(views, locale);
-    if (count) metaNodes.push(textEl('span', 'feed-row__views', tCount('feedViews', views, [count])));
+    if (count) facts.appendChild(textEl('span', 'feed-row__views', tCount('feedViews', views, [count])));
   }
+
+  if (facts.childNodes.length) metaNodes.push(facts);
 
   if (metaNodes.length) {
     const meta = document.createElement('div');
     meta.className = 'feed-row__meta';
-    // The separator is drawn by CSS on each part after the first, so that a
-    // meta line wrapping onto a second row carries its dot down with the part
-    // it belongs to instead of stranding one at the end of the line.
     metaNodes.forEach((node) => meta.appendChild(node));
     body.appendChild(meta);
   }

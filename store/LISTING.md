@@ -104,7 +104,7 @@ Keep up with the YouTube channels you care about without signing in to anything,
 
 FEEDS
 • Every new video from the channels you follow, in one list, newest first
-• A small dot marks what arrived since you last opened the popup
+• A New tag marks what arrived since you last opened the popup
 • Put channels in groups and show one group at a time
 • Live streams and premieres are tagged; Shorts stay hidden unless you want them
 • Filter by title or channel, or show only your favourites
@@ -151,7 +151,7 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 
 الموجز
 • كل فيديو جديد من القنوات التي تتابعها في قائمة واحدة، الأحدث أولًا
-• نقطة صغيرة تميّز ما وصل منذ آخر مرة فتحت فيها النافذة
+• وسم «جديد» يميّز ما وصل منذ آخر مرة فتحت فيها النافذة
 • ضع قنواتك في مجموعات، واعرض مجموعة واحدة في كل مرة
 • البث المباشر والعروض الأولى عليها وسم واضح، والفيديوهات القصيرة مخفية إلا إذا أردتها
 • صفِّ حسب العنوان أو القناة، أو اعرض المفضلة فقط
@@ -218,7 +218,7 @@ store description rather than the whole thing:
 ```text
 إضافة مجانية ومفتوحة المصدر لكروم وإيدج لمتابعة قنوات يوتيوب دون حساب جوجل.
 
-• موجز واحد يجمع كل الفيديوهات الجديدة من قنواتك، الأحدث أولًا، ونقطة تميّز ما وصل منذ آخر زيارة.
+• موجز واحد يجمع كل الفيديوهات الجديدة من قنواتك، الأحدث أولًا، ووسم «جديد» يميّز ما وصل منذ آخر زيارة.
 • مجموعات للقنوات، فتعرض مجموعة واحدة في كل مرة.
 • تنبيه واحد لكل قناة عند رفع فيديو جديد، لا تنبيه لكل فيديو.
 • وضع الصوت: يخفض الفيديو إلى 144p فتستهلك بيانات أقل بنحو 8 مرات من 720p، مع مؤقت نوم وعدّاد يعرض كم وفّرت.

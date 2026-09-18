@@ -760,6 +760,26 @@ export default async function run(t) {
     t.check(`light :root declares ${name}`, lightRoot.includes(`${name}:`), lightRoot.includes(name) ? name : 'missing');
   }
 
+  t.section('scrollbars follow the theme');
+
+  t.check('dark :root declares color-scheme: dark', /color-scheme:\s*dark/.test(darkRoot));
+  t.check('light :root declares color-scheme: light', /color-scheme:\s*light/.test(lightRoot));
+  // Styling that pseudo-element switches Chrome off overlay scrollbars, and a
+  // bar that floated over the list would start taking 8px of a 400px popup.
+  const webkitBars = [...css.matchAll(/([^\n{}]*)::-webkit-scrollbar[^\n{}]*\{/g)]
+    .map((m) => m[1].trim());
+  t.check(
+    'only the chips row styles ::-webkit-scrollbar',
+    webkitBars.length === 1 && webkitBars[0] === '.feed-groups',
+    JSON.stringify(webkitBars),
+  );
+  t.check(
+    'the group chips carry no bar, on 111 as well as 121',
+    /\.feed-groups\s*\{[^}]*scrollbar-width:\s*none/.test(css)
+      && /\.feed-groups::-webkit-scrollbar\s*\{[^}]*width:\s*0/.test(css)
+      && /\.feed-groups::-webkit-scrollbar\s*\{[^}]*height:\s*0/.test(css),
+  );
+
   t.section('channel sheet');
 
   t.check('has channel sheet overlay', /id="channel-sheet"/.test(html));
@@ -932,17 +952,41 @@ export default async function run(t) {
     'the popup holds lastSeenAt for this open',
     /view\.feedSeenAt/.test(js) && /previousLastSeenAt/.test(js),
   );
-  t.check('a new row draws an accent dot', /feed-row__new/.test(js) && /\.feed-row__new\s*\{/.test(css));
   t.check(
-    'the dot uses the accent and logical sides',
-    /\.feed-row__new\s*\{[^}]*background:\s*var\(--accent\)/.test(css)
-      && /\.feed-row__new\s*\{[^}]*margin-block-start/.test(css)
-      && !/\.feed-row__new\s*\{[^}]*(?:margin-left|margin-right|left:|right:)/.test(css),
+    'a new row wears a New tag, not a bare dot',
+    /feed-tag--new/.test(js) && /\.feed-tag--new\s*\{/.test(css)
+      && !/feed-row__new/.test(js) && !/feed-row__new/.test(css),
   );
   t.check(
-    'a new row has a spoken New marker',
-    /visually-hidden/.test(js) && /feedItemNew/.test(js)
-      && 'feedItemNew' in en && /\.visually-hidden\s*\{/.test(css),
+    'the New tag uses the accent',
+    /\.feed-tag--new\s*\{[^}]*background:\s*var\(--accent\)/.test(css)
+      && /\.feed-tag--new\s*\{[^}]*color:\s*var\(--on-accent\)/.test(css),
+  );
+  t.check(
+    'the New marker is a word, not colour alone',
+    /feed-tag--new['\`][^)]*t\('feedItemNew'\)/.test(js) && 'feedItemNew' in en,
+  );
+
+  t.section('the channel name survives Arabic');
+
+  t.check(
+    'age and views travel in one box',
+    /facts\.className = 'feed-row__facts'/.test(js)
+      && /facts\.appendChild\(age\)/.test(js)
+      && /facts\.appendChild\(textEl\('span', 'feed-row__views'/.test(js),
+  );
+  t.check(
+    'the meta line may take a second row',
+    /\.feed-row__meta\s*\{[^}]*flex-wrap:\s*wrap/.test(css),
+  );
+  t.check(
+    'the name has a floor to stand on',
+    /\.feed-row__meta > \.feed-row__channel\s*\{[^}]*flex:\s*1 1 \d+ch/.test(css),
+  );
+  t.check(
+    'only the facts box draws separators, so none can head a line',
+    /\.feed-row__facts > \* \+ \*::before\s*\{/.test(css)
+      && !/\.feed-row__meta > \* \+ \*::before/.test(css),
   );
 
   t.section('groups sheet');

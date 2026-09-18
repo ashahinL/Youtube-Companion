@@ -70,8 +70,8 @@ asks.
   timeline, newest first, with **no read state** and no hiding. The newest
   **500** videos are kept (a setting). Feeds draws them 50 at a time; more
   come with scrolling or **Show more**. A video newer than the last popup
-  open wears a small accent dot — the same rule as the badge, and still not
-  a read state: nothing is stored per video and nothing hides.
+  open wears a small accent **New** tag — the same rule as the badge, and
+  still not a read state: nothing is stored per video and nothing hides.
 - **Groups**: a channel can be in several named groups, put there from its ⋯
   menu; Feeds narrows to one group with a row of chips, alongside the search
   box and Favourites only, and the badge counts the same way. A group exists

@@ -9,6 +9,9 @@
     <!-- One page, no analytics, nothing loaded from anywhere else. -->
     <style>
       :root {
+        /* Without this the browser paints scrollbars and form controls for a
+         * light page: a white bar down a dark one. */
+        color-scheme: dark;
         --bg: #0f0f14;
         --surface: #17171f;
         --border: rgba(255, 255, 255, 0.1);
@@ -21,6 +24,7 @@
 
       @media (prefers-color-scheme: light) {
         :root {
+          color-scheme: light;
           --bg: #ffffff;
           --surface: #f6f6f8;
           --border: rgba(0, 0, 0, 0.12);
