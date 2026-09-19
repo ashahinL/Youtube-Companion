@@ -1003,6 +1003,20 @@ export default async function run(t) {
     'the New marker is a word, not colour alone',
     /feed-tag--new['\`][^)]*t\('feedItemNew'\)/.test(js) && 'feedItemNew' in en,
   );
+  t.check(
+    'the New marker sits above the row buttons, not in front of the title',
+    js.indexOf("actions.className = 'feed-row__actions'")
+      < js.indexOf("actions.appendChild(textEl('span', 'feed-tag feed-tag--new'")
+      && js.indexOf("actions.appendChild(textEl('span', 'feed-tag feed-tag--new'")
+        < js.indexOf("buttons.className = 'feed-row__buttons'")
+      && !/headline\.appendChild\(textEl\('span', 'feed-tag feed-tag--new'/.test(js),
+  );
+  t.check(
+    'the buttons stay put when a row has no New marker',
+    /\.feed-row__actions\s*\{[^}]*flex-direction:\s*column/.test(css)
+      && /\.feed-row__actions\s*\{[^}]*justify-content:\s*center/.test(css)
+      && /\.feed-row__actions\s*\{[^}]*align-items:\s*flex-end/.test(css),
+  );
 
   t.section('the channel name survives Arabic');
 

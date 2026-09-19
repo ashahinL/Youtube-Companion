@@ -813,16 +813,34 @@ body.is-opening .tabs {
   min-width: 0;
 }
 
+/* A column at the end of the row: the New marker on top, the buttons under
+ * it. The column is centred, so a row without a marker keeps its buttons
+ * exactly where they have always been, and one with a marker lifts them by
+ * half its height instead of moving the title. */
+.feed-row__actions {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+}
+
+.feed-row__buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .feed-row__open-alt {
   flex: none;
-  align-self: center;
   position: relative;
   z-index: 2;
 }
 
 .feed-row__queue {
   flex: none;
-  align-self: center;
   position: relative;
   z-index: 2;
 }

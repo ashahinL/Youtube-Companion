@@ -6,6 +6,11 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**Fixes**
+- The **New** marker on a feed row moved from in front of the title to the
+  top of the row, above the buttons. In front of the title it pushed the
+  whole title across, so new rows did not line up with the rest of the feed.
+
 ## 2.0.0 — 2026-09-19
 
 **New**

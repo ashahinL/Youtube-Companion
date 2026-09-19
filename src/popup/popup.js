@@ -798,9 +798,6 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
 
   const headline = document.createElement('div');
   headline.className = 'feed-row__headline';
-  // The marker leads the line and says the word, so it reads as "arrived
-  // since your last visit" rather than as a stray coloured dot.
-  if (isNew) headline.appendChild(textEl('span', 'feed-tag feed-tag--new', t('feedItemNew')));
   headline.appendChild(textEl('span', 'feed-row__title', title));
   const tag = feedTag(item, locale);
   if (tag) headline.appendChild(tag);
@@ -858,6 +855,16 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
 
   row.appendChild(body);
 
+  // The New marker goes above the buttons, in the space their centring
+  // leaves free. In front of the title it pushed the whole title across, so
+  // rows that arrived since the last visit did not line up with the rest.
+  const actions = document.createElement('div');
+  actions.className = 'feed-row__actions';
+  if (isNew) actions.appendChild(textEl('span', 'feed-tag feed-tag--new', t('feedItemNew')));
+  const buttons = document.createElement('div');
+  buttons.className = 'feed-row__buttons';
+  actions.appendChild(buttons);
+
   if (item.k !== 'live' && item.k !== 'premiere') {
     const queued = videoIsQueued(item.v);
     const qBtn = document.createElement('button');
@@ -872,7 +879,7 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
       event.stopPropagation();
       void toggleQueued(item);
     });
-    row.appendChild(qBtn);
+    buttons.appendChild(qBtn);
   }
 
   const alt = document.createElement('button');
@@ -889,7 +896,9 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
     event.stopPropagation();
     openFeedItem(item, modes.button);
   });
-  row.appendChild(alt);
+  buttons.appendChild(alt);
+
+  row.appendChild(actions);
   return row;
 }
 
