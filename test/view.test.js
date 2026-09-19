@@ -57,6 +57,8 @@ import {
   menuNavIndex,
   openingTab,
   isNewSince,
+  showWhatsNew,
+  WHATS_NEW_VERSION,
   queueEntryFromItem,
   sanitizeQueue,
   queueView,
@@ -1305,6 +1307,17 @@ export default async function run(t) {
   t.check('null lastSeenAt treats dated rows as new', isNewSince({ at: 100 }, null) === true);
 
   queueChecks(t);
+
+  t.section('showWhatsNew');
+
+  t.check('an unseen release is offered', showWhatsNew('', '2.0') === true);
+  t.check('a release seen under another number is offered', showWhatsNew('1.1', '2.0') === true);
+  t.check('the one already seen is not', showWhatsNew('2.0', '2.0') === false);
+  t.check('a missing flag counts as unseen', showWhatsNew(undefined, '2.0') === true);
+  t.check('a junk flag counts as unseen', showWhatsNew(7, '2.0') === true);
+  t.check('nothing is offered without a release', showWhatsNew('2.0', '') === false);
+  t.check('nor for a release that is not a string', showWhatsNew('2.0', 2) === false);
+  t.check('the shipped release is a non-empty string', typeof WHATS_NEW_VERSION === 'string' && !!WHATS_NEW_VERSION);
 }
 
 function namesForCap(n, prefix = 'g') {

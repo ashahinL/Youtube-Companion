@@ -1558,5 +1558,131 @@
   "importFromYouTubeTitle": {
     "message": "Bring your YouTube subscriptions across with a Google Takeout file. No sign-in.",
     "description": "Tooltip of the Import from YouTube button."
+  },
+  "whatsNewTitleBare": {
+    "message": "What's new",
+    "description": "Page title before the version is known; whatsNewTitle replaces it."
+  },
+  "whatsNewTitle": {
+    "message": "What's new in $RELEASE$",
+    "description": "Heading and title of the What's new page. $1 is the release, e.g. 2.0.",
+    "placeholders": {
+      "release": {
+        "content": "$1",
+        "example": "2.0"
+      }
+    }
+  },
+  "whatsNewLede": {
+    "message": "Still no sign-in, still no tracking.",
+    "description": "One line under the What's new heading."
+  },
+  "whatsNewNote": {
+    "message": "See what's new in $RELEASE$",
+    "description": "The dismissible line at the top of the popup after an update. $1 is the release.",
+    "placeholders": {
+      "release": {
+        "content": "$1",
+        "example": "2.0"
+      }
+    }
+  },
+  "whatsNewDismiss": {
+    "message": "Dismiss",
+    "description": "Accessible name of the button that hides the What's new line."
+  },
+  "whatsNewOpen": {
+    "message": "What's new in $RELEASE$",
+    "description": "Settings footer link that opens the What's new page. $1 is the release.",
+    "placeholders": {
+      "release": {
+        "content": "$1",
+        "example": "2.0"
+      }
+    }
+  },
+  "whatsNewQueueTitle": {
+    "message": "Up next",
+    "description": "What's new page: heading of the listen-later queue feature."
+  },
+  "whatsNewQueueBody": {
+    "message": "Line up what you want to hear. Add videos from Feeds or from the player, press Play all, and they play one after another in a single tab — with audio mode on or off.",
+    "description": "What's new page: the listen-later queue."
+  },
+  "whatsNewQueueShot": {
+    "message": "The Player tab with three videos lined up under Up next",
+    "description": "Alt text for the Up next screenshot."
+  },
+  "whatsNewGroupsTitle": {
+    "message": "Channel groups",
+    "description": "What's new page: heading of the channel groups feature."
+  },
+  "whatsNewGroupsBody": {
+    "message": "Put a channel in as many named groups as you like from its ⋯ menu, then narrow Feeds to one group with a tap. A group exists for as long as a channel is in it, and there is nothing to set up.",
+    "description": "What's new page: channel groups."
+  },
+  "whatsNewGroupsShot": {
+    "message": "The Feeds tab with a row of group chips above the videos",
+    "description": "Alt text for the channel groups screenshot."
+  },
+  "whatsNewImportTitle": {
+    "message": "Bring your subscriptions across",
+    "description": "What's new page: heading of the Takeout import feature."
+  },
+  "whatsNewImportBody": {
+    "message": "Download subscriptions.csv from Google Takeout and pick it on the welcome page. The file is read on your device, nothing signs in, and the channels arrive without a burst of alerts.",
+    "description": "What's new page: the Google Takeout import."
+  },
+  "whatsNewImportShot": {
+    "message": "The Watchlist tab listing followed channels",
+    "description": "Alt text for the watchlist screenshot."
+  },
+  "whatsNewMoreTitle": {
+    "message": "And a lot more",
+    "description": "What's new page: heading of the short list of smaller changes."
+  },
+  "whatsNewMorePlayer": {
+    "message": "The Audio tab is now Player, and the popup opens on Feeds unless something is actually playing.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreFollow": {
+    "message": "A Follow button for the channel you are watching — every channel, on a video made by several.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreSleep": {
+    "message": "A sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the popup closes.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreMute": {
+    "message": "Mute alerts for one channel and keep its videos in your feed.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreUndo": {
+    "message": "Undo after removing a channel — it comes back with its star and its place in the list.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreShortcut": {
+    "message": "Open the popup with Alt+Shift+Y.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreNewTag": {
+    "message": "A New tag on videos that arrived since your last visit.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreCover": {
+    "message": "Audio mode's cover is a picture from your device, never a web address.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewMoreBackoff": {
+    "message": "Checks step back when YouTube pushes back, so you never meet a captcha on your own YouTube.",
+    "description": "What's new page, short list."
+  },
+  "whatsNewAgain": {
+    "message": "You can open this page again from the bottom of Settings.",
+    "description": "What's new page footer."
+  },
+  "whatsNewFullList": {
+    "message": "The full list of changes",
+    "description": "What's new page footer: link to the changelog on GitHub."
   }
 }

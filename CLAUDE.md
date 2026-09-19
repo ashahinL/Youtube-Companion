@@ -88,6 +88,12 @@ asks.
   first check is silent; pictures and handles fill in a few per check.
 - **Welcome page** opens once on a fresh install, never on an update: import
   or follow channels, try audio mode, pin the icon.
+- **What's new page** (`src/whatsnew/`) is the update half of that. **No tab
+  opens by itself on an update** — a browser updates quietly in the
+  background, so a tab would interrupt. Instead the popup shows one
+  dismissible line above the panels, and the bottom of Settings reopens the
+  page at any time. It carries the headline features with a picture each,
+  three of them, in both languages, and links to the CHANGELOG for the rest.
 - **Uninstall page** is `site/uninstall.html` on GitHub Pages, published from
   `main`. Its address carries only the language and version. Its tick boxes
   fill in a GitHub issue that the person posts themselves; nothing is
@@ -287,6 +293,11 @@ Most live as comments at the line they protect. These span files or tools:
   `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
   with `not allowed` until it is added there. Add it only if a compromised
   youtube.com page could not misuse it.
+- **`WHATS_NEW_VERSION` is bumped by hand and is not the manifest version.**
+  It says which release the What's new page is about, so bumping the manifest
+  for a fixes-only patch does not ask everyone to look at an unchanged page.
+  Change it in the same commit that rewrites the page's content, and change
+  the copy in both locales.
 - **`queue.ended` is gated on the tab id and the video id.** The worker
   honours it only when `sender.tab.id` is the tab it wrote into
   `queuePlay` and `msg.v` is the video it handed that tab. Any other tab

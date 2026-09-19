@@ -52,6 +52,8 @@
 - **Up next**: add videos from Feeds or the player, then Play all. They play
   one after another in one tab. Up to 100, and not in backups.
   *(coming in 2.0)*
+- A **What's new** page after an update, offered as one dismissible line in
+  the popup and reopenable from Settings. *(coming in 2.0)*
 - With more than one YouTube tab open, pick which one to control.
 - See how much data you used and saved, and how long you listened, this
   month or all time.

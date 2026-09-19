@@ -1,7 +1,7 @@
 /**
- * Channels, feed, videoMeta, pollState, and listen-later queue accessors.
- * Each lives on its own chrome.storage.local key so a settings reset
- * cannot wipe them.
+ * Channels, feed, videoMeta, pollState, listen-later queue, and
+ * What's-new accessors. Each lives on its own chrome.storage.local key so
+ * a settings reset cannot wipe them.
  */
 
 import {
@@ -439,5 +439,18 @@ export async function readQueueOpen() {
 export async function writeQueueOpen(on) {
   const next = !!on;
   await setKey('queueOpen', next);
+  return next;
+}
+
+/* ---- what's new ----------------------------------------------------- */
+
+export async function readWhatsNewSeen() {
+  const seen = await getKey('whatsNewSeen');
+  return typeof seen === 'string' ? seen : '';
+}
+
+export async function writeWhatsNewSeen(version) {
+  const next = typeof version === 'string' ? version : '';
+  await setKey('whatsNewSeen', next);
   return next;
 }

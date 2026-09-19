@@ -135,6 +135,7 @@ function exportSettings(settings) {
   }
   delete cloned.audioCover;
   delete cloned.rateNoteDone;
+  delete cloned.whatsNewSeen;
   return cloned;
 }
 

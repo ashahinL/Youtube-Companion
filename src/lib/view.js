@@ -423,6 +423,21 @@ export function storeReviewsUrl(userAgent) {
 }
 
 /**
+ * Which release the What's new page is about. Bumped by hand when that page
+ * gets new content, and deliberately not the manifest version: a patch
+ * release of fixes has nothing to show, and reading the version would ask
+ * everyone to look at an unchanged page.
+ */
+export const WHATS_NEW_VERSION = '2.0';
+export const WHATS_NEW_KEY = 'whatsNewSeen';
+
+/** True until the reader has acknowledged `current`. */
+export function showWhatsNew(seen, current) {
+  if (typeof current !== 'string' || !current) return false;
+  return seen !== current;
+}
+
+/**
  * The sentence for a channel whose last check failed, as a message key and
  * its substitutions, or null when it did not fail. Records written before
  * the worker kept `kind` carry only the English message, so the status is

@@ -16,6 +16,7 @@ const SUITES = [
   ['popup shell',        './popup.test.js'],
   ['popup view',         './view.test.js'],
   ['welcome page',       './welcome.test.js'],
+  ["what's new page",    './whatsnew.test.js'],
   ['shots',              './shots.test.js'],
   ['formatting',         './fmt.test.js'],
   ['i18n',               './i18n.test.js'],

@@ -18,7 +18,9 @@ import {
   readQueue,
   addToQueue,
   QUEUE_CAP,
+  readWhatsNewSeen,
 } from '../src/lib/store.js';
+import { WHATS_NEW_VERSION } from '../src/lib/view.js';
 
 const MKBHD = 'UCBJycsmduvYEL83R_U4JriQ';
 const BEAST = 'UCX6OQ3DkcsbYNE6H8uQQuVA';
@@ -345,6 +347,7 @@ export default async function run(t) {
       'settings',
       'queue',
       'queueOpen',
+      'whatsNewSeen',
     ]);
     // Removing `settings` kicks the worker's onSettingsChanged listener,
     // which calls syncAlarms without the test awaiting it.
@@ -3212,10 +3215,29 @@ export default async function run(t) {
       mock.tabsCreated.length === 1 && mock.tabsCreated[0].url === 'chrome-extension://youtube-companion/src/welcome/welcome.html',
       JSON.stringify(mock.tabsCreated),
     );
+    t.check(
+      'and has missed no release, so the popup stays quiet',
+      (await readWhatsNewSeen()) === WHATS_NEW_VERSION,
+      await readWhatsNewSeen(),
+    );
     mock.tabsCreated.length = 0;
+    await wipe();
     await onInstalled({ reason: 'update', previousVersion: '1.0.0' });
     await onInstalled({ reason: 'chrome_update' });
     t.check('an update opens nothing', mock.tabsCreated.length === 0, JSON.stringify(mock.tabsCreated));
+    t.check(
+      'and leaves the release unseen, so the popup offers it',
+      (await readWhatsNewSeen()) === '',
+      await readWhatsNewSeen(),
+    );
+
+    const unseenState = await handleMessage({ type: 'getState' });
+    t.check('getState carries whatsNewSeen', unseenState.whatsNewSeen === '', JSON.stringify(unseenState.whatsNewSeen));
+    const ack = await handleMessage({ type: 'whatsNew.seen' });
+    t.check('whatsNew.seen reports ok', ack.ok === true);
+    t.check('and stores the current release', (await readWhatsNewSeen()) === WHATS_NEW_VERSION, await readWhatsNewSeen());
+    const seenState = await handleMessage({ type: 'getState' });
+    t.check('getState reflects it', seenState.whatsNewSeen === WHATS_NEW_VERSION);
 
     await writeSettings({ ui: { locale: 'en' } });
     await syncUninstallUrl();
@@ -3406,7 +3428,8 @@ export default async function run(t) {
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
       'importBackup', 'importTakeout', 'undoRemove',
-      'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen']) {
+      'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen',
+      'whatsNew.seen']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }
@@ -3417,6 +3440,7 @@ export default async function run(t) {
     t.check('queue.clear is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.clear'));
     t.check('queue.playAll is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.playAll'));
     t.check('queue.setOpen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.setOpen'));
+    t.check('whatsNew.seen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('whatsNew.seen'));
 
     const pageEnded = await viaListenerAs({ type: 'queue.ended', v: 'abcdefghijk' }, PAGE_SENDER);
     t.check(

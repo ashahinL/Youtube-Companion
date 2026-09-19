@@ -62,6 +62,7 @@
       pollState: clone(d.pollState || {}),
       queue: clone(d.queue || []),
       queueOpen: d.queueOpen === true,
+      whatsNewSeen: typeof d.whatsNewSeen === 'string' ? d.whatsNewSeen : '',
     };
   }
 

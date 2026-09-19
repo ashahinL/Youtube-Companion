@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title data-i18n="whatsNewTitleBare">What's new</title>
+    <link rel="icon" href="../../icons/icon32.png" />
+    <link rel="stylesheet" href="whatsnew.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <img class="hero__icon" src="../../icons/icon128.png" width="56" height="56" alt="" />
+        <div class="hero__text">
+          <h1 id="whatsnew-title" class="hero__name">What's new in 2.0</h1>
+          <p class="hero__lede" data-i18n="whatsNewLede">Still no sign-in, still no tracking.</p>
+        </div>
+        <label class="hero__lang">
+          <span class="sr-only" data-i18n="settingsLanguage">Language</span>
+          <select id="whatsnew-locale" class="select">
+            <option value="auto" data-i18n="settingsLocaleAuto">Auto</option>
+            <option value="en" data-i18n="settingsLocaleEn">English</option>
+            <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
+          </select>
+        </label>
+      </header>
+
+      <ul class="features">
+        <li class="feature">
+          <div class="feature__shot">
+            <img id="shot-player" width="400" height="600" alt="" />
+          </div>
+          <div class="feature__text">
+            <h2 class="feature__title" data-i18n="whatsNewQueueTitle">Up next</h2>
+            <p data-i18n="whatsNewQueueBody">
+              Line up what you want to hear. Add videos from Feeds or from the player, press Play all, and they play one after another in a single tab — with audio mode on or off.
+            </p>
+          </div>
+        </li>
+
+        <li class="feature">
+          <div class="feature__shot">
+            <img id="shot-feeds" width="400" height="600" alt="" />
+          </div>
+          <div class="feature__text">
+            <h2 class="feature__title" data-i18n="whatsNewGroupsTitle">Channel groups</h2>
+            <p data-i18n="whatsNewGroupsBody">
+              Put a channel in as many named groups as you like from its ⋯ menu, then narrow Feeds to one group with a tap. A group exists for as long as a channel is in it, and there is nothing to set up.
+            </p>
+          </div>
+        </li>
+
+        <li class="feature">
+          <div class="feature__shot">
+            <img id="shot-watchlist" width="400" height="600" alt="" />
+          </div>
+          <div class="feature__text">
+            <h2 class="feature__title" data-i18n="whatsNewImportTitle">Bring your subscriptions across</h2>
+            <p data-i18n="whatsNewImportBody">
+              Download subscriptions.csv from Google Takeout and pick it on the welcome page. The file is read on your device, nothing signs in, and the channels arrive without a burst of alerts.
+            </p>
+          </div>
+        </li>
+      </ul>
+
+      <section class="more">
+        <h2 class="more__title" data-i18n="whatsNewMoreTitle">And a lot more</h2>
+        <ul class="more__list">
+          <li data-i18n="whatsNewMorePlayer">The Audio tab is now Player, and the popup opens on Feeds unless something is actually playing.</li>
+          <li data-i18n="whatsNewMoreFollow">A Follow button for the channel you are watching — every channel, on a video made by several.</li>
+          <li data-i18n="whatsNewMoreSleep">A sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the popup closes.</li>
+          <li data-i18n="whatsNewMoreMute">Mute alerts for one channel and keep its videos in your feed.</li>
+          <li data-i18n="whatsNewMoreUndo">Undo after removing a channel — it comes back with its star and its place in the list.</li>
+          <li data-i18n="whatsNewMoreShortcut">Open the popup with Alt+Shift+Y.</li>
+          <li data-i18n="whatsNewMoreNewTag">A New tag on videos that arrived since your last visit.</li>
+          <li data-i18n="whatsNewMoreCover">Audio mode's cover is a picture from your device, never a web address.</li>
+          <li data-i18n="whatsNewMoreBackoff">Checks step back when YouTube pushes back, so you never meet a captcha on your own YouTube.</li>
+        </ul>
+      </section>
+
+      <footer class="foot">
+        <p data-i18n="whatsNewAgain">You can open this page again from the bottom of Settings.</p>
+        <a
+          href="https://github.com/ashahinL/Youtube-Companion/blob/main/CHANGELOG.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-i18n="whatsNewFullList"
+        >The full list of changes</a>
+      </footer>
+    </main>
+
+    <script type="module" src="whatsnew.js"></script>
+  </body>
+</html>

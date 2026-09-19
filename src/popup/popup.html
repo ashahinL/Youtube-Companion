@@ -77,6 +77,23 @@
       </button>
     </nav>
 
+    <!--
+      Above the panels rather than inside one, so it is there whichever tab
+      the popup opened on.
+    -->
+    <div id="whats-new" class="whats-new" role="status" hidden>
+      <button id="whats-new-open" class="whats-new__open" type="button"></button>
+      <button
+        id="whats-new-close"
+        class="icon-btn whats-new__close"
+        type="button"
+        data-i18n-label="whatsNewDismiss"
+        data-i18n-title="whatsNewDismiss"
+        aria-label="Dismiss"
+        title="Dismiss"
+      >✕</button>
+    </div>
+
     <section id="audio" class="panel" role="tabpanel" aria-labelledby="tab-audio" hidden>
       <div id="follow-card" class="follow-card" hidden>
         <p id="follow-card-label" class="footnote follow-card__label"></p>
@@ -872,6 +889,9 @@
         <p id="settings-stat-feed"></p>
         <p id="settings-stat-last"></p>
         <p id="settings-stat-version"></p>
+        <p>
+          <button id="settings-whats-new" class="link-btn" type="button"></button>
+        </p>
       </footer>
     </section>
 

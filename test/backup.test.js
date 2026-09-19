@@ -441,12 +441,14 @@ export default async function run(t) {
       audio: { ...DEFAULT_SETTINGS.audio, imageUrl: 'data:image/png;base64,aaa', backgroundType: 'image' },
       audioCover: 'data:image/jpeg;base64,shouldNotExport',
       rateNoteDone: true,
+      whatsNewSeen: '2.0',
     },
     channels: [],
   });
   t.check('a leftover imageUrl is stripped on export', !('imageUrl' in (withUrl.settings?.audio || {})));
   t.check('audioCover stuffed into settings is stripped on export', !('audioCover' in withUrl.settings));
   t.check('rateNoteDone is stripped on export', !('rateNoteDone' in withUrl.settings));
+  t.check('whatsNewSeen is stripped on export', !('whatsNewSeen' in withUrl.settings));
   t.check('backgroundType image still exports', withUrl.settings?.audio?.backgroundType === 'image');
 
   const queuedFile = buildBackup({
@@ -465,6 +467,18 @@ export default async function run(t) {
     channels: [],
   }, 'replace');
   t.check('importing a file that has a queue field does not write one', !('queue' in importedQueue) && !('queueOpen' in importedQueue));
+
+  const seenFile = mergeBackup(emptyState(), {
+    app: 'youtube-companion',
+    version: 1,
+    settings: { whatsNewSeen: '99.0' },
+    channels: [],
+  }, 'replace');
+  t.check(
+    'a file cannot tell this browser which release it has read',
+    !('whatsNewSeen' in (seenFile.settings || {})),
+    JSON.stringify(seenFile.settings || {}),
+  );
   t.check('import still returns channels', Array.isArray(importedQueue.channels));
 
   const importedCover = mergeBackup(emptyState(), {

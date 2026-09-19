@@ -52,8 +52,10 @@ import {
   takeFromQueue,
   readQueueOpen,
   writeQueueOpen,
+  readWhatsNewSeen,
+  writeWhatsNewSeen,
 } from '../lib/store.js';
-import { feedChannelIds, queueEntryFromItem } from '../lib/view.js';
+import { feedChannelIds, queueEntryFromItem, WHATS_NEW_VERSION } from '../lib/view.js';
 
 const OVERLAY_MESSAGE_KEYS = ['overlayTitle', 'overlayExit', 'overlayExitShortcut'];
 
@@ -419,15 +421,16 @@ export async function refreshBadge() {
 }
 
 async function collectState() {
-  const [settings, channels, feed, pollState, queue, queueOpen] = await Promise.all([
+  const [settings, channels, feed, pollState, queue, queueOpen, whatsNewSeen] = await Promise.all([
     readSettings(),
     readChannels(),
     readFeed(),
     readPollState(),
     readQueue(),
     readQueueOpen(),
+    readWhatsNewSeen(),
   ]);
-  return { settings, channels, feed, pollState, queue, queueOpen };
+  return { settings, channels, feed, pollState, queue, queueOpen, whatsNewSeen };
 }
 
 function pickChannels(channels, { scope, onlyId, onlyIds }) {
@@ -1161,6 +1164,9 @@ export async function handleMessage(msg, sender) {
       case 'queue.setOpen':
         await writeQueueOpen(msg && msg.on);
         return { ok: true };
+      case 'whatsNew.seen':
+        await writeWhatsNewSeen(WHATS_NEW_VERSION);
+        return { ok: true };
       case 'queue.playAll': {
         const queue = await readQueue();
         const first = queue[0];
@@ -1321,6 +1327,10 @@ function onBoot() {
 export async function onInstalled(details) {
   onBoot();
   if (details?.reason !== 'install') return;
+  // A first install is reading the welcome page right now, so it has missed
+  // nothing: stamping the flag here keeps the popup's What's new note for
+  // people who are actually being updated.
+  await writeWhatsNewSeen(WHATS_NEW_VERSION);
   await chromeApi().tabs.create({ url: chromeApi().runtime.getURL(WELCOME_PAGE), active: true });
 }
 

@@ -65,6 +65,8 @@ import {
   isNewSince,
   queueEntryFromItem,
   queueView,
+  showWhatsNew,
+  WHATS_NEW_VERSION,
 } from '../lib/view.js';
 import { SUPPORT_METHODS, supportRows } from '../lib/support.js';
 
@@ -136,6 +138,7 @@ const view = {
   queueOpen: false,
   queueClearOpen: false,
   queueNotice: '',
+  whatsNewSeen: '',
 };
 
 let audioPollTimer = null;
@@ -240,6 +243,7 @@ function applySnapshot(snap) {
   if (Array.isArray(snap.feed)) view.feed = snap.feed;
   if (Array.isArray(snap.queue)) view.queue = snap.queue;
   if (typeof snap.queueOpen === 'boolean') view.queueOpen = snap.queueOpen;
+  if (typeof snap.whatsNewSeen === 'string') view.whatsNewSeen = snap.whatsNewSeen;
   if (snap.pollState) view.pollState = snap.pollState;
   return true;
 }
@@ -1160,6 +1164,7 @@ function renderWatchlist(locale) {
  */
 function render() {
   const open = openTabName();
+  renderWhatsNew();
   if (open === 'feeds') renderFeeds(locale);
   if (open === 'watchlist') renderWatchlist(locale);
   if (open === 'audio') renderAudio();
@@ -1167,6 +1172,35 @@ function render() {
   renderChannelSheet();
   renderGroupsSheet();
   renderSupportSheet();
+}
+
+const WHATS_NEW_PAGE = 'src/whatsnew/whatsnew.html';
+
+function renderWhatsNew() {
+  const note = document.getElementById('whats-new');
+  if (note) {
+    note.hidden = !showWhatsNew(view.whatsNewSeen, WHATS_NEW_VERSION);
+    const open = document.getElementById('whats-new-open');
+    if (open) open.textContent = t('whatsNewNote', [WHATS_NEW_VERSION]);
+  }
+  const link = document.getElementById('settings-whats-new');
+  if (link) link.textContent = t('whatsNewOpen', [WHATS_NEW_VERSION]);
+}
+
+/** Acknowledges the release so neither the note nor a redraw brings it back. */
+async function markWhatsNewSeen() {
+  view.whatsNewSeen = WHATS_NEW_VERSION;
+  renderWhatsNew();
+  try {
+    await send({ type: 'whatsNew.seen' });
+  } catch {
+    // The next open reads the stored value and offers it again.
+  }
+}
+
+function openWhatsNew() {
+  void markWhatsNewSeen();
+  openUrl(chrome.runtime.getURL(WHATS_NEW_PAGE));
 }
 
 function renderChannelSheet() {
@@ -3454,6 +3488,15 @@ function bindSupportSheet() {
   });
   document.getElementById('settings-support-open')?.addEventListener('click', (event) => {
     openSupportSheet(event.currentTarget);
+  });
+  document.getElementById('settings-whats-new')?.addEventListener('click', () => {
+    openWhatsNew();
+  });
+  document.getElementById('whats-new-open')?.addEventListener('click', () => {
+    openWhatsNew();
+  });
+  document.getElementById('whats-new-close')?.addEventListener('click', () => {
+    void markWhatsNewSeen();
   });
 }
 

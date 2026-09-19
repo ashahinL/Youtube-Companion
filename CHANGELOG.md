@@ -7,6 +7,9 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- A **What's new** page. After an update the popup shows one line at the top;
+  open it to see what the release added, or dismiss it. It never opens a tab
+  on its own, and the bottom of Settings can reopen it any time.
 - **Up next** in the Player tab: add videos from Feeds or the player, press
   Play all, and they play one after another in one tab. Up to 100 videos,
   and it is not in backups.

@@ -89,6 +89,18 @@ export const SITE_SHOTS = [
   { name: 'home-player-ar', scene: 'player', locale: 'ar' },
 ];
 
+// The pictures on the What's new page. These ship inside the extension, so
+// they are scale 1 and there are only three of them per language — and both
+// languages, because an Arabic reader should not get English screenshots.
+export const PAGE_SHOTS = [
+  { name: 'page-player', file: 'player', scene: 'player', locale: 'en' },
+  { name: 'page-feeds', file: 'feeds', scene: 'feeds', locale: 'en' },
+  { name: 'page-watchlist', file: 'watchlist', scene: 'watchlist', locale: 'en' },
+  { name: 'page-player-ar', file: 'player-ar', scene: 'player', locale: 'ar' },
+  { name: 'page-feeds-ar', file: 'feeds-ar', scene: 'feeds', locale: 'ar' },
+  { name: 'page-watchlist-ar', file: 'watchlist-ar', scene: 'watchlist', locale: 'ar' },
+];
+
 // A blank 1280×800 store frame compresses to tens of KB; a real one is
 // hundreds. Half the median of this run is the cut.
 export const STORE_FRAME_MIN_RATIO = 0.5;
@@ -358,6 +370,7 @@ async function run() {
     ...DOCS_SHOTS.map((s) => s.name),
     ...STORE_SHOTS.map((s) => s.name),
     ...SITE_SHOTS.map((s) => s.name),
+    ...PAGE_SHOTS.map((s) => s.name),
     'promo-440x280',
     'logo-300',
     'icon-192',
@@ -383,6 +396,13 @@ async function run() {
     for (const shot of SITE_SHOTS) {
       if (!wanted(names, shot.name)) continue;
       const out = path.join(ROOT, 'site/images', `${shot.name}.png`);
+      const url = `${origin}/__shots/frame.html?scene=${encodeURIComponent(shot.scene)}&locale=${shot.locale}`;
+      await capture(browser, url, out, 400, 600, 1);
+    }
+
+    for (const shot of PAGE_SHOTS) {
+      if (!wanted(names, shot.name)) continue;
+      const out = path.join(ROOT, 'src/whatsnew/img', `${shot.file}.png`);
       const url = `${origin}/__shots/frame.html?scene=${encodeURIComponent(shot.scene)}&locale=${shot.locale}`;
       await capture(browser, url, out, 400, 600, 1);
     }
