@@ -57,6 +57,9 @@ import {
   menuNavIndex,
   openingTab,
   isNewSince,
+  queueEntryFromItem,
+  sanitizeQueue,
+  queueView,
 } from '../src/lib/view.js';
 import { MAX_BACKUP_CHANNELS } from '../src/lib/backup.js';
 
@@ -124,6 +127,69 @@ function vids(rows) {
 
 function ids(rows) {
   return rows.map((row) => row.id).join(',');
+}
+
+function queueChecks(t) {
+  t.section('queueEntryFromItem');
+
+  const now = 1_700_000_000_000;
+  const valid = queueEntryFromItem({
+    v: 'abcdefghijk',
+    t: 'A talk',
+    c: 'UCxxxxxxxxxxxxxxxxxxxxxx',
+    ct: 'A channel',
+    at: 99,
+    d: 12.5,
+    k: 'short',
+  }, now);
+  t.check('copies a valid feed item', !!valid && valid.v === 'abcdefghijk' && valid.t === 'A talk'
+    && valid.c === 'UCxxxxxxxxxxxxxxxxxxxxxx' && valid.ct === 'A channel'
+    && valid.at === 99 && valid.d === 12.5 && valid.k === 'short' && valid.qa === now, JSON.stringify(valid));
+  t.check('invalid id is null', queueEntryFromItem({ v: 'nope', t: 'x' }, now) === null);
+  t.check('missing item is null', queueEntryFromItem(null, now) === null);
+  t.check('missing v is null', queueEntryFromItem({ t: 'x' }, now) === null);
+  const thin = queueEntryFromItem({ v: 'abcdefghijk' }, now);
+  t.check(
+    'missing fields default',
+    thin.t === '' && thin.c === '' && thin.ct === '' && thin.at === 0 && thin.d === 0
+      && thin.qa === now && !('k' in thin),
+    JSON.stringify(thin),
+  );
+  const live = queueEntryFromItem({ v: 'abcdefghijk', k: 'live', t: 'Live now' }, now);
+  t.check('a live item keeps k', live && live.k === 'live' && live.t === 'Live now', JSON.stringify(live));
+  t.check('unknown k is dropped', !('k' in (queueEntryFromItem({ v: 'abcdefghijk', k: 'video' }, now) || {})));
+  t.check('NaN at/d/qa become 0', queueEntryFromItem({ v: 'abcdefghijk', at: 'x', d: Infinity, qa: NaN }, 5).qa === 0);
+
+  t.section('sanitizeQueue');
+
+  t.check('non-array is []', same(sanitizeQueue({ v: 'abcdefghijk' }, 10), []));
+  const cleaned = sanitizeQueue([
+    null,
+    { v: 'nope' },
+    { v: 'abcdefghijk', t: 'First' },
+    { v: 'abcdefghijk', t: 'Dup' },
+    { t: 'no id' },
+    { v: 'bcdefghijkl', t: 'Second', k: 'premiere' },
+    { v: 'cdefghijklm', t: 'Third' },
+  ], 2);
+  t.check('drops junk, keeps first duplicate, clamps to cap', cleaned.length === 2
+    && cleaned[0].v === 'abcdefghijk' && cleaned[0].t === 'First'
+    && cleaned[1].v === 'bcdefghijkl' && cleaned[1].k === 'premiere', JSON.stringify(cleaned));
+  t.check('cap 0 is []', same(sanitizeQueue([{ v: 'abcdefghijk' }], 0), []));
+
+  t.section('queueView');
+
+  t.check(
+    'empty closed',
+    same(queueView({ queue: [], open: false, cap: 100 }), {
+      items: [], count: 0, open: false, full: false, empty: true,
+    }),
+  );
+  const rows = [{ v: 'abcdefghijk', t: 'A' }];
+  const shown = queueView({ queue: rows, open: true, cap: 100 });
+  t.check('count and open', shown.count === 1 && shown.open === true && shown.empty === false && shown.full === false && shown.items === rows);
+  t.check('full at cap', queueView({ queue: new Array(100).fill(0).map((_, i) => ({ v: i })), open: false, cap: 100 }).full === true);
+  t.check('missing queue is empty', queueView({ open: true, cap: 100 }).empty === true && queueView({ open: true, cap: 100 }).open === true);
 }
 
 export default async function run(t) {
@@ -1237,6 +1303,8 @@ export default async function run(t) {
   t.check('missing lastSeenAt treats dated rows as new', isNewSince({ at: 100 }) === true);
   t.check('zero lastSeenAt treats dated rows as new', isNewSince({ at: 100 }, 0) === true);
   t.check('null lastSeenAt treats dated rows as new', isNewSince({ at: 100 }, null) === true);
+
+  queueChecks(t);
 }
 
 function namesForCap(n, prefix = 'g') {

@@ -1,7 +1,9 @@
 /**
  * Isolated-world audio-mode engine. Pins the player to 144p, covers the
  * video, accounts listening time, and tears the session down on one
- * AbortSignal. Classic script: content scripts cannot use import.
+ * AbortSignal. Also tells the worker when the main video ends, so a
+ * listen-later queue can advance. Classic script: content scripts
+ * cannot use import.
  */
 
 (function (root) {
@@ -1300,6 +1302,24 @@
     setTimeout(poll, PLAYER_POLL_MS);
   }
 
+  function onVideoEnded(event) {
+    try {
+      // Ads and preview players fire ended too; only the main watch
+      // video is what the worker handed this tab.
+      if (event.target !== findVideo()) return;
+      const id = readVideoId();
+      if (!id) return;
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
+      Promise.resolve(ch.runtime.sendMessage({ type: 'queue.ended', v: id })).then(
+        function () {},
+        function () {},
+      );
+    } catch (err) {
+      // ignore
+    }
+  }
+
   function requestAudioModeBoot() {
     if (bootOnce) return bootOnce;
     bootOnce = (async function () {
@@ -1365,6 +1385,17 @@
         );
         return true;
       });
+    }
+    try {
+      const doc = root.document;
+      // ended does not bubble, but a capture listener on document still
+      // sees it, and keeps working across YouTube's in-page navigations
+      // without tracking which <video> is current.
+      if (doc && typeof doc.addEventListener === 'function') {
+        doc.addEventListener('ended', onVideoEnded, true);
+      }
+    } catch (err) {
+      // swallow
     }
     // The worker says whether this tab was opened in audio mode.
     requestAudioModeBoot();

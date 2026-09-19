@@ -8,8 +8,8 @@
  * card shows, which credited channels are followed, which Follow buttons
  * wait, how a backup merge-over-cap error is named, which ⋯ menu
  * item Arrow/Home/End would select, channel-group names, caps, and
- * the Feeds group filter, and how group writes queue so two ticks
- * cannot interleave.
+ * the Feeds group filter, how group writes queue so two ticks cannot
+ * interleave, and the listen-later queue snapshot.
  * Pure — no DOM, no chrome, no clock.
  */
 
@@ -607,6 +607,73 @@ export function openingTab({ players, audioOn } = {}) {
     if (playerIsActive(player)) return 'audio';
   }
   return 'feeds';
+}
+
+const QUEUE_KINDS = new Set(['live', 'premiere', 'short']);
+
+function finiteOrZero(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function queueText(value) {
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * A self-contained queue row from a feed item (or the player card's
+ * thinner snapshot). `null` when `item.v` is not a video id — the feed
+ * is capped at 500, so a queued id can outlive its feed row and must
+ * carry its own title and channel.
+ */
+export function queueEntryFromItem(item, now) {
+  if (!item) return null;
+  const parsed = normalizeVideoInput(item.v);
+  if (!parsed || parsed.kind !== 'video') return null;
+  const qaRaw = item.qa == null ? now : item.qa;
+  const entry = {
+    v: parsed.id,
+    t: queueText(item.t),
+    c: queueText(item.c),
+    ct: queueText(item.ct),
+    at: finiteOrZero(item.at),
+    d: finiteOrZero(item.d),
+    qa: finiteOrZero(qaRaw),
+  };
+  if (QUEUE_KINDS.has(item.k)) entry.k = item.k;
+  return entry;
+}
+
+/** Drop junk and duplicates (first spelling of `v` wins), then clamp. */
+export function sanitizeQueue(raw, cap) {
+  const limit = Number(cap);
+  const max = Number.isFinite(limit) && limit >= 0 ? limit : 0;
+  if (!Array.isArray(raw) || max === 0) return [];
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    const entry = queueEntryFromItem(item, item?.qa);
+    if (!entry) continue;
+    if (seen.has(entry.v)) continue;
+    seen.add(entry.v);
+    out.push(entry);
+    if (out.length >= max) break;
+  }
+  return out;
+}
+
+export function queueView({ queue, open, cap } = {}) {
+  const items = Array.isArray(queue) ? queue : [];
+  const limit = Number(cap);
+  const max = Number.isFinite(limit) && limit >= 0 ? limit : 0;
+  const count = items.length;
+  return {
+    items,
+    count,
+    open: !!open,
+    full: count >= max,
+    empty: count === 0,
+  };
 }
 
 export function watchlistView({ channels, feed, query }) {

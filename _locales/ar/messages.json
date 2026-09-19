@@ -1065,6 +1065,64 @@
     "message": "لا يوجد فيديو",
     "description": "Player-card title when the target tab has no video title."
   },
+  "queueTitle": {
+    "message": "التالي",
+    "description": "Player tab queue header when the listen-later list is empty."
+  },
+  "queueTitleCount": {
+    "message": "التالي ($COUNT$)",
+    "description": "Player tab queue header when the list has videos. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "queuePlayAll": {
+    "message": "تشغيل الكل",
+    "description": "Player tab button that plays the listen-later queue in one YouTube tab. Keep it short; the header is 400px."
+  },
+  "queueClear": {
+    "message": "مسح",
+    "description": "Player tab button that starts clearing the listen-later queue. Keep it short."
+  },
+  "queueClearConfirm": {
+    "message": "مسح كل الفيديوهات في التالي؟",
+    "description": "Inline confirmation before the listen-later queue is cleared."
+  },
+  "queueClearConfirmYes": {
+    "message": "مسح الكل",
+    "description": "Confirms clearing the listen-later queue. Keep it short."
+  },
+  "queueClearConfirmNo": {
+    "message": "إلغاء",
+    "description": "Cancels clearing the listen-later queue."
+  },
+  "queueEmpty": {
+    "message": "لا شيء هنا بعد. أضف فيديو من الموجز أو المشغّل.",
+    "description": "Empty state inside the listen-later queue when it is expanded."
+  },
+  "queueAdd": {
+    "message": "إضافة إلى التالي",
+    "description": "Accessible name and tooltip of the button that queues a video."
+  },
+  "queueRemove": {
+    "message": "إزالة من التالي",
+    "description": "Accessible name and tooltip of the button that removes a video from the queue."
+  },
+  "queueFull": {
+    "message": "التالي ممتلئ (100 فيديو).",
+    "description": "Shown when adding to the listen-later queue fails because it already has 100 videos."
+  },
+  "queueShow": {
+    "message": "إظهار التالي",
+    "description": "Tooltip on the queue header when the list is collapsed."
+  },
+  "queueHide": {
+    "message": "إخفاء التالي",
+    "description": "Tooltip on the queue header when the list is expanded."
+  },
   "audioStatsFilter": {
     "message": "نطاق الإحصاءات",
     "description": "Accessible name of the This Month / All Time filter group."

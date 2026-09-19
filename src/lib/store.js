@@ -1,9 +1,15 @@
 /**
- * Channels, feed, videoMeta, and pollState accessors. Each lives on its
- * own chrome.storage.local key so a settings reset cannot wipe them.
+ * Channels, feed, videoMeta, pollState, and listen-later queue accessors.
+ * Each lives on its own chrome.storage.local key so a settings reset
+ * cannot wipe them.
  */
 
-import { applyChannelGroup, sanitizeChannelGroups } from './view.js';
+import {
+  applyChannelGroup,
+  sanitizeChannelGroups,
+  queueEntryFromItem,
+  sanitizeQueue,
+} from './view.js';
 
 const DEFAULT_POLL_STATE = {
   running: false,
@@ -377,4 +383,61 @@ export function markNotified(state, ids) {
 
 export function hasNotified(state, id) {
   return Array.isArray(state?.notified) && state.notified.includes(id);
+}
+
+/* ---- queue ---------------------------------------------------------- */
+
+export const QUEUE_CAP = 100;
+
+export async function readQueue() {
+  const list = await getKey('queue');
+  return sanitizeQueue(list, QUEUE_CAP);
+}
+
+export async function saveQueue(list) {
+  const next = sanitizeQueue(list, QUEUE_CAP);
+  await setKey('queue', next);
+  return next;
+}
+
+export async function addToQueue(entry) {
+  const queue = await readQueue();
+  const built = queueEntryFromItem(entry, Date.now());
+  if (!built) return { added: false, full: false, queue };
+  if (queue.some((row) => row.v === built.v)) return { added: false, full: false, queue };
+  if (queue.length >= QUEUE_CAP) return { added: false, full: true, queue };
+  const next = [...queue, built];
+  await saveQueue(next);
+  return { added: true, full: false, queue: next };
+}
+
+export async function removeFromQueue(v) {
+  const queue = await readQueue();
+  const next = queue.filter((row) => row.v !== v);
+  if (next.length !== queue.length) await saveQueue(next);
+  return { queue: next };
+}
+
+export async function clearQueue() {
+  await saveQueue([]);
+  return { queue: [] };
+}
+
+export async function takeFromQueue(v) {
+  const queue = await readQueue();
+  const item = queue.find((row) => row.v === v) || null;
+  if (!item) return { item: null, queue };
+  const next = queue.filter((row) => row.v !== v);
+  await saveQueue(next);
+  return { item, queue: next };
+}
+
+export async function readQueueOpen() {
+  return (await getKey('queueOpen')) === true;
+}
+
+export async function writeQueueOpen(on) {
+  const next = !!on;
+  await setKey('queueOpen', next);
+  return next;
 }

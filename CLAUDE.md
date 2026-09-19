@@ -129,6 +129,12 @@ asks.
   naming the count, then every channel and the whole feed go. Alert history
   stays, so channels added back never alert twice. There is no undo; Export
   is the way back.
+- **Up next** is a listen-later queue in the Player tab, under the player
+  card and above the stats, collapsible, with the open/closed choice
+  remembered. Auto-advance plays the list in one YouTube tab, audio mode
+  on or off. Add from a feed row (and so the channel sheet), or from the
+  player card for what is playing now. Cap 100. Not in backups. Live
+  streams and premieres cannot be queued from a feed row.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
   popup header and a Support group at the bottom of Settings open one sheet
   (PayPal, InstaPay with address, Copy and QR); the README and store text
@@ -281,6 +287,17 @@ Most live as comments at the line they protect. These span files or tools:
   `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
   with `not allowed` until it is added there. Add it only if a compromised
   youtube.com page could not misuse it.
+- **`queue.ended` is gated on the tab id and the video id.** The worker
+  honours it only when `sender.tab.id` is the tab it wrote into
+  `queuePlay` and `msg.v` is the video it handed that tab. Any other tab
+  or id is ignored, so a compromised youtube.com page cannot drain the
+  queue or redirect some other tab.
+- **The content script listens for `ended` in the capture phase on
+  `document`.** A media `ended` event does not bubble, but capture still
+  sees it, and it keeps working across YouTube's in-page navigations
+  without tracking which `<video>` is current. Guard it: `event.target`
+  must be `findVideo()`, and the id sent is `readVideoId()`, not
+  anything from the event. Ads and preview players fire `ended` too.
 - **`render()` draws only the open tab.** A hidden tab's DOM is whatever it
   was when it was last open, and `activate()` draws a tab as it opens. Code
   that reads a hidden tab's elements after `render()` reads stale ones, and

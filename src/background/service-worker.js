@@ -45,8 +45,15 @@ import {
   hasNotified,
   backoffDelayMs,
   isSameListing,
+  readQueue,
+  addToQueue,
+  removeFromQueue,
+  clearQueue,
+  takeFromQueue,
+  readQueueOpen,
+  writeQueueOpen,
 } from '../lib/store.js';
-import { feedChannelIds } from '../lib/view.js';
+import { feedChannelIds, queueEntryFromItem } from '../lib/view.js';
 
 const OVERLAY_MESSAGE_KEYS = ['overlayTitle', 'overlayExit', 'overlayExitShortcut'];
 
@@ -83,9 +90,17 @@ const WELCOME_PAGE = 'src/welcome/welcome.html';
 const UNINSTALL_PAGE = 'https://ashahinl.github.io/Youtube-Companion/uninstall.html';
 
 // The content script shares a renderer with youtube.com, so it is the sender
-// a compromised page would speak as. It needs these two and nothing else;
+// a compromised page would speak as. It may ask the two audio-mode questions
+// and report that the main video ended. queue.ended is only honoured when
+// sender.tab.id and msg.v both match the session record this worker wrote;
 // anything that reads or changes stored data must come from an extension page.
-const CONTENT_SCRIPT_MESSAGES = new Set(['audioMode.boot', 'audioMode.shortcut']);
+export const CONTENT_SCRIPT_MESSAGES = new Set([
+  'audioMode.boot',
+  'audioMode.shortcut',
+  'queue.ended',
+]);
+
+const QUEUE_PLAY_KEY = 'queuePlay';
 
 // In-memory latch so two overlapping calls in the same worker cannot both
 // pass the storage read. The durable twin is pollState.running.
@@ -143,6 +158,57 @@ function errMessage(err) {
 function watchUrl(videoId, kind) {
   if (kind === 'short') return `https://www.youtube.com/shorts/${videoId}`;
   return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+function audioWatchUrl(videoId) {
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
+
+async function markAudioOpen(tabId) {
+  if (tabId == null) return;
+  const run = chromeApi().storage.session.set({ [`audioOpen:${tabId}`]: true });
+  audioOpenInFlight = audioOpenInFlight.then(() => run, () => run);
+  await run;
+}
+
+async function openVideoTab(videoId, kind, { audio } = {}) {
+  const url = audio ? audioWatchUrl(videoId) : watchUrl(videoId, kind);
+  if (!audio) return chromeApi().tabs.create({ url, active: true });
+  const run = (async () => {
+    const tab = await chromeApi().tabs.create({ url, active: true });
+    const tabId = tab && tab.id;
+    if (tabId != null) await chromeApi().storage.session.set({ [`audioOpen:${tabId}`]: true });
+    return tab;
+  })();
+  audioOpenInFlight = audioOpenInFlight.then(() => run, () => run);
+  return run;
+}
+
+function asQueuePlay(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const tabId = raw.tabId;
+  if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return null;
+  const parsed = normalizeVideoInput(raw.v);
+  if (!parsed || parsed.kind !== 'video') return null;
+  return { tabId, v: parsed.id };
+}
+
+async function readQueuePlay() {
+  const got = await chromeApi().storage.session.get(QUEUE_PLAY_KEY);
+  return asQueuePlay(got && got[QUEUE_PLAY_KEY]);
+}
+
+async function writeQueuePlay(rec) {
+  if (!rec) {
+    await chromeApi().storage.session.remove(QUEUE_PLAY_KEY);
+    return;
+  }
+  await chromeApi().storage.session.set({ [QUEUE_PLAY_KEY]: rec });
+}
+
+async function queueOpensInAudioMode() {
+  const settings = await readSettings();
+  return !!settings?.audio?.openFeedInAudioMode;
 }
 
 function newestOf(items) {
@@ -353,13 +419,15 @@ export async function refreshBadge() {
 }
 
 async function collectState() {
-  const [settings, channels, feed, pollState] = await Promise.all([
+  const [settings, channels, feed, pollState, queue, queueOpen] = await Promise.all([
     readSettings(),
     readChannels(),
     readFeed(),
     readPollState(),
+    readQueue(),
+    readQueueOpen(),
   ]);
-  return { settings, channels, feed, pollState };
+  return { settings, channels, feed, pollState, queue, queueOpen };
 }
 
 function pickChannels(channels, { scope, onlyId, onlyIds }) {
@@ -1070,16 +1138,59 @@ export async function handleMessage(msg, sender) {
         if (!parsed || parsed.kind !== 'video') {
           return { ok: false, error: 'not a video' };
         }
-        const url = `https://www.youtube.com/watch?v=${parsed.id}`;
-        const run = (async () => {
-          const tab = await chromeApi().tabs.create({ url, active: true });
-          const tabId = tab && tab.id;
-          if (tabId == null) return;
-          // One key per tab, so two quick opens never race a read-modify-write.
-          await chromeApi().storage.session.set({ [`audioOpen:${tabId}`]: true });
-        })();
-        audioOpenInFlight = audioOpenInFlight.then(() => run, () => run);
-        await run;
+        // One key per tab, so two quick opens never race a read-modify-write.
+        await openVideoTab(parsed.id, 'video', { audio: true });
+        return { ok: true };
+      }
+      case 'queue.add': {
+        const built = queueEntryFromItem(msg && msg.item, Date.now());
+        if (!built) return { ok: false, error: 'invalid' };
+        const result = await addToQueue(built);
+        if (result.added) return { ok: true, queue: result.queue };
+        if (result.full) return { ok: false, error: 'full', queue: result.queue };
+        return { ok: true, queue: result.queue };
+      }
+      case 'queue.remove': {
+        const result = await removeFromQueue(msg && msg.v);
+        return { ok: true, queue: result.queue };
+      }
+      case 'queue.clear': {
+        const result = await clearQueue();
+        return { ok: true, queue: result.queue };
+      }
+      case 'queue.setOpen':
+        await writeQueueOpen(msg && msg.on);
+        return { ok: true };
+      case 'queue.playAll': {
+        const queue = await readQueue();
+        const first = queue[0];
+        if (!first) return { ok: false, error: 'empty' };
+        const audio = await queueOpensInAudioMode();
+        const tab = await openVideoTab(first.v, first.k, { audio });
+        const tabId = tab && tab.id;
+        if (tabId == null) return { ok: false, error: 'no tab' };
+        await writeQueuePlay({ tabId, v: first.v });
+        return { ok: true, queue };
+      }
+      case 'queue.ended': {
+        const play = await readQueuePlay();
+        if (!play) return { ok: false };
+        if (sender?.tab?.id !== play.tabId) return { ok: false };
+        if (msg.v !== play.v) return { ok: false };
+        await takeFromQueue(play.v);
+        const queue = await readQueue();
+        const next = queue[0];
+        if (!next) {
+          await writeQueuePlay(null);
+          return { ok: true, done: true };
+        }
+        const audio = await queueOpensInAudioMode();
+        const url = audio ? audioWatchUrl(next.v) : watchUrl(next.v, next.k);
+        if (audio) await markAudioOpen(play.tabId);
+        // YouTube's own autoplay may show a suggestion first; tabs.update
+        // still wins. Do not try to suppress YouTube's autoplay.
+        await chromeApi().tabs.update(play.tabId, { url });
+        await writeQueuePlay({ tabId: play.tabId, v: next.v });
         return { ok: true };
       }
       case 'audioMode.boot': {
@@ -1238,6 +1349,12 @@ onSettingsChanged(() => {
   syncUninstallUrl().catch(() => {});
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
+chromeApi().tabs.onRemoved.addListener((tabId) => {
+  void (async () => {
+    const play = await readQueuePlay();
+    if (play && play.tabId === tabId) await writeQueuePlay(null);
+  })();
+});
 
 /**
  * The keys Chrome actually bound: `shortcut` toggles audio mode, `popup` opens

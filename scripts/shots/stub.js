@@ -60,6 +60,8 @@
       channels: clone(d.channels || []),
       feed: clone(d.feed || []),
       pollState: clone(d.pollState || {}),
+      queue: clone(d.queue || []),
+      queueOpen: d.queueOpen === true,
     };
   }
 

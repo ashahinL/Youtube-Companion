@@ -161,6 +161,12 @@
               <span id="audio-duration" class="audio-player__time">0:00</span>
             </div>
           </div>
+          <button
+            id="audio-queue"
+            class="icon-btn audio-player__queue"
+            type="button"
+            hidden
+          ></button>
           <div class="audio-player__controls">
             <div class="audio-player__transport" dir="ltr">
               <button
@@ -245,6 +251,42 @@
           title="Click to set the keyboard shortcut."
           data-i18n-title="audioShortcutTitle"
         ></button>
+      </div>
+      <div id="queue" class="queue">
+        <div class="queue__head">
+          <button
+            id="queue-toggle"
+            class="queue__toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="queue-list"
+          >
+            <span id="queue-toggle-label"></span>
+            <span class="queue__chevron" aria-hidden="true">▾</span>
+          </button>
+          <button id="queue-play" class="btn btn--primary queue__play" type="button" data-i18n="queuePlayAll">
+            Play all
+          </button>
+          <button id="queue-clear" class="btn queue__clear" type="button" data-i18n="queueClear">
+            Clear
+          </button>
+        </div>
+        <p id="queue-notice" class="banner banner--error" role="status" hidden></p>
+        <div id="queue-confirm" class="queue__confirm" hidden>
+          <span id="queue-confirm-prompt" class="confirm-prompt" data-i18n="queueClearConfirm">
+            Clear every video in Up next?
+          </span>
+          <button id="queue-clear-yes" class="btn btn--primary" type="button" data-i18n="queueClearConfirmYes">
+            Clear all
+          </button>
+          <button id="queue-clear-no" class="btn" type="button" data-i18n="queueClearConfirmNo">
+            Cancel
+          </button>
+        </div>
+        <div id="queue-list" class="list queue__list" hidden></div>
+        <p id="queue-empty" class="empty" data-i18n="queueEmpty" hidden>
+          Nothing here yet. Add a video from Feeds or the player.
+        </p>
       </div>
       <div class="audio-stats">
         <div

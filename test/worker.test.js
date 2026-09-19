@@ -15,6 +15,9 @@ import {
   saveVideoMeta,
   readPollState,
   writePollState,
+  readQueue,
+  addToQueue,
+  QUEUE_CAP,
 } from '../src/lib/store.js';
 
 const MKBHD = 'UCBJycsmduvYEL83R_U4JriQ';
@@ -322,6 +325,7 @@ export default async function run(t) {
     ready,
     runSweep,
     handleMessage,
+    CONTENT_SCRIPT_MESSAGES,
     syncAlarms,
     reconcileRunning,
     refreshBadge,
@@ -339,6 +343,8 @@ export default async function run(t) {
       'videoMeta',
       'pollState',
       'settings',
+      'queue',
+      'queueOpen',
     ]);
     // Removing `settings` kicks the worker's onSettingsChanged listener,
     // which calls syncAlarms without the test awaiting it.
@@ -2003,6 +2009,8 @@ export default async function run(t) {
     t.check('getState has channels', state.channels?.[0]?.id === MKBHD, JSON.stringify(state.channels?.[0]?.id));
     t.check('getState has feed', Array.isArray(state.feed), String(typeof state.feed));
     t.check('getState has pollState', state.pollState?.running === false, JSON.stringify(state.pollState));
+    t.check('getState has queue', Array.isArray(state.queue) && state.queue.length === 0, JSON.stringify(state.queue));
+    t.check('getState has queueOpen closed', state.queueOpen === false, String(state.queueOpen));
 
     installFetch({
       feeds: {
@@ -3222,6 +3230,159 @@ export default async function run(t) {
     await writeSettings({ ui: { locale: 'en' } });
     await wait(20);
 
+    t.section('listen-later queue messages');
+
+    const Q1 = 'qvideo00001';
+    const Q2 = 'qvideo00002';
+    const Q3 = 'qvideo00003';
+
+    await wipe();
+    const addedFirst = await handleMessage({
+      type: 'queue.add',
+      item: { v: Q1, t: 'One', c: MKBHD, ct: 'Marques', at: 10, d: 20 },
+    });
+    t.check('queue.add reports ok', addedFirst.ok === true && addedFirst.queue?.[0]?.v === Q1, JSON.stringify(addedFirst));
+    t.check('queue.add stores the snapshot', (await readQueue())[0]?.t === 'One');
+    const addedAgain = await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'Dup' } });
+    t.check('queue.add of a duplicate is ok and unchanged', addedAgain.ok === true && addedAgain.queue.length === 1);
+    const badId = await handleMessage({ type: 'queue.add', item: { v: 'nope', t: 'Bad' } });
+    t.check(
+      'queue.add of a bad id is invalid',
+      badId.ok === false && badId.error === 'invalid',
+      JSON.stringify(badId),
+    );
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    const removedOne = await handleMessage({ type: 'queue.remove', v: Q1 });
+    t.check('queue.remove drops that id', removedOne.ok === true && removedOne.queue.map((row) => row.v).join() === Q2);
+    const openedOk = await handleMessage({ type: 'queue.setOpen', on: true });
+    t.check('queue.setOpen reports ok', openedOk.ok === true);
+    const openedState = await handleMessage({ type: 'getState' });
+    t.check('getState reflects queueOpen', openedState.queueOpen === true);
+    const clearedQueue = await handleMessage({ type: 'queue.clear' });
+    t.check('queue.clear empties', clearedQueue.ok === true && clearedQueue.queue.length === 0 && (await readQueue()).length === 0);
+
+    const emptyPlay = await handleMessage({ type: 'queue.playAll' });
+    t.check(
+      'queue.playAll on empty is empty',
+      emptyPlay.ok === false && emptyPlay.error === 'empty',
+      JSON.stringify(emptyPlay),
+    );
+
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One', k: 'short' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q3, t: 'Three' } });
+    mock.resetCalls();
+    const played = await handleMessage({ type: 'queue.playAll' });
+    t.check('queue.playAll reports ok', played.ok === true, JSON.stringify(played));
+    t.check('playAll leaves item 0 in the queue', played.queue?.[0]?.v === Q1 && played.queue.length === 3);
+    t.check('playAll opens one focused tab', mock.tabsCreated.length === 1 && mock.tabsCreated[0].active === true);
+    t.check(
+      'playAll uses the shorts URL for a short',
+      mock.tabsCreated[0].url === `https://www.youtube.com/shorts/${Q1}`,
+      mock.tabsCreated[0].url,
+    );
+    const playTabId = mock.tabsCreated[0].id;
+    const playFlag = await globalThis.chrome.storage.session.get(`audioOpen:${playTabId}`);
+    t.check('playAll without the audio setting stores no audioOpen flag', playFlag[`audioOpen:${playTabId}`] === undefined, JSON.stringify(playFlag));
+    const playRec = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check(
+      'playAll writes queuePlay',
+      playRec.queuePlay?.tabId === playTabId && playRec.queuePlay?.v === Q1,
+      JSON.stringify(playRec),
+    );
+
+    const wrongTab = await handleMessage(
+      { type: 'queue.ended', v: Q1 },
+      { tab: { id: playTabId + 99 } },
+    );
+    t.check('queue.ended from the wrong tab is ignored', wrongTab.ok === false, JSON.stringify(wrongTab));
+    t.check('wrong tab does not change the queue', (await readQueue()).map((row) => row.v).join() === `${Q1},${Q2},${Q3}`);
+    t.check('wrong tab does not navigate', mock.tabsUpdated.length === 0, JSON.stringify(mock.tabsUpdated));
+
+    const wrongV = await handleMessage(
+      { type: 'queue.ended', v: Q2 },
+      { tab: { id: playTabId } },
+    );
+    t.check('queue.ended with the wrong v is ignored', wrongV.ok === false, JSON.stringify(wrongV));
+    t.check('wrong v does not change the queue', (await readQueue())[0]?.v === Q1);
+    t.check('wrong v does not navigate', mock.tabsUpdated.length === 0);
+
+    const advanced = await handleMessage(
+      { type: 'queue.ended', v: Q1 },
+      { tab: { id: playTabId } },
+    );
+    t.check('the matching ended advances', advanced.ok === true && advanced.done !== true, JSON.stringify(advanced));
+    t.check('the finished video left the queue', (await readQueue()).map((row) => row.v).join() === `${Q2},${Q3}`);
+    t.check(
+      'advance updates the same tab',
+      mock.tabsUpdated.length === 1
+        && mock.tabsUpdated[0].tabId === playTabId
+        && mock.tabsUpdated[0].url === `https://www.youtube.com/watch?v=${Q2}`,
+      JSON.stringify(mock.tabsUpdated),
+    );
+    const afterAdvance = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check(
+      'queuePlay moves to the next id',
+      afterAdvance.queuePlay?.tabId === playTabId && afterAdvance.queuePlay?.v === Q2,
+      JSON.stringify(afterAdvance),
+    );
+
+    await handleMessage({ type: 'queue.ended', v: Q2 }, { tab: { id: playTabId } });
+    mock.tabsUpdated.length = 0;
+    const last = await handleMessage({ type: 'queue.ended', v: Q3 }, { tab: { id: playTabId } });
+    t.check('the last item reports done', last.ok === true && last.done === true, JSON.stringify(last));
+    t.check('the queue is empty after the last item', (await readQueue()).length === 0);
+    t.check('the last item does not navigate', mock.tabsUpdated.length === 0);
+    const afterDone = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check('the last item clears queuePlay', afterDone.queuePlay === undefined, JSON.stringify(afterDone));
+
+    await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    const playedAgain = await handleMessage({ type: 'queue.playAll' });
+    const liveTab = mock.tabsCreated[mock.tabsCreated.length - 1].id;
+    t.check('second playAll opened a tab', playedAgain.ok === true && liveTab != null);
+    mock.fireTabRemoved(liveTab);
+    await wait(20);
+    const afterClose = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check('closing the play tab clears queuePlay', afterClose.queuePlay === undefined, JSON.stringify(afterClose));
+    t.check('closing the tab leaves the queue', (await readQueue())[0]?.v === Q1);
+
+    await wipe();
+    await writeSettings({ audio: { openFeedInAudioMode: true } });
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One', k: 'short' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    mock.resetCalls();
+    const audioPlay = await handleMessage({ type: 'queue.playAll' });
+    const audioTabId = mock.tabsCreated[0]?.id;
+    t.check('audio playAll reports ok', audioPlay.ok === true);
+    t.check(
+      'audio playAll uses the watch URL',
+      mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q1}`,
+      mock.tabsCreated[0]?.url,
+    );
+    const audioFlag = await globalThis.chrome.storage.session.get(`audioOpen:${audioTabId}`);
+    t.check('audio playAll sets audioOpen', audioFlag[`audioOpen:${audioTabId}`] === true, JSON.stringify(audioFlag));
+    await handleMessage({ type: 'queue.ended', v: Q1 }, { tab: { id: audioTabId } });
+    t.check(
+      'audio advance updates the same tab on the watch URL',
+      mock.tabsUpdated[0]?.tabId === audioTabId
+        && mock.tabsUpdated[0]?.url === `https://www.youtube.com/watch?v=${Q2}`,
+      JSON.stringify(mock.tabsUpdated),
+    );
+    const nextFlag = await globalThis.chrome.storage.session.get(`audioOpen:${audioTabId}`);
+    t.check('audio advance sets audioOpen again', nextFlag[`audioOpen:${audioTabId}`] === true, JSON.stringify(nextFlag));
+
+    await wipe();
+    for (let i = 0; i < QUEUE_CAP; i++) {
+      await addToQueue({ v: `f${String(i).padStart(10, '0')}`, t: 'x' });
+    }
+    const full = await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'Nope' } });
+    t.check(
+      'queue.add at the cap is full',
+      full.ok === false && full.error === 'full' && full.queue.length === QUEUE_CAP,
+      JSON.stringify({ ok: full.ok, error: full.error, n: full.queue?.length }),
+    );
+
     t.section('who may send which message');
 
     const channelsBefore = JSON.stringify(await readChannels());
@@ -3244,10 +3405,25 @@ export default async function run(t) {
 
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
-      'importBackup', 'importTakeout', 'undoRemove']) {
+      'importBackup', 'importTakeout', 'undoRemove',
+      'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }
+
+    t.check('queue.ended is in CONTENT_SCRIPT_MESSAGES', CONTENT_SCRIPT_MESSAGES.has('queue.ended'));
+    t.check('queue.add is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.add'));
+    t.check('queue.remove is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.remove'));
+    t.check('queue.clear is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.clear'));
+    t.check('queue.playAll is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.playAll'));
+    t.check('queue.setOpen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.setOpen'));
+
+    const pageEnded = await viaListenerAs({ type: 'queue.ended', v: 'abcdefghijk' }, PAGE_SENDER);
+    t.check(
+      'a YouTube page may send queue.ended',
+      pageEnded.res.error !== 'not allowed',
+      JSON.stringify(pageEnded.res),
+    );
 
     const pageShortcut = await viaListenerAs({ type: 'audioMode.shortcut' }, PAGE_SENDER);
     t.check('a YouTube page may read the audio shortcut', pageShortcut.res.ok === true, JSON.stringify(pageShortcut.res));

@@ -49,6 +49,9 @@
   *(coming in 2.0)*
 - Sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the
   popup closes. *(coming in 2.0)*
+- **Up next**: add videos from Feeds or the player, then Play all. They play
+  one after another in one tab. Up to 100, and not in backups.
+  *(coming in 2.0)*
 - With more than one YouTube tab open, pick which one to control.
 - See how much data you used and saved, and how long you listened, this
   month or all time.

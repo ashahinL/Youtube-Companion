@@ -1065,6 +1065,64 @@
     "message": "No video",
     "description": "Player-card title when the target tab has no video title."
   },
+  "queueTitle": {
+    "message": "Up next",
+    "description": "Player tab queue header when the listen-later list is empty."
+  },
+  "queueTitleCount": {
+    "message": "Up next ($COUNT$)",
+    "description": "Player tab queue header when the list has videos. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "queuePlayAll": {
+    "message": "Play all",
+    "description": "Player tab button that plays the listen-later queue in one YouTube tab. Keep it short; the header is 400px."
+  },
+  "queueClear": {
+    "message": "Clear",
+    "description": "Player tab button that starts clearing the listen-later queue. Keep it short."
+  },
+  "queueClearConfirm": {
+    "message": "Clear every video in Up next?",
+    "description": "Inline confirmation before the listen-later queue is cleared."
+  },
+  "queueClearConfirmYes": {
+    "message": "Clear all",
+    "description": "Confirms clearing the listen-later queue. Keep it short."
+  },
+  "queueClearConfirmNo": {
+    "message": "Cancel",
+    "description": "Cancels clearing the listen-later queue."
+  },
+  "queueEmpty": {
+    "message": "Nothing here yet. Add a video from Feeds or the player.",
+    "description": "Empty state inside the listen-later queue when it is expanded."
+  },
+  "queueAdd": {
+    "message": "Add to Up next",
+    "description": "Accessible name and tooltip of the button that queues a video."
+  },
+  "queueRemove": {
+    "message": "Remove from Up next",
+    "description": "Accessible name and tooltip of the button that removes a video from the queue."
+  },
+  "queueFull": {
+    "message": "Up next is full (100 videos).",
+    "description": "Shown when adding to the listen-later queue fails because it already has 100 videos."
+  },
+  "queueShow": {
+    "message": "Show Up next",
+    "description": "Tooltip on the queue header when the list is collapsed."
+  },
+  "queueHide": {
+    "message": "Hide Up next",
+    "description": "Tooltip on the queue header when the list is expanded."
+  },
   "audioStatsFilter": {
     "message": "Statistics range",
     "description": "Accessible name of the This Month / All Time filter group."

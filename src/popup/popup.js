@@ -12,7 +12,7 @@
  */
 
 import { thumbUrl } from '../lib/yt.js';
-import { sortChannelsForDisplay } from '../lib/store.js';
+import { sortChannelsForDisplay, QUEUE_CAP } from '../lib/store.js';
 import { relativeTime, compactCount, absoluteTime, duration } from '../lib/fmt.js';
 import { buildBackup, backupSizeError, MAX_BACKUP_CHANNELS } from '../lib/backup.js';
 import { migrateAudioCover } from '../lib/settings.js';
@@ -63,6 +63,8 @@ import {
   audioVolumeSelectValue,
   openingTab,
   isNewSince,
+  queueEntryFromItem,
+  queueView,
 } from '../lib/view.js';
 import { SUPPORT_METHODS, supportRows } from '../lib/support.js';
 
@@ -130,6 +132,10 @@ const view = {
   // Previous pollState.lastSeenAt, held for this open so feed dots
   // do not vanish while the user is looking at them.
   feedSeenAt: 0,
+  queue: [],
+  queueOpen: false,
+  queueClearOpen: false,
+  queueNotice: '',
 };
 
 let audioPollTimer = null;
@@ -146,6 +152,7 @@ let feedPageKey = '';
 let feedGroupsScrolledTo;
 let groupWrite = Promise.resolve();
 let audioPickerKey = '';
+let queueListSig = '';
 let supportOpenerId = null;
 const supportCopiedTimers = new WeakMap();
 
@@ -231,6 +238,8 @@ function applySnapshot(snap) {
   if (snap.settings) view.settings = snap.settings;
   if (Array.isArray(snap.channels)) view.channels = snap.channels;
   if (Array.isArray(snap.feed)) view.feed = snap.feed;
+  if (Array.isArray(snap.queue)) view.queue = snap.queue;
+  if (typeof snap.queueOpen === 'boolean') view.queueOpen = snap.queueOpen;
   if (snap.pollState) view.pollState = snap.pollState;
   return true;
 }
@@ -721,6 +730,31 @@ function headphonesIcon() {
   return svg;
 }
 
+function queueIcon(queued) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 48 48');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const stroke = (d, join) => {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('fill', 'none');
+    p.setAttribute('stroke', 'currentColor');
+    p.setAttribute('stroke-width', '3');
+    p.setAttribute('stroke-linecap', 'round');
+    if (join) p.setAttribute('stroke-linejoin', 'round');
+    p.setAttribute('d', d);
+    return p;
+  };
+  svg.append(stroke('M6 12h24'), stroke('M6 24h24'), stroke('M6 36h16'));
+  if (queued) svg.append(stroke('M30 22l5 5 9-12', true));
+  else svg.append(stroke('M38 18v16'), stroke('M30 26h16'));
+  return svg;
+}
+
+function videoIsQueued(v) {
+  return !!v && (view.queue || []).some((row) => row && row.v === v);
+}
+
 function feedRow(item, locale, channel, { showChannel = true } = {}) {
   const modes = rowOpenModes(view.settings);
   const row = document.createElement('div');
@@ -819,6 +853,23 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   }
 
   row.appendChild(body);
+
+  if (item.k !== 'live' && item.k !== 'premiere') {
+    const queued = videoIsQueued(item.v);
+    const qBtn = document.createElement('button');
+    qBtn.type = 'button';
+    qBtn.className = 'icon-btn feed-row__queue';
+    const qLabel = t(queued ? 'queueRemove' : 'queueAdd');
+    qBtn.setAttribute('aria-label', qLabel);
+    qBtn.title = qLabel;
+    qBtn.setAttribute('aria-pressed', queued ? 'true' : 'false');
+    qBtn.appendChild(queueIcon(queued));
+    qBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      void toggleQueued(item);
+    });
+    row.appendChild(qBtn);
+  }
 
   const alt = document.createElement('button');
   alt.type = 'button';
@@ -941,6 +992,10 @@ function renderFeeds(locale) {
     noticeEl.hidden = false;
     noticeEl.textContent = view.feedNotice;
     noticeEl.classList.toggle('banner--error', view.feedNotice !== t('feedSweepRunning'));
+  } else if (view.queueNotice) {
+    noticeEl.hidden = false;
+    noticeEl.textContent = view.queueNotice;
+    noticeEl.classList.add('banner--error');
   } else if (slowText) {
     noticeEl.hidden = false;
     noticeEl.textContent = slowText;
@@ -1169,6 +1224,10 @@ function renderChannelSheet() {
   if (view.sheetError) {
     statusEl.hidden = false;
     statusEl.textContent = view.sheetError;
+    statusEl.classList.add('banner--error');
+  } else if (view.queueNotice) {
+    statusEl.hidden = false;
+    statusEl.textContent = view.queueNotice;
     statusEl.classList.add('banner--error');
   } else if (slowText) {
     statusEl.hidden = false;
@@ -1619,6 +1678,24 @@ function renderAudioPlayer(reachable) {
       if (sleep.value !== next) sleep.value = next;
     }
   }
+
+  const queueBtn = document.getElementById('audio-queue');
+  if (queueBtn) {
+    const show = reachable && !!videoId;
+    queueBtn.hidden = !show;
+    if (show) {
+      const queued = videoIsQueued(videoId);
+      const qLabel = t(queued ? 'queueRemove' : 'queueAdd');
+      queueBtn.setAttribute('aria-label', qLabel);
+      queueBtn.title = qLabel;
+      queueBtn.setAttribute('aria-pressed', queued ? 'true' : 'false');
+      const pressed = queued ? '1' : '0';
+      if (queueBtn.dataset.icon !== pressed) {
+        queueBtn.replaceChildren(queueIcon(queued));
+        queueBtn.dataset.icon = pressed;
+      }
+    }
+  }
 }
 
 function renderAudioStats() {
@@ -1777,6 +1854,207 @@ async function followChannel(input) {
   target?.focus();
 }
 
+function queueRow(item) {
+  const row = document.createElement('div');
+  row.className = 'queue-row';
+  const title = item.t || '';
+  const modes = rowOpenModes(view.settings);
+
+  const openBtn = document.createElement('button');
+  openBtn.type = 'button';
+  openBtn.className = 'queue-row__open';
+  openBtn.setAttribute(
+    'aria-label',
+    t(modes.row === 'audio' ? 'feedOpenVideoAudio' : 'feedOpenVideo', [title]),
+  );
+  openBtn.addEventListener('click', () => {
+    void playQueueItem(item);
+  });
+  row.appendChild(openBtn);
+
+  const thumb = document.createElement('div');
+  thumb.className = 'queue-row__thumb';
+  const img = document.createElement('img');
+  img.alt = title;
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.src = thumbUrl(item.v, 'mq');
+  thumb.appendChild(img);
+  row.appendChild(thumb);
+
+  const body = document.createElement('div');
+  body.className = 'queue-row__body';
+  body.appendChild(textEl('div', 'queue-row__title', title));
+  const channelName = item.ct || '';
+  if (channelName) body.appendChild(textEl('div', 'queue-row__channel', channelName));
+  row.appendChild(body);
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'icon-btn queue-row__remove';
+  remove.setAttribute('aria-label', t('queueRemove'));
+  remove.title = t('queueRemove');
+  remove.textContent = '✕';
+  remove.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void removeQueued(item.v);
+  });
+  row.appendChild(remove);
+  return row;
+}
+
+function renderQueue() {
+  const root = document.getElementById('queue');
+  if (!root) return;
+  const folded = queueView({ queue: view.queue, open: view.queueOpen, cap: QUEUE_CAP });
+  const toggle = document.getElementById('queue-toggle');
+  const label = document.getElementById('queue-toggle-label');
+  const play = document.getElementById('queue-play');
+  const clear = document.getElementById('queue-clear');
+  const list = document.getElementById('queue-list');
+  const empty = document.getElementById('queue-empty');
+  const notice = document.getElementById('queue-notice');
+  const confirm = document.getElementById('queue-confirm');
+
+  const title = folded.empty
+    ? t('queueTitle')
+    : tCount('queueTitleCount', folded.count);
+  if (label) label.textContent = title;
+  if (toggle) {
+    toggle.setAttribute('aria-expanded', folded.open ? 'true' : 'false');
+    toggle.title = t(folded.open ? 'queueHide' : 'queueShow');
+  }
+  // An empty queue leaves the header a quiet one-line label: the Player tab
+  // is crowded enough without two buttons that would do nothing.
+  if (play) play.hidden = folded.empty;
+  if (clear) clear.hidden = folded.empty;
+  if (confirm) confirm.hidden = !view.queueClearOpen || folded.empty;
+  if (notice) {
+    notice.hidden = !view.queueNotice;
+    notice.textContent = view.queueNotice || '';
+  }
+
+  const showList = folded.open && !folded.empty;
+  const showEmpty = folded.open && folded.empty;
+  if (list) list.hidden = !showList;
+  if (empty) empty.hidden = !showEmpty;
+
+  // The signature is what stops a redraw from rebuilding rows that have not
+  // changed, which would drop focus mid-keyboard. Only a hidden list is
+  // emptied: clearing it on an unchanged redraw would blank the open list.
+  const sig = JSON.stringify([locale, view.queue, folded.open]);
+  if (!showList) {
+    queueListSig = '';
+    list?.replaceChildren();
+  } else if (list && sig !== queueListSig) {
+    const focusedV = document.activeElement instanceof HTMLElement
+      ? document.activeElement.dataset.queueV
+      : '';
+    queueListSig = sig;
+    list.replaceChildren();
+    for (const item of folded.items) {
+      const row = queueRow(item);
+      row.dataset.queueV = item.v;
+      list.appendChild(row);
+    }
+    if (focusedV) {
+      list.querySelector(`[data-queue-v="${CSS.escape(focusedV)}"]`)?.querySelector('.queue-row__open')?.focus?.();
+    }
+  }
+}
+
+function applyQueueResult(res, { fullNotice = false } = {}) {
+  if (res && Array.isArray(res.queue)) view.queue = res.queue;
+  if (res && res.ok === false && res.error === 'full' && fullNotice) {
+    view.queueNotice = t('queueFull');
+  }
+  render();
+}
+
+async function toggleQueued(item) {
+  if (!item || !item.v) return;
+  if (item.k === 'live' || item.k === 'premiere') return;
+  view.queueNotice = '';
+  view.queueClearOpen = false;
+  const queued = videoIsQueued(item.v);
+  try {
+    if (queued) {
+      const res = await send({ type: 'queue.remove', v: item.v });
+      applyQueueResult(res);
+      return;
+    }
+    const entry = queueEntryFromItem(item, Date.now()) || item;
+    const res = await send({ type: 'queue.add', item: entry });
+    applyQueueResult(res, { fullNotice: true });
+  } catch (err) {
+    view.queueNotice = formatError(err?.message || err);
+    render();
+  }
+}
+
+async function removeQueued(v) {
+  view.queueNotice = '';
+  view.queueClearOpen = false;
+  try {
+    const res = await send({ type: 'queue.remove', v });
+    applyQueueResult(res);
+  } catch (err) {
+    view.queueNotice = formatError(err?.message || err);
+    render();
+  }
+}
+
+async function playQueueItem(item) {
+  view.queueNotice = '';
+  try {
+    const res = await send({ type: 'queue.remove', v: item.v });
+    if (res && Array.isArray(res.queue)) view.queue = res.queue;
+  } catch {
+    // Open anyway; the row click should still take you to the video.
+  }
+  openFeedItem(item, rowOpenModes(view.settings).row);
+}
+
+async function playQueue() {
+  if (!(view.queue || []).length) return;
+  view.queueNotice = '';
+  view.queueClearOpen = false;
+  try {
+    const res = await send({ type: 'queue.playAll' });
+    if (res && Array.isArray(res.queue)) view.queue = res.queue;
+    if (res && res.ok === true) {
+      window.close();
+      return;
+    }
+    if (res && res.error === 'empty') render();
+    else if (res && res.ok === false) {
+      view.queueNotice = formatError(res.error);
+      render();
+    }
+  } catch (err) {
+    view.queueNotice = formatError(err?.message || err);
+    render();
+  }
+}
+
+async function clearQueued() {
+  view.queueNotice = '';
+  try {
+    const res = await send({ type: 'queue.clear' });
+    view.queueClearOpen = false;
+    applyQueueResult(res);
+  } catch (err) {
+    view.queueNotice = formatError(err?.message || err);
+    render();
+  }
+}
+
+function toggleQueueOpen() {
+  view.queueOpen = !view.queueOpen;
+  void send({ type: 'queue.setOpen', on: view.queueOpen });
+  renderQueue();
+}
+
 /**
  * The player card's channel line: every credited channel in the popup's own
  * list format ("A and B"), a check before each one on the list.
@@ -1828,6 +2106,7 @@ function renderAudio() {
 
   renderAudioPicker(reachable);
   renderAudioPlayer(reachable);
+  renderQueue();
   renderAudioStats();
 
   const hint = document.getElementById('audio-shortcut');
@@ -2843,6 +3122,41 @@ function bindAudio() {
   });
   document.getElementById('audio-rate-no')?.addEventListener('click', () => {
     void dismissRateNote().then(() => renderAudio());
+  });
+
+  document.getElementById('audio-queue')?.addEventListener('click', () => {
+    const player = view.audioPlayer;
+    const tab = (view.audioTabs || []).find((row) => row.id === view.audioTargetId);
+    const videoId = (player && player.videoId)
+      || (tab ? Core.videoIdFromUrl(tab.url) : '')
+      || '';
+    if (!videoId) return;
+    const titleFromPlayer = player && player.title ? player.title : '';
+    const titleFromTab = tab ? Core.tabTitleToVideoTitle(tab.title) : '';
+    void toggleQueued({
+      v: videoId,
+      t: titleFromPlayer || titleFromTab || '',
+      ct: (player && player.channel) || '',
+    });
+  });
+  document.getElementById('queue-toggle')?.addEventListener('click', () => {
+    toggleQueueOpen();
+  });
+  document.getElementById('queue-play')?.addEventListener('click', () => {
+    void playQueue();
+  });
+  document.getElementById('queue-clear')?.addEventListener('click', () => {
+    view.queueClearOpen = true;
+    renderQueue();
+    document.getElementById('queue-clear-no')?.focus();
+  });
+  document.getElementById('queue-clear-yes')?.addEventListener('click', () => {
+    void clearQueued();
+  });
+  document.getElementById('queue-clear-no')?.addEventListener('click', () => {
+    view.queueClearOpen = false;
+    renderQueue();
+    document.getElementById('queue-clear')?.focus();
   });
 
   try {

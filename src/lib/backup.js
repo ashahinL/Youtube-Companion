@@ -2,9 +2,10 @@
  * Export and import of settings plus the channel list. Pure: no chrome,
  * no DOM, never throws on bad input.
  *
- * The feed and the classification cache are not in the file — both
- * rebuild from the channel list on the next sweep, and restoring a
- * stale feed over a fresh one would walk it backwards.
+ * The feed, the classification cache, and the listen-later queue are
+ * not in the file — the feed rebuilds from the channel list, restoring
+ * a stale feed would walk it backwards, and the queue is a local
+ * playback list.
  */
 
 import { DEFAULT_SETTINGS, clampSettings } from './settings.js';

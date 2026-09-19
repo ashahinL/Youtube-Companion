@@ -130,6 +130,10 @@
     return row;
   }
 
+  function queued(v, c, ct, t) {
+    return { v: v, c: c, ct: ct, t: t, at: 0, d: 0, qa: 0 };
+  }
+
   // The only live fixture is a news channel's stream. Store images are
   // public-facing, so the demo feed leaves it out rather than show a
   // political thumbnail on the listing.
@@ -177,6 +181,14 @@
     defaultSettings: defaultSettings,
     channels: channels,
     feed: feed,
+    // Up next is drawn open so the Player frame shows the list, not just
+    // its header. Real installs start it closed.
+    queue: [
+      queued('_oRgdlJUD18', MKBHD, 'Marques Brownlee', 'iOS 27 Hands-On: Top 5 New Features!'),
+      queued('iYlODtkyw_I', BEAST, 'MrBeast', 'Survive 30 Days Chained To A Stranger, Win $250,000'),
+      queued('eWKY0OnPByg', MKBHD, 'Marques Brownlee', 'Apple Lost the AI Race'),
+    ],
+    queueOpen: true,
     pollState: {
       running: false,
       lastPollAt: ago(12 * 60 * 1000),

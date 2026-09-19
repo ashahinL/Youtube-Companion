@@ -49,6 +49,7 @@ export default async function run(t) {
   const viewJs = fs.readFileSync(path.join(ROOT, 'src/lib/view.js'), 'utf8');
   const worker = fs.readFileSync(path.join(ROOT, 'src/background/service-worker.js'), 'utf8');
   const en = JSON.parse(fs.readFileSync(path.join(ROOT, '_locales/en/messages.json'), 'utf8'));
+  const ar = JSON.parse(fs.readFileSync(path.join(ROOT, '_locales/ar/messages.json'), 'utf8'));
 
   t.section('tabs');
 
@@ -659,6 +660,14 @@ export default async function run(t) {
   for (const key of labelKeys) {
     t.check(`data-i18n-label="${key}" exists in en`, key in en);
   }
+  const queueKeys = [
+    'queueTitle', 'queueTitleCount', 'queuePlayAll', 'queueClear',
+    'queueClearConfirm', 'queueClearConfirmYes', 'queueClearConfirmNo', 'queueEmpty',
+    'queueAdd', 'queueRemove', 'queueFull', 'queueShow', 'queueHide',
+  ];
+  for (const key of queueKeys) {
+    t.check(`queue key ${key} exists in en and ar`, key in en && key in ar);
+  }
   t.check('popup.js imports i18n.js', /from ['"]\.\.\/lib\/i18n\.js['"]/.test(js));
   t.check('popup.js imports view.js', /from ['"]\.\.\/lib\/view\.js['"]/.test(js));
   t.check(
@@ -1123,6 +1132,57 @@ export default async function run(t) {
       && /\.feed-row__open\s*\{[^}]*position:\s*absolute/.test(css)
       && /\.feed-row__open\s*\{[^}]*inset:\s*0/.test(css),
   );
+
+  t.section('listen-later queue');
+
+  t.check('the Player tab has a queue block after the player and before stats',
+    /id="audio-controls"[\s\S]*id="queue"[\s\S]*class="audio-stats"/.test(html));
+  t.check(
+    'the queue toggle names the list it controls',
+    /id="queue-toggle"[^>]*aria-expanded="false"/.test(html)
+      && /id="queue-toggle"[^>]*aria-controls="queue-list"/.test(html)
+      && /id="queue-list"/.test(html),
+  );
+  t.check('Play all and Clear are real buttons', /id="queue-play"[^>]*type="button"/.test(html)
+    && /id="queue-clear"[^>]*type="button"/.test(html));
+  t.check(
+    'clearing the queue asks first, inline',
+    /id="queue-confirm"[^>]*hidden/.test(html)
+      && /id="queue-clear-yes"/.test(html)
+      && /id="queue-clear-no"/.test(html)
+      && !/\bconfirm\s*\(/.test(js),
+  );
+  const qBtnAt = js.indexOf("qBtn.className = 'icon-btn feed-row__queue'");
+  const bodyAt = js.indexOf('row.appendChild(body)');
+  const altAt = js.indexOf("alt.className = 'icon-btn feed-row__open-alt'");
+  t.check(
+    'the feed-row queue button sits between the body and the open-alt button',
+    qBtnAt > bodyAt && qBtnAt < altAt && bodyAt >= 0 && altAt >= 0,
+    JSON.stringify({ bodyAt, qBtnAt, altAt }),
+  );
+  t.check(
+    'the feed-row queue button sits above the row overlay',
+    /\.feed-row__queue\s*\{[^}]*position:\s*relative/.test(css)
+      && /\.feed-row__queue\s*\{[^}]*z-index:\s*2/.test(css)
+      && /\.feed-row__open\s*\{[^}]*z-index:\s*1/.test(css),
+  );
+  t.check(
+    'live and premiere rows have no queue button',
+    /item\.k !== 'live' && item\.k !== 'premiere'/.test(js)
+      && /feed-row__queue/.test(js),
+  );
+  t.check(
+    'the player card has a queue button',
+    /class="icon-btn audio-player__queue"/.test(a)
+      && a.indexOf('id="audio-queue"') > a.indexOf('id="audio-player"')
+      && /getElementById\('audio-queue'\)/.test(js),
+  );
+  t.check(
+    'only a hidden queue list is emptied, so a redraw cannot blank it',
+    /if \(!showList\) \{\s*queueListSig = '';\s*list\?\.replaceChildren\(\);\s*\} else if \(list && sig !== queueListSig\)/.test(js),
+  );
+  t.check('queue.playAll is sent from the popup', /type: 'queue.playAll'/.test(js));
+  t.check('queue.ended is not sent from the popup', !/type: 'queue.ended'/.test(js));
   t.check(
     'the feed channel button is a sibling of the video action, not nested in it',
     /row\.appendChild\(openBtn\)/.test(js)

@@ -125,6 +125,8 @@ export function installChromeMock(initial = {}) {
     badgeTexts: [],
     badgeColor: null,
     tabsCreated: [],
+    tabsUpdated: [],
+    tabRemovedListeners: [],
     messagesSent: [],
     commandListeners: [],
     commandList: [{ name: 'toggle-audio-mode', shortcut: '' }],
@@ -261,6 +263,11 @@ export function installChromeMock(initial = {}) {
         handle.tabsCreated.push({ ...tab });
         return tab;
       },
+      async update(tabId, opts) {
+        const tab = { id: tabId, ...(opts || {}) };
+        handle.tabsUpdated.push({ tabId, ...(opts || {}) });
+        return tab;
+      },
       async query(info) {
         if (info?.active && info?.currentWindow) {
           return handle.activeTab ? [handle.activeTab] : [];
@@ -270,6 +277,15 @@ export function installChromeMock(initial = {}) {
       async sendMessage(tabId, message) {
         handle.messagesSent.push({ tabId, message });
         return { ok: true };
+      },
+      onRemoved: {
+        addListener(fn) {
+          if (typeof fn === 'function') handle.tabRemovedListeners.push(fn);
+        },
+        removeListener(fn) {
+          const i = handle.tabRemovedListeners.indexOf(fn);
+          if (i >= 0) handle.tabRemovedListeners.splice(i, 1);
+        },
       },
     },
 
@@ -351,6 +367,7 @@ export function installChromeMock(initial = {}) {
     handle.notifications.length = 0;
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
+    handle.tabsUpdated.length = 0;
     handle.messagesSent.length = 0;
     handle.activeTab = null;
     handle.sessionSetHold = null;
@@ -366,6 +383,10 @@ export function installChromeMock(initial = {}) {
   handle.fireAlarm = (name) => {
     const alarm = alarms[name] || { name };
     return Promise.all(handle.alarmListeners.map((fn) => fn(alarm)));
+  };
+
+  handle.fireTabRemoved = (tabId) => {
+    for (const fn of handle.tabRemovedListeners) fn(tabId);
   };
 
   return handle;

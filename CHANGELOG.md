@@ -7,6 +7,9 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- **Up next** in the Player tab: add videos from Feeds or the player, press
+  Play all, and they play one after another in one tab. Up to 100 videos,
+  and it is not in backups.
 - The Audio tab is now called **Player**. The popup opens on it only when a
   YouTube tab has a video playing or paused partway through, or when audio
   mode is on. Otherwise it opens on Feeds.

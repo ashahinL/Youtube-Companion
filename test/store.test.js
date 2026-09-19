@@ -28,6 +28,15 @@ import {
   writePollState,
   markNotified,
   hasNotified,
+  QUEUE_CAP,
+  readQueue,
+  saveQueue,
+  addToQueue,
+  removeFromQueue,
+  takeFromQueue,
+  clearQueue,
+  readQueueOpen,
+  writeQueueOpen,
 } from '../src/lib/store.js';
 
 function same(a, b) {
@@ -45,6 +54,71 @@ function item(v, extra = {}) {
     k: extra.k || 'video',
     st: extra.st ?? 0,
   };
+}
+
+async function queueChecks(t) {
+  t.section('queue');
+
+  t.check('readQueue is []', same(await readQueue(), []));
+  t.check('QUEUE_CAP is 100', QUEUE_CAP === 100);
+  t.check('queueOpen defaults closed', (await readQueueOpen()) === false);
+  await writeQueueOpen(true);
+  t.check('writeQueueOpen persists true', (await readQueueOpen()) === true);
+  await writeQueueOpen(0);
+  t.check('writeQueueOpen stores a boolean', (await readQueueOpen()) === false);
+
+  const q1 = await addToQueue({ v: 'abcdefghijk', t: 'First', c: 'UCx', ct: 'Chan' });
+  t.check('addToQueue reports added:true', q1.added === true && q1.full === false);
+  t.check('addToQueue appends', q1.queue.length === 1 && q1.queue[0].v === 'abcdefghijk' && q1.queue[0].t === 'First');
+  const q2 = await addToQueue({ v: 'bcdefghijkl', t: 'Second' });
+  t.check('addToQueue appends to the end', q2.queue.map((row) => row.v).join() === 'abcdefghijk,bcdefghijkl', q2.queue.map((row) => row.v).join());
+  const dup = await addToQueue({ v: 'abcdefghijk', t: 'Again' });
+  t.check('duplicate v is refused', dup.added === false && dup.full === false && dup.queue.length === 2);
+  t.check('duplicate leaves the original title', dup.queue[0].t === 'First');
+
+  const removed = await removeFromQueue('abcdefghijk');
+  t.check('removeFromQueue drops that id', removed.queue.length === 1 && removed.queue[0].v === 'bcdefghijkl');
+  const taken = await takeFromQueue('bcdefghijkl');
+  t.check('takeFromQueue returns the item', taken.item?.v === 'bcdefghijkl' && taken.item?.t === 'Second', JSON.stringify(taken.item));
+  t.check('takeFromQueue removes it', taken.queue.length === 0);
+  const takenMissing = await takeFromQueue('abcdefghijk');
+  t.check('takeFromQueue of a missing id is null', takenMissing.item === null && takenMissing.queue.length === 0);
+
+  await addToQueue({ v: 'abcdefghijk', t: 'A' });
+  await addToQueue({ v: 'bcdefghijkl', t: 'B' });
+  const cleared = await clearQueue();
+  t.check('clearQueue empties', same(cleared.queue, []) && same(await readQueue(), []));
+
+  const ids = [];
+  let fillOk = true;
+  for (let i = 0; i < QUEUE_CAP; i++) {
+    const v = `q${String(i).padStart(10, '0')}`;
+    ids.push(v);
+    const res = await addToQueue({ v, t: v });
+    if (!res.added || res.full) fillOk = false;
+  }
+  t.check('filling to the cap succeeds', fillOk && (await readQueue()).length === QUEUE_CAP);
+  const overflow = await addToQueue({ v: 'zzzzzzzzzzz', t: 'Nope' });
+  t.check('cap refuses with full:true', overflow.added === false && overflow.full === true && overflow.queue.length === QUEUE_CAP);
+  t.check('cap leaves the list unchanged', overflow.queue[0].v === ids[0] && overflow.queue[QUEUE_CAP - 1].v === ids[QUEUE_CAP - 1]);
+
+  await globalThis.chrome.storage.local.set({
+    queue: [
+      { v: 'nope' },
+      null,
+      { v: 'abcdefghijk', t: 'Keep' },
+      { v: 'abcdefghijk', t: 'Dup' },
+      { v: 'bcdefghijkl', t: 'Two' },
+    ],
+  });
+  const sanitised = await readQueue();
+  t.check(
+    'readQueue sanitizes a corrupt stored value',
+    sanitised.length === 2 && sanitised[0].v === 'abcdefghijk' && sanitised[0].t === 'Keep' && sanitised[1].v === 'bcdefghijkl',
+    JSON.stringify(sanitised),
+  );
+  await saveQueue([{ v: 'nope' }, { v: 'cdefghijklm', t: 'Saved' }]);
+  t.check('saveQueue sanitizes', same((await readQueue()).map((row) => row.v), ['cdefghijklm']));
 }
 
 export default async function run(t) {
@@ -400,6 +474,8 @@ export default async function run(t) {
       sorted[2].id === '4' && sorted[3].id === '2',
       sorted.map((c) => c.id + ':' + c.title).join(','));
     t.check('does not mutate the input', channels[0].id === '1');
+
+    await queueChecks(t);
   } finally {
     mock.restore();
   }

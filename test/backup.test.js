@@ -70,6 +70,7 @@ export default async function run(t) {
   t.check('channels length matches', built.channels.length === 2, String(built.channels.length));
   t.check('feed is absent', !('feed' in built));
   t.check('videoMeta is absent', !('videoMeta' in built));
+  t.check('queue is absent', !('queue' in built) && !('queueOpen' in built));
   t.check('export has no audioCover', !('audioCover' in built) && !('audioCover' in (built.settings || {})));
   t.check('export has no imageUrl', !('imageUrl' in (built.settings?.audio || {})));
 
@@ -447,6 +448,24 @@ export default async function run(t) {
   t.check('audioCover stuffed into settings is stripped on export', !('audioCover' in withUrl.settings));
   t.check('rateNoteDone is stripped on export', !('rateNoteDone' in withUrl.settings));
   t.check('backgroundType image still exports', withUrl.settings?.audio?.backgroundType === 'image');
+
+  const queuedFile = buildBackup({
+    settings: DEFAULT_SETTINGS,
+    channels: [],
+    queue: [{ v: 'abcdefghijk', t: 'Should not export' }],
+    queueOpen: true,
+  });
+  t.check('passing a queue into buildBackup still omits it', !('queue' in queuedFile) && !('queueOpen' in queuedFile));
+
+  const importedQueue = mergeBackup(emptyState(), {
+    app: 'youtube-companion',
+    version: 1,
+    queue: [{ v: 'abcdefghijk', t: 'From file' }],
+    queueOpen: true,
+    channels: [],
+  }, 'replace');
+  t.check('importing a file that has a queue field does not write one', !('queue' in importedQueue) && !('queueOpen' in importedQueue));
+  t.check('import still returns channels', Array.isArray(importedQueue.channels));
 
   const importedCover = mergeBackup(emptyState(), {
     app: 'youtube-companion',
