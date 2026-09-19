@@ -9,9 +9,9 @@ words. The name and the short description come from `_locales/*/messages.json`
 
 | Store | State | Record |
 |---|---|---|
-| Edge Add-ons | **Live by 2026-09-16** (submitted 2026-09-13) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
-| Chrome Web Store | **Live 2026-09-14** (submitted 2026-09-13) | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
-| مرتكز (Mortakaz) | **Listed 2026-09-17** | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
+| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **not uploaded yet** | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
+| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **not uploaded yet** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
+| مرتكز (Mortakaz) | **Listed 2026-09-17** · 2.0.0 text and images **not pasted yet** | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
 
 When a listing goes live, put its link in the README's install section.
 
@@ -59,11 +59,11 @@ somewhere unusual.
 | `icons/icon128.png` | 128×128 | Store icon | — (taken from the zip) | — |
 | `logo-300.png` | 300×300 | — | Extension logo | — |
 | `promo-440x280.png` | 440×280 | Small promo tile | Small promotional tile | — |
-| `screenshot-1-feeds.png` … `screenshot-6-arabic.png` | 1280×800 | Screenshots 1–5 only | Screenshots 1–6 | All six |
+| `screenshot-1-feeds.png` … `screenshot-8-alerts.png` | 1280×800 | Five of the eight | All eight | All eight |
 | — | 1400×560 | Marquee (optional, none made) | Large promotional tile (optional, none made) | — |
 
-**Chrome takes five screenshots, Edge takes six.** The set is ordered so the
-first five stand on their own, and Edge gets the channel sheet as its sixth:
+**Chrome takes five screenshots; Edge takes up to ten.** Eight are made, so
+Edge and مرتكز get all of them:
 
 1. `screenshot-1-feeds` — Every channel, one feed
 2. `screenshot-2-player` — Listen with less data
@@ -71,9 +71,18 @@ first five stand on their own, and Edge gets the channel sheet as its sixth:
 4. `screenshot-4-watchlist` — Add by link or @handle
 5. `screenshot-5-sheet` — A channel at a glance
 6. `screenshot-6-arabic` — بالعربية أيضًا
+7. `screenshot-7-queue` — A list that plays itself
+8. `screenshot-8-alerts` — Told when they upload
 
-Chrome's five are 1, 2, 3, 4 and 6 — the Arabic frame earns its place on a
-listing that is also published in Arabic.
+Chrome's five, in the order they are uploaded: **1, 2, 7, 4 and 6.** The Arabic
+frame earns its place on a listing that is also published in Arabic. Groups (3)
+is the one that drops, because the feed frame already shows the group chips
+above the list, and the queue frame shows something no other frame does.
+
+A frame's picture comes from `docs/screenshots/`, so it can only show a scene
+`scripts/shots/stub.js` knows how to set up. The queue frame is the popup
+scrolled down and has no app header: the list and the stats do not fit under it
+in 600px.
 
 **The What's new page's pictures are not store images, and still need the same
 look.** `npm run shots` writes six 400×600 popup frames into
@@ -229,7 +238,7 @@ Everything below is pasted by hand from the project page's **تعديل** button
 | الرابط الرئيسي | https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd |
 | رابط إضافي | https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh |
 | الكلمات المفتاحية | يوتيوب · إضافة_متصفح · بدون_حساب · وضع_الصوت · توفير_البيانات · خصوصية |
-| صور المشروع | The same five `store/images/screenshot-*.png` as the stores. Re-upload them whenever `npm run shots` changes them. |
+| صور المشروع | The same eight `store/images/screenshot-*.png` as the stores. Re-upload them whenever `npm run shots` changes them. |
 
 The page's description box is short, so this is a trimmed version of the Arabic
 store description rather than the whole thing:
@@ -241,6 +250,7 @@ store description rather than the whole thing:
 • مجموعات للقنوات، فتعرض مجموعة واحدة في كل مرة.
 • تنبيه واحد لكل قناة عند رفع فيديو جديد، لا تنبيه لكل فيديو.
 • وضع الصوت: يخفض الفيديو إلى 144p فتستهلك بيانات أقل بنحو 8 مرات من 720p، مع مؤقت نوم وعدّاد يعرض كم وفّرت.
+• قائمة «التالي» للاستماع لاحقًا: «تشغيل الكل» فتعمل وحدها في تبويب واحد حتى مع إغلاق النافذة.
 • استورد اشتراكاتك من ملف Google Takeout، يُقرأ على جهازك.
 • بلا تسجيل دخول ولا إعلانات ولا تتبّع، وبياناتك تبقى في متصفحك.
 • واجهة عربية كاملة من اليمين إلى اليسار.

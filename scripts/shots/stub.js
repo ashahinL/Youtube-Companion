@@ -268,6 +268,25 @@
       click('#tab-watchlist');
       return;
     }
+    if (name === 'queue') {
+      click('#tab-audio');
+      // The queue rows are built after the tab draws, so scrolling before they
+      // exist lands on a document that is still only one screen tall. The
+      // rating card sits under the stats and asks for a review; dismissing it
+      // is what a user does, and it keeps the frame about the list.
+      whenPresent('#queue-list .queue-row', function (row) {
+        if (!row) return;
+        click('#audio-rate-note:not([hidden]) #audio-rate-no');
+        // The player card, not the queue itself: scrolling the queue to the
+        // top asks for more scroll than the document has, and the clamp lands
+        // the frame's top edge halfway through the player title.
+        var card = document.querySelector('#audio-player');
+        if (!card) return;
+        var y = card.getBoundingClientRect().top + root.scrollY - 6;
+        root.scrollTo(0, Math.max(0, y));
+      });
+      return;
+    }
     if (name === 'settings') {
       click('#tab-settings');
       return;

@@ -110,7 +110,10 @@ and wait in line again. Do that only for a fix that cannot wait.
 
 - **Approved:** update the store table in `store/LISTING.md` on `main`. The
   first time a listing goes live, put its link in the README's install
-  section. Merge `main` into `dev`.
+  section. Drop the `*(coming in X.Y)*` markers this version made true — the
+  README on `main` describes what people can install, so they come off when
+  both stores have published, not when the tag is made. Merge `main` into
+  `dev`.
 - **Rejected:** write the reason in `store/LISTING.md`, fix it on a branch
   from `main`, ship the fix alone as the next patch version, and merge `main`
   into `dev`.

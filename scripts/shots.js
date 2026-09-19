@@ -33,6 +33,7 @@ export const DOCS_SHOTS = [
   { name: 'settings', scene: 'settings', locale: 'en' },
   { name: 'feeds-ar', scene: 'feeds', locale: 'ar' },
   { name: 'support', scene: 'support', locale: 'en' },
+  { name: 'queue', scene: 'queue', locale: 'en' },
 ];
 
 export const STORE_SHOTS = [
@@ -77,6 +78,20 @@ export const STORE_SHOTS = [
     title: 'بالعربية أيضًا',
     sub: 'واجهة كاملة من اليمين إلى اليسار.',
     dir: 'rtl',
+  },
+  {
+    name: 'screenshot-7-queue',
+    img: 'queue.png',
+    title: 'A list that plays itself',
+    sub: 'Queue videos to hear later. Play all works through them in one tab, even with the popup closed.',
+    dir: 'ltr',
+  },
+  {
+    name: 'screenshot-8-alerts',
+    img: 'settings.png',
+    title: 'Told when they upload',
+    sub: 'One desktop alert per channel, not one per video. Favourites always alert.',
+    dir: 'ltr',
   },
 ];
 

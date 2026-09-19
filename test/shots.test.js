@@ -63,9 +63,9 @@ export default async function run(t) {
   t.section('store and docs lists');
 
   t.check(
-    'the store set is the six 2.0 frames',
+    'the store set is the eight 2.0 frames',
     STORE_SHOTS.map((s) => s.name).join()
-      === 'screenshot-1-feeds,screenshot-2-player,screenshot-3-groups,screenshot-4-watchlist,screenshot-5-sheet,screenshot-6-arabic',
+      === 'screenshot-1-feeds,screenshot-2-player,screenshot-3-groups,screenshot-4-watchlist,screenshot-5-sheet,screenshot-6-arabic,screenshot-7-queue,screenshot-8-alerts',
   );
   const docsImgs = new Set(DOCS_SHOTS.map((s) => `${s.name}.png`));
   for (const shot of STORE_SHOTS) {

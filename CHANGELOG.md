@@ -6,6 +6,8 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+## 2.0.0 — 2026-09-19
+
 **New**
 - A **What's new** page. After an update the popup shows one line at the top;
   open it to see what the release added, or dismiss it. It never opens a tab
