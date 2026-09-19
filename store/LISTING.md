@@ -17,26 +17,32 @@ When a listing goes live, put its link in the README's install section.
 
 ## The package
 
-The same zip goes to both stores: `companion-for-youtube-1.0.0.zip`, 24
-entries, 174,899 bytes, SHA-256
-`682706219de51def937835587acc098c6926e3cdb935166e8988d1174470e575`.
+The same zip goes to both stores: `companion-for-youtube-2.0.0.zip`, 38
+entries, 652,434 bytes, SHA-256
+`d939e0cb0871cb9ae2c55e362422909ecec9b7437e86f4e9c4573dc482a8924e`, packed on
+2026-09-19 from `main` at `v2.0.0`.
 
-- Download it from the [v1.0.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v1.0.0), or
-- run `npm run pack` on a fresh clone of the `v1.0.0` tag.
+- Download it from the [v2.0.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.0.0), or
+- run `npm run pack` on a fresh clone of the `v2.0.0` tag.
+
+Most of the jump from 1.0.0's 174,899 bytes is the six What's new pictures
+and the InstaPay QR code, which are PNGs inside `src/`.
+
+1.0.0 was `companion-for-youtube-1.0.0.zip`, 24 entries, 174,899 bytes,
+SHA-256 `682706219de51def937835587acc098c6926e3cdb935166e8988d1174470e575`,
+on the [v1.0.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v1.0.0).
 
 The zip is byte-identical across runs **on the same Node build**, not across
 machines: the compressed bytes depend on the zlib inside Node. Homebrew's
-Node 26.4.0 (system zlib 1.2.12) packs the `v1.0.0` tag to a different hash
-than the one above, with the same files inside. To check a zip against a tag,
-compare the files, not the hash:
+Node 26.4.0 (system zlib 1.2.12) packs the same tag to a different hash, with
+the same files inside. To check a zip against a tag, compare the files, not
+the hash:
 
 ```bash
-mkdir /tmp/z && unzip -q companion-for-youtube-1.0.0.zip -d /tmp/z
+mkdir /tmp/z && unzip -q companion-for-youtube-2.0.0.zip -d /tmp/z
 cd /tmp/z && find . -type f | sed 's|^\./||' | while read f; do
-  git -C <repo> show v1.0.0:"$f" | cmp -s - "$f" || echo "differs: $f"; done
+  git -C <repo> show v2.0.0:"$f" | cmp -s - "$f" || echo "differs: $f"; done
 ```
-
-Checked on 2026-09-14: all 24 files in the uploaded zip match `v1.0.0`.
 
 A later version is packed on its ship day, from its tag, into
 `dist/companion-for-youtube-<version>.zip`. The steps are in
@@ -102,7 +108,7 @@ the earlier file.
 | Category (Chrome) | Lifestyle › Entertainment |
 | Category (Edge) | Entertainment |
 | Languages | English, Arabic |
-| Website / homepage | https://ashahinl.github.io/Youtube-Companion/ (from 2.0; it goes live on the merge to `main`, so check it opens before pasting it) |
+| Website / homepage | https://ashahinl.github.io/Youtube-Companion/ (live since 2026-09-19, when 2.0.0 merged to `main`) |
 | Support | https://github.com/ashahinL/Youtube-Companion/issues |
 | Privacy policy | https://github.com/ashahinL/Youtube-Companion/blob/main/PRIVACY.md |
 | Pricing | Free |
