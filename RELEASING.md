@@ -75,7 +75,11 @@ and wait in line again. Do that only for a fix that cannot wait.
 5. **Date the changelog.** Rename `## Unreleased` to `## X.Y.Z — YYYY-MM-DD`
    and start a new empty `## Unreleased` above it.
 6. **Update where things stand.** The "Where things stand" section of
-   `CLAUDE.md`, and the store table in `store/LISTING.md`.
+   `CLAUDE.md`, and in `store/LISTING.md` the store table, the package's
+   entry count / size / SHA-256, and **the two descriptions**. Read this
+   version's changelog bullet by bullet against them: a feature nobody can
+   read about on the listing may as well not have shipped. 2.0.0 nearly went
+   out with no mention of Support, undo, Clear watchlist or the audio cover.
 7. **Commit, move `main` up to it, and tag.**
    ```bash
    git commit -am "Version X.Y.Z"
