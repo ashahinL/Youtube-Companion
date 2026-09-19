@@ -138,6 +138,8 @@ WATCHLIST
 • Star your favourites: they sit at the top and are checked more often
 • Mute a channel to keep it in your feed but out of your alerts
 • Open any channel to see its latest videos without leaving the popup
+• Removed one by mistake? Undo puts it back with its star, its place in the list and its videos
+• Clear the whole list in one go, after a confirm, to start over
 
 ALERTS
 • A desktop notification when a channel uploads: one per channel, not one per video
@@ -146,6 +148,7 @@ ALERTS
 PLAYER, WITH AUDIO MODE
 • Drops the video to 144p and covers it, so you keep the sound and use about 8× less data than 720p
 • Switch it off and the video goes back to the quality you were watching
+• Pick the cover from a picture on your device; it stays on the device and is never uploaded
 • Seek, skip 10 seconds, change speed and volume from the popup
 • A sleep timer: pause after 15, 30 or 60 minutes, even with the popup closed
 • Open videos from your feed straight into audio mode
@@ -164,6 +167,9 @@ PRIVATE BY DESIGN
 • YouTube pages cannot tell it is installed
 • Your channels, feed and settings stay in your browser: no analytics, no ads, no tracking
 • Export your channels and settings to a file, and import them back
+
+SUPPORT
+• Free, with no ads and no tracking. If it saves you time or data, the heart in the popup opens PayPal and InstaPay
 
 In English and Arabic, with a full right-to-left layout.
 
@@ -191,6 +197,8 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • ميّز قنواتك المفضلة بنجمة: تظهر في الأعلى وتُفحص أكثر
 • اكتم قناة لتبقى في موجزك دون أن ترسل لك تنبيهات
 • افتح أي قناة لترى أحدث فيديوهاتها دون مغادرة النافذة
+• أزلت قناة بالخطأ؟ «تراجع» يعيدها بنجمتها وترتيبها في القائمة وفيديوهاتها
+• امسح القائمة بالكامل بضغطة واحدة بعد تأكيد، لتبدأ من جديد
 
 التنبيهات
 • إشعار على سطح المكتب عندما ترفع قناة فيديو: تنبيه واحد لكل قناة، لا لكل فيديو
@@ -199,6 +207,7 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 المشغّل ووضع الصوت
 • يخفض جودة الفيديو إلى 144p ويغطيه، فيبقى الصوت وتستهلك بيانات أقل بنحو 8 مرات من 720p
 • أوقفه فيعود الفيديو إلى الجودة التي كنت تشاهد بها
+• اختر الغطاء من صورة على جهازك؛ تبقى على الجهاز ولا تُرفع إلى أي مكان
 • تحكم في التشغيل من النافذة: التقديم، والقفز 10 ثوانٍ، والسرعة، ومستوى الصوت
 • مؤقت نوم: إيقاف بعد 15 أو 30 أو 60 دقيقة، حتى والنافذة مغلقة
 • افتح فيديوهات الموجز مباشرة في وضع الصوت
@@ -217,6 +226,9 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • صفحات يوتيوب لا يمكنها معرفة أن الإضافة مثبتة
 • قنواتك وموجزك وإعداداتك تبقى في متصفحك: بلا تحليلات ولا إعلانات ولا تتبّع
 • صدّر قنواتك وإعداداتك إلى ملف، واستوردها مرة أخرى
+
+الدعم
+• الإضافة مجانية بلا إعلانات ولا تتبّع. إن وفّرت عليك وقتًا أو بيانات، فأيقونة القلب في النافذة تفتح PayPal وInstaPay
 
 بالعربية والإنجليزية، مع واجهة كاملة من اليمين إلى اليسار.
 
@@ -260,6 +272,7 @@ store description rather than the whole thing:
 • استورد اشتراكاتك من ملف Google Takeout، يُقرأ على جهازك.
 • بلا تسجيل دخول ولا إعلانات ولا تتبّع، وبياناتك تبقى في متصفحك.
 • واجهة عربية كاملة من اليمين إلى اليسار.
+• مجانية بالكامل؛ ومن أراد الدعم فأيقونة القلب في النافذة تفتح PayPal وInstaPay.
 ```
 
 ## Privacy answers — both stores
