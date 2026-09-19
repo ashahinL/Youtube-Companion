@@ -447,6 +447,12 @@ export default async function run(t) {
     /<p[^>]*\bid="audio-page-notice"[^>]*\bhidden\b/.test(a),
   );
   t.check('has restore-quality select', /id="audio-restore-quality"/.test(a));
+  // Arabic's المؤقت متوقف is wider than "Sleep off", and without the wrap
+  // space-between pushed that select past the popup's 400px edge.
+  t.check(
+    'the player controls wrap instead of running off the edge',
+    /\.audio-player__controls\s*\{[^}]*flex-wrap:\s*wrap/.test(css),
+  );
   t.check(
     'restore quality is bound to settings.audio.restoreQuality',
     /data-setting="audio.restoreQuality"/.test(a),
@@ -598,6 +604,28 @@ export default async function run(t) {
     /data-setting="audio.openFeedInAudioMode"/.test(s),
   );
   t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
+
+  // An on/off setting takes effect the moment it is clicked, so it wears a
+  // switch. The one tick box left in the popup is the Feeds filter, which
+  // belongs beside the search box and the group chips, not here.
+  const settingBoxes = [...s.matchAll(/<input type="checkbox" data-setting="([^"]+)" \/>/g)].map((m) => m[1]);
+  t.check(
+    'every on/off setting is a switch',
+    settingBoxes.length === 5
+      && settingBoxes.every((name) => new RegExp(`<span class="switch">\\s*<input type="checkbox" data-setting="${name.replace('.', '\\.')}"`).test(s)),
+    JSON.stringify(settingBoxes),
+  );
+  t.check(
+    'a switch row puts its label and its switch at opposite ends',
+    (s.match(/class="row row--switch"/g) || []).length === 5
+      && /\.row--switch\s*\{[^}]*justify-content:\s*space-between/.test(css),
+  );
+  // Sizing it down to a tick box would shrink the switch's hit area to 15px
+  // inside a 36px track.
+  t.check(
+    'the tick-box size rule cannot reach a switch input',
+    /\.row > input\[type='checkbox'\]/.test(css) && !/\.row input\[type='checkbox'\]/.test(css),
+  );
   const presets = [...s.matchAll(/\bdata-preset="([^"]+)"/g)].map((m) => m[1]);
   t.check(
     'look group has the six presets',

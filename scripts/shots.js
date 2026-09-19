@@ -336,6 +336,11 @@ async function capture(browser, url, outAbs, width, height, scale) {
       `--force-device-scale-factor=${scale}`,
       `--window-size=${width},${height}`,
       '--virtual-time-budget=8000',
+      // Virtual time lands the player-card title marquee at whatever point 8s
+      // of its loop reaches, which cut a word in half in the store frame.
+      // Reduced motion holds every animation still and clamps the title to
+      // two readable lines instead.
+      '--force-prefers-reduced-motion',
       `--screenshot=${tmpOut}`,
       url,
     ]);

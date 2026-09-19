@@ -75,6 +75,13 @@ first five stand on their own, and Edge gets the channel sheet as its sixth:
 Chrome's five are 1, 2, 3, 4 and 6 — the Arabic frame earns its place on a
 listing that is also published in Arabic.
 
+**The What's new page's pictures are not store images, and still need the same
+look.** `npm run shots` writes six 400×600 popup frames into
+`src/whatsnew/img/` — Player, Feeds and Watchlist in English, then the same
+three in Arabic. They ship inside the zip, because the page showing them is an
+extension page, so a blank one reaches everyone who updates rather than one
+store reviewer. Check them in the same pass as the store images.
+
 Upload screenshots **one at a time, in order**, waiting for each to finish. On
 Edge, starting the next upload while one was still in flight silently dropped
 the earlier file.
@@ -130,6 +137,12 @@ PLAYER, WITH AUDIO MODE
 • See how much data you saved this month and all time
 • Keyboard shortcuts: Alt+Shift+A for audio mode, Alt+Shift+Y to open the popup
 
+UP NEXT
+• A listen-later queue in the Player tab: add a video from your feed, or the one playing now
+• Press Play all and the list plays itself in one tab, moving on as each video ends
+• Works with audio mode on or off, and keeps going with the popup closed
+• Up to 100 videos, and the list stays until you clear it
+
 PRIVATE BY DESIGN
 • No account, no Google sign-in, no API key
 • Reads only public youtube.com pages, without your YouTube cookies
@@ -176,6 +189,12 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • افتح فيديوهات الموجز مباشرة في وضع الصوت
 • اعرف كم وفّرت من البيانات هذا الشهر وطوال الوقت
 • اختصارات لوحة المفاتيح: Alt+Shift+A لوضع الصوت، وAlt+Shift+Y لفتح النافذة
+
+التالي
+• قائمة «استمع لاحقًا» في تبويب المشغّل: أضف فيديو من موجزك، أو الفيديو الذي يعمل الآن
+• اضغط «تشغيل الكل» فتعمل القائمة وحدها في تبويب واحد، وتنتقل للتالي عند انتهاء كل فيديو
+• تعمل مع وضع الصوت أو بدونه، وتستمر والنافذة مغلقة
+• حتى 100 فيديو، وتبقى القائمة حتى تحذفها
 
 الخصوصية أولًا
 • بلا حساب، وبلا تسجيل دخول بجوجل، وبلا مفتاح API

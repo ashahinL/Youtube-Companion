@@ -55,6 +55,8 @@ shipped yet waits under Unreleased. How a version ships:
 - Removing the extension opens a short page that asks why. It links to both
   the Chrome Web Store and Edge Add-ons. Nothing is sent unless you post the
   answers as a GitHub issue yourself.
+- Settings' on/off options are toggle switches now, the same ones audio mode
+  uses, instead of tick boxes.
 
 **Safer**
 - YouTube pages can no longer tell the extension is installed by loading its
@@ -82,6 +84,9 @@ shipped yet waits under Unreleased. How a version ships:
 **Fixes**
 - The scrolling title in the Player tab stays still, on two lines, when your
   system asks for reduced motion.
+- In Arabic, the sleep timer no longer runs off the edge of the Player tab.
+  Speed, volume and the timer drop to their own line when the words are too
+  wide for one.
 - When YouTube's channel feeds are down, checks still work. A channel whose
   feed fails is read from its Videos tab instead (shorts and live streams wait
   until the feed is back), and older videos found that way don't alert.

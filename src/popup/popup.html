@@ -532,31 +532,40 @@
       <fieldset class="group" id="settings-notifications">
         <legend class="group__legend" data-i18n="settingsNotifications">Notifications</legend>
         <label
-          class="row"
+          class="row row--switch"
           title="Master switch for desktop alerts on new uploads."
           data-i18n-title="settingsAlertsEnabledTitle"
         >
-          <input type="checkbox" data-setting="alerts.enabled" />
           <span data-i18n="settingsAlertsEnabled">Enable notifications</span>
+          <span class="switch">
+            <input type="checkbox" data-setting="alerts.enabled" />
+            <span class="switch__track" aria-hidden="true"></span>
+          </span>
         </label>
         <label
-          class="row"
+          class="row row--switch"
           title="Favourites always alert while notifications are on. This switch is only for the rest."
           data-i18n-title="settingsNotifyNormalTitle"
         >
-          <input type="checkbox" data-setting="alerts.notifyNormal" />
           <span data-i18n="settingsNotifyNormal">Notify for non-favourite channels</span>
+          <span class="switch">
+            <input type="checkbox" data-setting="alerts.notifyNormal" />
+            <span class="switch__track" aria-hidden="true"></span>
+          </span>
         </label>
         <p class="settings-note" data-i18n="settingsNotifyNormalNote">
           Favourites always alert while notifications are on.
         </p>
         <label
-          class="row"
+          class="row row--switch"
           title="When off, alerts use the extension icon instead."
           data-i18n-title="settingsUseAvatarTitle"
         >
-          <input type="checkbox" data-setting="alerts.useAvatarIcon" />
           <span data-i18n="settingsUseAvatar">Use the channel's avatar as the alert icon</span>
+          <span class="switch">
+            <input type="checkbox" data-setting="alerts.useAvatarIcon" />
+            <span class="switch__track" aria-hidden="true"></span>
+          </span>
         </label>
       </fieldset>
 
@@ -597,12 +606,15 @@
           <span data-i18n="settingsFeedMaxAfter">videos</span>
         </label>
         <label
-          class="row"
+          class="row row--switch"
           title="Off hides shorts from the feed and from the toolbar badge."
           data-i18n-title="settingsShowShortsTitle"
         >
-          <input type="checkbox" data-setting="feed.showShorts" />
           <span data-i18n="settingsShowShorts">Show shorts</span>
+          <span class="switch">
+            <input type="checkbox" data-setting="feed.showShorts" />
+            <span class="switch__track" aria-hidden="true"></span>
+          </span>
         </label>
       </fieldset>
 
@@ -640,12 +652,15 @@
       <fieldset class="group" id="settings-audio">
         <legend class="group__legend" data-i18n="settingsAudio">Audio mode</legend>
         <label
-          class="row"
+          class="row row--switch"
           title="On, clicking a video opens it with audio mode already on, and its button opens it normally."
           data-i18n-title="settingsOpenFeedInAudioTitle"
         >
-          <input type="checkbox" data-setting="audio.openFeedInAudioMode" />
           <span data-i18n="settingsOpenFeedInAudio">Open feed videos in audio mode</span>
+          <span class="switch">
+            <input type="checkbox" data-setting="audio.openFeedInAudioMode" />
+            <span class="switch__track" aria-hidden="true"></span>
+          </span>
         </label>
         <label
           class="row row--inline"
