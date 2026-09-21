@@ -125,6 +125,9 @@ asks.
   same filters the Feeds tab applies. It is always the feed count, audio mode
   or not.
 - **English and Arabic**, full RTL, with a language override in Settings.
+- **Theme**: System, Light or Dark in Settings; it applies to the popup,
+  welcome and What's new pages; the audio overlay and site/ keep their own
+  look; a localStorage mirror only prevents a flash, settings are the truth.
 - **Audio mode**: its switch lives only inside the Player tab. No recorder. The
   overlay look is a group in Settings; Image uses a picture you pick on the
   device, stored outside settings so it is not in backups. With two or more

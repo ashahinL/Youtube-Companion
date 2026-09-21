@@ -35,10 +35,16 @@ export default async function run(t) {
   );
   t.check('the short list has nine lines', (html.match(/data-i18n="whatsNewMore(?!Title)/g) || []).length === 9);
   t.check('the page has the language select', /id="whatsnew-locale"/.test(html) && js.includes("'whatsnew-locale'"));
+  t.check('the page loads the boot script before its stylesheet', (() => {
+    const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+    const bootAt = head.indexOf('<script src="../lib/theme-boot.js">');
+    const cssAt = head.indexOf('<link rel="stylesheet"');
+    return bootAt >= 0 && cssAt > bootAt;
+  })());
   t.check(
     'the page loads one module script',
     /<script type="module" src="whatsnew\.js"><\/script>/.test(html)
-      && (html.match(/<script\b/g) || []).length === 1,
+      && (html.match(/<script\b/g) || []).length === 2,
   );
 
   const links = [...html.matchAll(/href="(https?:[^"]+)"/g)].map((m) => m[1]);
@@ -58,6 +64,38 @@ export default async function run(t) {
   const lightRoot = css.slice(css.indexOf('@media (prefers-color-scheme: light)'));
   t.check('the dark theme declares color-scheme: dark', /color-scheme:\s*dark/.test(darkRoot));
   t.check('the light theme declares color-scheme: light', /color-scheme:\s*light/.test(lightRoot));
+  const boot = read('src/lib/theme-boot.js');
+  t.check(
+    'the boot script reads the stored choice synchronously',
+    /localStorage\.getItem\(['"]companion\.theme['"]\)/.test(boot),
+  );
+  t.check(
+    'every localStorage touch sits inside try/catch',
+    boot.indexOf('try') >= 0
+      && boot.indexOf('try') < boot.indexOf('localStorage')
+      && boot.lastIndexOf('localStorage') < boot.lastIndexOf('catch'),
+  );
+  const forced = css.match(/:root\[data-theme='light'\]\s*\{[^}]*\}/);
+  t.check(
+    'forced light carries the light tokens',
+    !!forced && /--bg:\s*#ffffff/.test(forced[0]) && /color-scheme:\s*light/.test(forced[0]),
+    forced ? forced[0].slice(0, 120) : 'missing',
+  );
+  t.check(
+    'a light OS still defers to a forced dark',
+    /@media\s*\(prefers-color-scheme:\s*light\)\s*\{[^}]*:root:not\(\[data-theme='dark'\]\)/.test(css),
+  );
+  const sysLight = css.match(/@media\s*\(prefers-color-scheme:\s*light\)\s*\{[^}]*:root:not\(\[data-theme='dark'\]\)\s*\{[^}]*\}/);
+  t.check(
+    'the OS-light block still declares color-scheme: light',
+    !!sysLight && /color-scheme:\s*light/.test(sysLight[0]) && /--bg:\s*#ffffff/.test(sysLight[0]),
+    sysLight ? sysLight[0].slice(0, 120) : 'missing',
+  );
+  t.check('the page applies the stored theme on load', js.includes('applyTheme(theme)'));
+  t.check(
+    'the theme comes from settings, next to the locale',
+    js.includes('state?.settings?.ui?.theme') && js.includes('state?.settings?.ui?.locale'),
+  );
   t.check('the body paints its own background', /body\s*\{[^}]*background:\s*var\(--bg\)/.test(css));
   t.check('the two columns stack on a narrow window', /@media \(max-width: 720px\)[\s\S]{0,200}grid-template-columns:\s*minmax\(0, 1fr\)/.test(css));
 

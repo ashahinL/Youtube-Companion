@@ -23,7 +23,8 @@ function stripColorRoots(css) {
   while (i < n) {
     const slice = css.slice(i);
     const media = slice.match(/^@media\s*\(prefers-color-scheme:[^{]*\{/);
-    const root = slice.match(/^:root\s*\{/);
+    // :root, :root[data-theme='light'] and :root:not([data-theme='dark']).
+    const root = slice.match(/^:root[^{\n]*\{/);
     if (media || root) {
       const open = (media || root)[0].length;
       let depth = 1;
@@ -644,6 +645,33 @@ export default async function run(t) {
     'look group has the open-feed-in-audio-mode checkbox',
     /data-setting="audio.openFeedInAudioMode"/.test(s),
   );
+  const langRowAt = s.indexOf('data-setting="ui.locale"');
+  const themeRowAt = s.indexOf('data-setting="ui.theme"');
+  t.check(
+    'a theme row sits directly after the language row',
+    langRowAt >= 0 && themeRowAt > langRowAt && !s.slice(langRowAt, themeRowAt).includes('</fieldset>'),
+    `${langRowAt} ${themeRowAt}`,
+  );
+  const themeSelect = s.match(/<select\b[^>]*data-setting="ui\.theme"[\s\S]*?<\/select>/);
+  const themeValues = [...(themeSelect ? themeSelect[0] : '').matchAll(/<option\b[^>]*\bvalue="([^"]+)"/g)].map((m) => m[1]);
+  t.check(
+    'the theme select offers system, light and dark',
+    themeValues.join() === 'system,light,dark',
+    JSON.stringify(themeValues),
+  );
+  t.check(
+    'the theme options are translated',
+    /data-i18n="settingsThemeSystem"/.test(themeSelect ? themeSelect[0] : '')
+      && /data-i18n="settingsThemeLight"/.test(themeSelect ? themeSelect[0] : '')
+      && /data-i18n="settingsThemeDark"/.test(themeSelect ? themeSelect[0] : ''),
+  );
+  t.check(
+    'the theme row wears the same row markup as the language row',
+    /class="row row--inline"[\s\S]{0,240}data-setting="ui\.theme"/.test(s),
+  );
+  for (const key of ['settingsTheme', 'settingsThemeTitle', 'settingsThemeSystem', 'settingsThemeLight', 'settingsThemeDark']) {
+    t.check(`theme key ${key} exists in en and ar`, key in en && key in ar);
+  }
   t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
 
   // An on/off setting takes effect the moment it is clicked, so it wears a
@@ -817,7 +845,7 @@ export default async function run(t) {
 
   const rootBlocks = [];
   {
-    const re = /:root\s*\{/g;
+    const re = /:root[^{\n]*\{/g;
     let m;
     while ((m = re.exec(css))) {
       let depth = 1;
@@ -856,6 +884,63 @@ export default async function run(t) {
     /\.feed-groups\s*\{[^}]*scrollbar-width:\s*none/.test(css)
       && /\.feed-groups::-webkit-scrollbar\s*\{[^}]*width:\s*0/.test(css)
       && /\.feed-groups::-webkit-scrollbar\s*\{[^}]*height:\s*0/.test(css),
+  );
+
+  t.section('theme choice');
+
+  const boot = fs.readFileSync(path.join(ROOT, 'src/lib/theme-boot.js'), 'utf8');
+  const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
+  const bootAt = head.indexOf('<script src="../lib/theme-boot.js">');
+  const cssAt = head.indexOf('<link rel="stylesheet"');
+  t.check(
+    'the boot script loads in <head> before the stylesheet',
+    bootAt >= 0 && cssAt > bootAt,
+    `${bootAt} ${cssAt}`,
+  );
+  t.check(
+    'the boot script is classic, not a module',
+    /<script src="\.\.\/lib\/theme-boot\.js"><\/script>/.test(head) && !/^\s*import[\s(]/m.test(boot),
+  );
+  t.check(
+    'the boot script reads the stored choice synchronously',
+    /localStorage\.getItem\(['"]companion\.theme['"]\)/.test(boot),
+  );
+  t.check(
+    'every localStorage touch sits inside try/catch',
+    boot.indexOf('try') >= 0
+      && boot.indexOf('try') < boot.indexOf('localStorage')
+      && boot.lastIndexOf('localStorage') < boot.lastIndexOf('catch'),
+  );
+  t.check(
+    'the boot script pins light or dark and clears anything else',
+    /document\.documentElement\.dataset\.theme = theme/.test(boot)
+      && /delete document\.documentElement\.dataset\.theme/.test(boot),
+  );
+  const forced = css.match(/:root\[data-theme='light'\]\s*\{[^}]*\}/);
+  t.check(
+    'forced light carries the light tokens',
+    !!forced && /--bg:\s*#ffffff/.test(forced[0]) && /color-scheme:\s*light/.test(forced[0]),
+    forced ? forced[0].slice(0, 120) : 'missing',
+  );
+  t.check(
+    'a light OS still defers to a forced dark',
+    /@media\s*\(prefers-color-scheme:\s*light\)\s*\{[^}]*:root:not\(\[data-theme='dark'\]\)/.test(css),
+  );
+  const sysLight = css.match(/@media\s*\(prefers-color-scheme:\s*light\)\s*\{[^}]*:root:not\(\[data-theme='dark'\]\)\s*\{[^}]*\}/);
+  t.check(
+    'the OS-light block still declares color-scheme: light',
+    !!sysLight && /color-scheme:\s*light/.test(sysLight[0]) && /--bg:\s*#ffffff/.test(sysLight[0]),
+    sysLight ? sysLight[0].slice(0, 120) : 'missing',
+  );
+  t.check('popup.js imports the shared theme helper', /from ['"]\.\.\/lib\/theme\.js['"]/.test(js));
+  t.check(
+    'popup.js applies the stored theme once settings load',
+    js.includes('applyTheme(view.settings?.ui?.theme)'),
+  );
+  t.check(
+    'a settings change applies the theme too',
+    js.split('applyTheme(view.settings?.ui?.theme)').length - 1 >= 2,
+    String(js.split('applyTheme(view.settings?.ui?.theme)').length - 1),
   );
 
   t.section('channel sheet');

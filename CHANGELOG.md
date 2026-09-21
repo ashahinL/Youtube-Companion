@@ -6,6 +6,9 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**New**
+- A Theme setting in Settings: System, Light or Dark for the popup, the welcome page and the What's new page.
+
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the
   block takes two rows instead of three.

@@ -14,6 +14,7 @@ import {
   applyDirection,
 } from '../lib/i18n.js';
 import { takeoutSizeError, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
+import { applyTheme } from '../lib/theme.js';
 
 // The toolbar menu tells a page nothing when the icon is pinned, so the page
 // asks again until it is.
@@ -170,15 +171,18 @@ bind();
 
 void (async () => {
   let setting = 'auto';
+  let theme = 'system';
   try {
     const state = await send({ type: 'getState' });
     setting = state?.settings?.ui?.locale || 'auto';
+    theme = state?.settings?.ui?.theme || 'system';
     const keys = await send({ type: 'audioMode.shortcut' });
     if (keys?.ok) shortcuts = { shortcut: keys.shortcut || '', popup: keys.popup || '' };
   } catch {
     // The page still reads in the browser's language without the worker.
   }
   await applyLanguage(setting);
+  applyTheme(theme);
   if (location.hash === '#import') el('welcome-import').focus();
   if (typeof chrome.action?.getUserSettings === 'function' && !(await checkPinned())) watchPinned();
 })();

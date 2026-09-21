@@ -53,6 +53,7 @@
     },
     ui: {
       locale: 'auto',
+      theme: 'system',
     },
     audio: {
       openFeedInAudioMode: false,

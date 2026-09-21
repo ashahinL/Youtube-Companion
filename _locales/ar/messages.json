@@ -635,6 +635,26 @@
     "message": "العربية",
     "description": "Language option that pins the UI to Arabic."
   },
+  "settingsTheme": {
+    "message": "السمة",
+    "description": "Label for the UI theme select."
+  },
+  "settingsThemeTitle": {
+    "message": "النظام يتبع سمة المتصفح أو الجهاز.",
+    "description": "Tooltip on the UI theme select."
+  },
+  "settingsThemeSystem": {
+    "message": "النظام",
+    "description": "Theme option that follows the browser or operating system theme."
+  },
+  "settingsThemeLight": {
+    "message": "فاتح",
+    "description": "Theme option that pins the UI to the light theme."
+  },
+  "settingsThemeDark": {
+    "message": "داكن",
+    "description": "Theme option that pins the UI to the dark theme."
+  },
   "settingsBackup": {
     "message": "النسخة الاحتياطية",
     "description": "Settings group heading for export and import."

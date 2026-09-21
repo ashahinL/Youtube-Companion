@@ -33,6 +33,7 @@ import {
   applyTo,
   applyDirection,
 } from '../lib/i18n.js';
+import { applyTheme } from '../lib/theme.js';
 import {
   isChannelRef,
   listedMatch,
@@ -2618,6 +2619,7 @@ async function patchSettings(patch) {
     view.backupNotice = { text: formatError(err?.message || err), error: true };
   }
   await applyI18n(view.settings?.ui?.locale);
+  applyTheme(view.settings?.ui?.theme);
   render();
 }
 
@@ -2657,6 +2659,7 @@ async function importBackup(mode) {
     } else {
       if (res.state) applySnapshot(res.state);
       await applyI18n(view.settings?.ui?.locale);
+      applyTheme(view.settings?.ui?.theme);
       const added = Number(res.added) || 0;
       const skipped = Number(res.skipped) || 0;
       const text = mode === 'replace'
@@ -3572,6 +3575,7 @@ void (async () => {
       ? Number(snap.previousLastSeenAt) || 0
       : Number(snap?.pollState?.lastSeenAt) || 0;
     await applyI18n(view.settings?.ui?.locale);
+    applyTheme(view.settings?.ui?.theme);
     const winner = await Promise.race([
       probe.then((r) => ({ kind: 'probe', r })),
       new Promise((resolve) => {

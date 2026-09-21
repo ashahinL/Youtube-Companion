@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <title data-i18n="appName">Companion for YouTube</title>
+    <script src="../lib/theme-boot.js"></script>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body class="is-opening">
@@ -630,6 +631,18 @@
             <option value="auto" data-i18n="settingsLocaleAuto">Auto</option>
             <option value="en" data-i18n="settingsLocaleEn">English</option>
             <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
+          </select>
+        </label>
+        <label
+          class="row row--inline"
+          title="System follows the browser or operating system theme."
+          data-i18n-title="settingsThemeTitle"
+        >
+          <span data-i18n="settingsTheme">Theme</span>
+          <select class="settings-select" data-setting="ui.theme">
+            <option value="system" data-i18n="settingsThemeSystem">System</option>
+            <option value="light" data-i18n="settingsThemeLight">Light</option>
+            <option value="dark" data-i18n="settingsThemeDark">Dark</option>
           </select>
         </label>
       </fieldset>

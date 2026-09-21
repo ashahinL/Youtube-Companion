@@ -155,6 +155,24 @@ export default async function run(t) {
     t.check("locale 'ar' is kept", loc('ar') === 'ar');
     t.check("locale 'fr' falls back to 'auto'", loc('fr') === 'auto');
     t.check("locale '' falls back to 'auto'", loc('') === 'auto');
+    t.check('theme defaults to system', DEFAULT_SETTINGS.ui.theme === 'system');
+    const theme = (value) =>
+      clampSettings({ ...DEFAULT_SETTINGS, ui: { theme: value } }).ui.theme;
+    t.check("theme 'system' is kept", theme('system') === 'system');
+    t.check("theme 'light' is kept", theme('light') === 'light');
+    t.check("theme 'dark' is kept", theme('dark') === 'dark');
+    t.check("theme 'neon' falls back to 'system'", theme('neon') === 'system');
+    t.check("theme '' falls back to 'system'", theme('') === 'system');
+    t.check("theme 'Light' falls back to 'system'", theme('Light') === 'system');
+    t.check('theme 1 falls back to system', theme(1) === 'system');
+    t.check(
+      'missing theme falls back to system',
+      clampSettings({ ui: {} }).ui.theme === 'system',
+    );
+    t.check(
+      'a theme patch keeps the locale',
+      clampSettings({ ui: { locale: 'ar', theme: 'dark' } }).ui.locale === 'ar',
+    );
     t.check('boolean 1 coerces to true',
       clampSettings({ ...DEFAULT_SETTINGS, alerts: { ...DEFAULT_SETTINGS.alerts, enabled: 1 } })
         .alerts.enabled === true);

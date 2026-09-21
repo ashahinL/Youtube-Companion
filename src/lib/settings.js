@@ -32,6 +32,8 @@ export const DEFAULT_SETTINGS = {
   ui: {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
     locale: 'auto',
+    // 'system' follows the OS; 'light' | 'dark' pin the extension pages.
+    theme: 'system',
   },
   audio: {
     // Off: the row opens normally and its button opens in audio mode. On: those swap.
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 const LOCALES = new Set(['auto', 'en', 'ar']);
+const THEMES = new Set(['system', 'light', 'dark']);
 
 // Same strings as the player API; see docs/youtube.md.
 const PLAYBACK_QUALITIES = new Set([
@@ -162,6 +165,8 @@ export function clampSettings(s) {
     ui: {
       // Anything outside the shipped locales follows the browser language.
       locale: LOCALES.has(ui.locale) ? ui.locale : 'auto',
+      // Anything outside the shipped themes follows the OS.
+      theme: THEMES.has(ui.theme) ? ui.theme : 'system',
     },
     audio: {
       openFeedInAudioMode: boolOf(audio, 'openFeedInAudioMode', d.audio.openFeedInAudioMode),

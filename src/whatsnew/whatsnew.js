@@ -2,7 +2,8 @@
  * What's new page, opened from the popup's note or from the bottom of
  * Settings. The welcome page belongs to a fresh install; this one is for
  * people who already had the extension and were updated under them. It
- * fetches nothing and stores nothing but the language.
+ * fetches nothing and stores nothing but the language; the stored theme is
+ * applied on load.
  */
 
 import {
@@ -13,6 +14,7 @@ import {
   applyDirection,
 } from '../lib/i18n.js';
 import { WHATS_NEW_VERSION } from '../lib/view.js';
+import { applyTheme } from '../lib/theme.js';
 
 // Each picture is a real popup frame, so an Arabic reader gets the Arabic
 // one rather than a page of English screenshots.
@@ -65,13 +67,16 @@ bind();
 
 void (async () => {
   let setting = 'auto';
+  let theme = 'system';
   try {
     const state = await send({ type: 'getState' });
     setting = state?.settings?.ui?.locale || 'auto';
+    theme = state?.settings?.ui?.theme || 'system';
     // Reaching the page is acknowledgement, whichever way it was opened.
     await send({ type: 'whatsNew.seen' });
   } catch {
     // The page still reads in the browser's language without the worker.
   }
   await applyLanguage(setting);
+  applyTheme(theme);
 })();

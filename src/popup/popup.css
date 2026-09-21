@@ -46,8 +46,31 @@
   --ytc-audio-sunset-to: #7a1020;
 }
 
+:root[data-theme='light'] {
+  /* Forced light: the same tokens as the OS-light block below. Kept as a
+   * copy because a media query cannot also match a forced choice. */
+  /* badge tokens deliberately do not flip; see :root */
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #f6f6f8;
+  --surface-hover: #eeeef2;
+  --border: rgba(0, 0, 0, 0.1);
+  --text: #16161a;
+  --text-dim: rgba(22, 22, 26, 0.58);
+  --accent: #6d4ae8;
+  --on-accent: #ffffff;
+  --ok: #15803d;
+  --tag-live: #d10f20;
+  --on-tag-live: #ffffff;
+  --tag-premiere: #c98911;
+  --on-tag-premiere: #1a1408;
+  --tag-short: #e6e6ee;
+  --on-tag-short: #16161a;
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
+  /* A forced dark opts out; anything else follows the OS. */
+  :root:not([data-theme='dark']) {
     /* badge tokens deliberately do not flip; see :root */
     color-scheme: light;
     --bg: #ffffff;

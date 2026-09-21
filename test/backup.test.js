@@ -262,6 +262,44 @@ export default async function run(t) {
     String(restored.settings.feed.maxItems),
   );
 
+  t.section('theme survives export/import');
+
+  const themed = clampSettings({
+    ...DEFAULT_SETTINGS,
+    ui: { ...DEFAULT_SETTINGS.ui, theme: 'dark' },
+  });
+  const themedFile = buildBackup({ settings: themed, channels: [] });
+  t.check('theme dark is in the export', themedFile.settings?.ui?.theme === 'dark');
+  const themedParsed = parseBackup(JSON.stringify(themedFile));
+  t.check('themed export parses', themedParsed.ok === true, themedParsed.error);
+  const themedReplace = mergeBackup(emptyState(), themedParsed.data, 'replace');
+  t.check(
+    'replace keeps theme dark',
+    themedReplace.settings.ui.theme === 'dark',
+    JSON.stringify(themedReplace.settings.ui),
+  );
+  const themedMerge = mergeBackup(
+    { settings: DEFAULT_SETTINGS, channels: [] },
+    themedParsed.data,
+    'merge',
+  );
+  t.check(
+    'merge puts the file theme on top',
+    themedMerge.settings.ui.theme === 'dark',
+    JSON.stringify(themedMerge.settings.ui),
+  );
+  const junkTheme = mergeBackup(emptyState(), {
+    app: 'youtube-companion',
+    version: 1,
+    settings: { ui: { theme: 'neon' } },
+    channels: [],
+  }, 'replace');
+  t.check(
+    'a junk theme in the file falls back to system',
+    junkTheme.settings.ui.theme === 'system',
+    JSON.stringify(junkTheme.settings.ui),
+  );
+
   t.section('merge keeps the live favourite');
 
   const live = {
