@@ -675,37 +675,25 @@
     "message": "اللغة",
     "description": "Settings group heading for the UI language."
   },
-  "settingsLocale": {
-    "message": "اللغة",
-    "description": "Label for the UI language select."
-  },
-  "settingsLocaleTitle": {
-    "message": "تلقائي يتبع لغة المتصفح.",
-    "description": "Tooltip on the UI language select."
-  },
   "settingsLocaleAuto": {
     "message": "تلقائي",
     "description": "Language option that follows the browser language."
   },
   "settingsLocaleEn": {
     "message": "English",
-    "description": "Language option that pins the UI to English."
+    "description": "Language card that pins the UI to English. Stays in English in every locale."
   },
   "settingsLocaleAr": {
     "message": "العربية",
-    "description": "Language option that pins the UI to Arabic."
+    "description": "Language card that pins the UI to Arabic. Stays in Arabic in every locale."
   },
   "settingsTheme": {
     "message": "السمة",
-    "description": "Label for the UI theme select."
-  },
-  "settingsThemeTitle": {
-    "message": "النظام يتبع سمة المتصفح أو الجهاز.",
-    "description": "Tooltip on the UI theme select."
+    "description": "Settings group heading for the UI theme."
   },
   "settingsThemeSystem": {
     "message": "النظام",
-    "description": "Theme option that follows the browser or operating system theme."
+    "description": "System card on the Theme and Language pickers: follow the browser or operating system."
   },
   "settingsThemeLight": {
     "message": "فاتح",

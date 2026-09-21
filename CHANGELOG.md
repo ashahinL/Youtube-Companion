@@ -7,7 +7,8 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
-- A Theme setting in Settings: System, Light or Dark for the popup, the
+- Theme and Language in Settings are each a group of three cards (Light,
+  Dark, System; English, العربية, System). Theme also applies to the
   welcome page and the What's new page.
 - Channel groups can be renamed and deleted from the Groups sheet: renaming
   onto an existing name merges the two, and deleting asks inline first.

@@ -2405,6 +2405,9 @@ function renderSettings(locale) {
   for (const input of document.querySelectorAll('#settings [data-setting]')) {
     const value = readPath(s, input.dataset.setting);
     if (input.type === 'checkbox') input.checked = !!value;
+    // Setting .value on a radio would overwrite its value instead of
+    // checking the matching one.
+    else if (input.type === 'radio') input.checked = input.value === value;
     else input.value = value ?? '';
   }
 

@@ -621,30 +621,88 @@
 
       <fieldset class="group" id="settings-language">
         <legend class="group__legend" data-i18n="settingsLanguage">Language</legend>
-        <label
-          class="row row--inline"
-          title="Auto follows the browser language."
-          data-i18n-title="settingsLocaleTitle"
-        >
-          <span data-i18n="settingsLocale">Language</span>
-          <select class="settings-select" data-setting="ui.locale">
-            <option value="auto" data-i18n="settingsLocaleAuto">Auto</option>
-            <option value="en" data-i18n="settingsLocaleEn">English</option>
-            <option value="ar" data-i18n="settingsLocaleAr">العربية</option>
-          </select>
-        </label>
-        <label
-          class="row row--inline"
-          title="System follows the browser or operating system theme."
-          data-i18n-title="settingsThemeTitle"
-        >
-          <span data-i18n="settingsTheme">Theme</span>
-          <select class="settings-select" data-setting="ui.theme">
-            <option value="system" data-i18n="settingsThemeSystem">System</option>
-            <option value="light" data-i18n="settingsThemeLight">Light</option>
-            <option value="dark" data-i18n="settingsThemeDark">Dark</option>
-          </select>
-        </label>
+        <div class="theme-cards">
+          <label class="theme-card">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="ui-locale"
+              value="en"
+              data-setting="ui.locale"
+            />
+            <span class="theme-card__preview" lang="en" dir="ltr" aria-hidden="true">Aa</span>
+            <span class="theme-card__label" lang="en" dir="ltr" data-i18n="settingsLocaleEn">English</span>
+          </label>
+          <label class="theme-card">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="ui-locale"
+              value="ar"
+              data-setting="ui.locale"
+            />
+            <span class="theme-card__preview" lang="ar" dir="rtl" aria-hidden="true">أب</span>
+            <span class="theme-card__label" lang="ar" dir="rtl" data-i18n="settingsLocaleAr">العربية</span>
+          </label>
+          <label class="theme-card">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="ui-locale"
+              value="auto"
+              data-setting="ui.locale"
+              checked
+            />
+            <span class="theme-card__preview theme-card__preview--split" aria-hidden="true">
+              <span lang="en" dir="ltr">Aa</span>
+              <span lang="ar" dir="rtl">أب</span>
+            </span>
+            <span class="theme-card__label" data-i18n="settingsThemeSystem">System</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <fieldset class="group" id="settings-theme">
+        <legend class="group__legend" data-i18n="settingsTheme">Theme</legend>
+        <div class="theme-cards">
+          <label class="theme-card">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="ui-theme"
+              value="light"
+              data-setting="ui.theme"
+            />
+            <span class="theme-card__preview" data-theme-preview="light" aria-hidden="true"></span>
+            <span class="theme-card__label" data-i18n="settingsThemeLight">Light</span>
+          </label>
+          <label class="theme-card">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="ui-theme"
+              value="dark"
+              data-setting="ui.theme"
+            />
+            <span class="theme-card__preview" data-theme-preview="dark" aria-hidden="true"></span>
+            <span class="theme-card__label" data-i18n="settingsThemeDark">Dark</span>
+          </label>
+          <label class="theme-card">
+            <input
+              class="visually-hidden"
+              type="radio"
+              name="ui-theme"
+              value="system"
+              data-setting="ui.theme"
+              checked
+            />
+            <span class="theme-card__preview theme-card__preview--split" aria-hidden="true">
+              <span data-theme-preview="light"></span>
+              <span data-theme-preview="dark"></span>
+            </span>
+            <span class="theme-card__label" data-i18n="settingsThemeSystem">System</span>
+          </label>
+        </div>
       </fieldset>
 
       <fieldset class="group" id="settings-keys">

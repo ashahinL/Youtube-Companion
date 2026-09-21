@@ -635,6 +635,7 @@ export default async function run(t) {
     'settings-checking',
     'settings-feed',
     'settings-language',
+    'settings-theme',
     'settings-audio',
     'settings-backup',
   ];
@@ -645,33 +646,167 @@ export default async function run(t) {
     'look group has the open-feed-in-audio-mode checkbox',
     /data-setting="audio.openFeedInAudioMode"/.test(s),
   );
-  const langRowAt = s.indexOf('data-setting="ui.locale"');
-  const themeRowAt = s.indexOf('data-setting="ui.theme"');
   t.check(
-    'a theme row sits directly after the language row',
-    langRowAt >= 0 && themeRowAt > langRowAt && !s.slice(langRowAt, themeRowAt).includes('</fieldset>'),
-    `${langRowAt} ${themeRowAt}`,
+    'theme group sits directly after the language group',
+    /id="settings-language">[\s\S]*?<\/fieldset>\s*<fieldset class="group" id="settings-theme">/.test(s),
   );
-  const themeSelect = s.match(/<select\b[^>]*data-setting="ui\.theme"[\s\S]*?<\/select>/);
-  const themeValues = [...(themeSelect ? themeSelect[0] : '').matchAll(/<option\b[^>]*\bvalue="([^"]+)"/g)].map((m) => m[1]);
+  const langGroup = (s.match(/<fieldset class="group" id="settings-language">[\s\S]*?<\/fieldset>/) || [''])[0];
+  const themeGroup = (s.match(/<fieldset class="group" id="settings-theme">[\s\S]*?<\/fieldset>/) || [''])[0];
   t.check(
-    'the theme select offers system, light and dark',
-    themeValues.join() === 'system,light,dark',
-    JSON.stringify(themeValues),
+    'the language fieldset has no theme control',
+    /data-setting="ui\.locale"/.test(langGroup) && !/ui\.theme/.test(langGroup),
+  );
+  t.check(
+    'language legend is translated',
+    /<legend class="group__legend" data-i18n="settingsLanguage">/.test(langGroup),
+  );
+  const langRadios = [...langGroup.matchAll(/<input\b[^>]*>/g)].map((m) => m[0]);
+  const langValues = langRadios.map((tag) => (tag.match(/\bvalue="([^"]+)"/) || [])[1]);
+  const langNames = [...new Set(langRadios.map((tag) => (tag.match(/\bname="([^"]+)"/) || [])[1]))];
+  t.check(
+    'language is three radio cards in the order en, ar, auto',
+    langRadios.length === 3
+      && langRadios.every((tag) => /\btype="radio"/.test(tag) && /data-setting="ui\.locale"/.test(tag))
+      && langValues.join() === 'en,ar,auto'
+      && langNames.length === 1 && !!langNames[0],
+    JSON.stringify({ langValues, langNames, count: langRadios.length }),
+  );
+  t.check(
+    'language uses the same card markup as theme',
+    /class="theme-cards"/.test(langGroup)
+      && (langGroup.match(/class="theme-card"/g) || []).length === 3
+      && /class="theme-cards"/.test(themeGroup)
+      && (themeGroup.match(/class="theme-card"/g) || []).length === 3,
+  );
+  t.check(
+    'the English card keeps English script and direction',
+    /lang="en" dir="ltr" data-i18n="settingsLocaleEn">English</.test(langGroup)
+      && /lang="en" dir="ltr" aria-hidden="true">Aa</.test(langGroup),
+  );
+  t.check(
+    'the Arabic card keeps Arabic script and direction',
+    /lang="ar" dir="rtl" data-i18n="settingsLocaleAr">العربية</.test(langGroup)
+      && /lang="ar" dir="rtl" aria-hidden="true">أب</.test(langGroup),
+  );
+  t.check(
+    'the language System card reuses the theme System string',
+    /data-i18n="settingsThemeSystem"/.test(langGroup)
+      && /theme-card__preview--split/.test(langGroup)
+      && /lang="en" dir="ltr">Aa</.test(langGroup)
+      && /lang="ar" dir="rtl">أب</.test(langGroup),
+  );
+  const autoRadio = langRadios.find((tag) => /\bvalue="auto"/.test(tag)) || '';
+  t.check(
+    'language System is checked by default',
+    /\bchecked\b/.test(autoRadio) && langRadios.filter((tag) => /\bchecked\b/.test(tag)).length === 1,
+    autoRadio,
+  );
+  t.check(
+    'choosing a language card writes ui.locale through data-setting',
+    /data-setting="ui\.locale"/.test(langGroup)
+      && !/<select\b[^>]*data-setting="ui\.locale"/.test(s)
+      && /function bindSettings\(\) \{[\s\S]*?else next = el\.value;[\s\S]*?patchSettings\(buildPatch\(path, next\)\)/.test(js),
+  );
+  t.check(
+    'language and theme are separate radio groups',
+    langNames[0] && themeGroup.includes('name="ui-theme"') && langNames[0] !== 'ui-theme',
+    JSON.stringify(langNames),
+  );
+  t.check(
+    'theme legend is translated',
+    /<legend class="group__legend" data-i18n="settingsTheme">/.test(themeGroup),
+  );
+  const themeRadios = [...themeGroup.matchAll(/<input\b[^>]*>/g)].map((m) => m[0]);
+  const themeValues = themeRadios.map((tag) => (tag.match(/\bvalue="([^"]+)"/) || [])[1]);
+  const themeNames = [...new Set(themeRadios.map((tag) => (tag.match(/\bname="([^"]+)"/) || [])[1]))];
+  t.check(
+    'theme is three radio cards in the order light, dark, system',
+    themeRadios.length === 3
+      && themeRadios.every((tag) => /\btype="radio"/.test(tag) && /data-setting="ui\.theme"/.test(tag))
+      && themeValues.join() === 'light,dark,system'
+      && themeNames.length === 1 && !!themeNames[0],
+    JSON.stringify({ themeValues, themeNames, count: themeRadios.length }),
   );
   t.check(
     'the theme options are translated',
-    /data-i18n="settingsThemeSystem"/.test(themeSelect ? themeSelect[0] : '')
-      && /data-i18n="settingsThemeLight"/.test(themeSelect ? themeSelect[0] : '')
-      && /data-i18n="settingsThemeDark"/.test(themeSelect ? themeSelect[0] : ''),
+    /data-i18n="settingsThemeLight"/.test(themeGroup)
+      && /data-i18n="settingsThemeDark"/.test(themeGroup)
+      && /data-i18n="settingsThemeSystem"/.test(themeGroup),
+  );
+  const systemRadio = themeRadios.find((tag) => /\bvalue="system"/.test(tag)) || '';
+  t.check(
+    'System is checked by default',
+    /\bchecked\b/.test(systemRadio) && themeRadios.filter((tag) => /\bchecked\b/.test(tag)).length === 1,
+    systemRadio,
   );
   t.check(
-    'the theme row wears the same row markup as the language row',
-    /class="row row--inline"[\s\S]{0,240}data-setting="ui\.theme"/.test(s),
+    'renderSettings checks the radio that matches the stored theme',
+    /input\.type === 'radio'/.test(js)
+      && /input\.checked = input\.value === value/.test(js),
   );
-  for (const key of ['settingsTheme', 'settingsThemeTitle', 'settingsThemeSystem', 'settingsThemeLight', 'settingsThemeDark']) {
+  t.check(
+    'choosing a theme card writes ui.theme through data-setting',
+    /data-setting="ui\.theme"/.test(themeGroup)
+      && !/<select\b[^>]*data-setting="ui\.theme"/.test(s)
+      && /function bindSettings\(\) \{[\s\S]*?else next = el\.value;[\s\S]*?patchSettings\(buildPatch\(path, next\)\)/.test(js),
+  );
+  t.check(
+    'theme cards sit in one row',
+    /\.theme-cards\s*\{[^}]*display:\s*flex/.test(css)
+      && !/\.theme-cards\s*\{[^}]*flex-wrap:\s*wrap/.test(css),
+  );
+  t.check(
+    'the selected theme card uses the same accent ring as a swatch',
+    /\.theme-card:has\(:checked\)/.test(css)
+      && /\.swatch\[aria-pressed='true'\][\s\S]{0,80}\.theme-card:has\(:checked\)\s*\{[^}]*var\(--accent\)/.test(css),
+  );
+  t.check(
+    'the system card splits light and dark',
+    /theme-card__preview--split/.test(themeGroup)
+      && /data-theme-preview="light"/.test(themeGroup)
+      && /data-theme-preview="dark"/.test(themeGroup),
+  );
+  const previewTok = (name) => {
+    const m = css.match(new RegExp(`--theme-preview-${name}:\\s*(#[0-9a-fA-F]{3,8})`));
+    return m ? m[1].toLowerCase() : '';
+  };
+  const lightBlock = (css.match(/:root\[data-theme='light'\]\s*\{[^}]*\}/) || [''])[0];
+  const darkBlock = (css.match(/:root\s*\{[^}]*\}/) || [''])[0];
+  const blockTok = (block, name) => {
+    const m = block.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})`));
+    return m ? m[1].toLowerCase() : '';
+  };
+  t.check(
+    'light preview colours match the light tokens',
+    previewTok('light-bg') === blockTok(lightBlock, 'bg')
+      && previewTok('light-surface') === blockTok(lightBlock, 'surface')
+      && previewTok('light-text') === blockTok(lightBlock, 'text')
+      && previewTok('light-bg') !== '',
+    JSON.stringify({
+      preview: [previewTok('light-bg'), previewTok('light-surface'), previewTok('light-text')],
+      tokens: [blockTok(lightBlock, 'bg'), blockTok(lightBlock, 'surface'), blockTok(lightBlock, 'text')],
+    }),
+  );
+  t.check(
+    'dark preview colours match the dark tokens',
+    previewTok('dark-bg') === blockTok(darkBlock, 'bg')
+      && previewTok('dark-surface') === blockTok(darkBlock, 'surface')
+      && previewTok('dark-text') === blockTok(darkBlock, 'text')
+      && previewTok('dark-bg') !== '',
+    JSON.stringify({
+      preview: [previewTok('dark-bg'), previewTok('dark-surface'), previewTok('dark-text')],
+      tokens: [blockTok(darkBlock, 'bg'), blockTok(darkBlock, 'surface'), blockTok(darkBlock, 'text')],
+    }),
+  );
+  for (const key of ['settingsTheme', 'settingsThemeSystem', 'settingsThemeLight', 'settingsThemeDark']) {
     t.check(`theme key ${key} exists in en and ar`, key in en && key in ar);
   }
+  t.check('the old theme select title key is gone', !('settingsThemeTitle' in en) && !('settingsThemeTitle' in ar));
+  for (const key of ['settingsLanguage', 'settingsLocaleEn', 'settingsLocaleAr', 'settingsLocaleAuto']) {
+    t.check(`language key ${key} exists in en and ar`, key in en && key in ar);
+  }
+  t.check('the old language select label key is gone', !('settingsLocale' in en) && !('settingsLocale' in ar));
+  t.check('the old language select title key is gone', !('settingsLocaleTitle' in en) && !('settingsLocaleTitle' in ar));
   t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
 
   // An on/off setting takes effect the moment it is clicked, so it wears a
