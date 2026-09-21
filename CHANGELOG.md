@@ -9,6 +9,8 @@ shipped yet waits under Unreleased. How a version ships:
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the
   block takes two rows instead of three.
+- Long numbers in the statistics cards now shrink to fit instead of being
+  cut off.
 
 **Fixes**
 - The **New** marker on a feed row moved from in front of the title to the

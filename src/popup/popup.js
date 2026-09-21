@@ -1741,6 +1741,24 @@ function renderAudioPlayer(reachable) {
   }
 }
 
+function fitAudioStatValue(el) {
+  if (!el) return;
+  el.style.fontSize = '';
+  const have = el.clientWidth;
+  const need = el.scrollWidth;
+  if (!have || need <= have) return;
+  const base = parseFloat(getComputedStyle(el).fontSize) || 14;
+  let px = base * have / need;
+  el.style.fontSize = Math.max(9, px) + 'px';
+  // Width is not perfectly linear in font-size, so the first step can
+  // still overflow by a fraction of a pixel and hit the ellipsis.
+  let guard = 12;
+  while (el.scrollWidth > have && px > 9 && guard--) {
+    px -= 0.25;
+    el.style.fontSize = Math.max(9, px) + 'px';
+  }
+}
+
 function renderAudioStats() {
   const monthBtn = document.getElementById('audio-stats-month');
   const allBtn = document.getElementById('audio-stats-all');
@@ -1763,6 +1781,10 @@ function renderAudioStats() {
   if (saved) saved.textContent = Core.formatData(folded.savedMb, units);
   if (listened) listened.textContent = Core.formatTime(folded.listened);
   if (active) active.textContent = Core.formatTime(folded.active);
+  fitAudioStatValue(used);
+  fitAudioStatValue(saved);
+  fitAudioStatValue(listened);
+  fitAudioStatValue(active);
 
   const note = document.getElementById('audio-rate-note');
   if (note) {
