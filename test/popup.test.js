@@ -526,6 +526,10 @@ export default async function run(t) {
       && /id="audio-stat-listened"/.test(a)
       && /id="audio-stat-active"/.test(a),
   );
+  t.check(
+    'stats grid has four equal columns',
+    /\.audio-stats\s*\{[\s\S]{0,80}grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/.test(css),
+  );
   const rateNote = a.match(/<div[^>]*\bid="audio-rate-note"[^>]*>/);
   t.check(
     'the 1 GB note sits below the stats cards',

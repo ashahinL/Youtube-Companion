@@ -6,6 +6,10 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**Changes**
+- The four statistics cards in the Player tab now sit in one row, so the
+  block takes two rows instead of three.
+
 **Fixes**
 - The **New** marker on a feed row moved from in front of the title to the
   top of the row, above the buttons. In front of the title it pushed the
