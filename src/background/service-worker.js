@@ -40,6 +40,7 @@ import {
   readVideoMeta,
   saveVideoMeta,
   putVideoMeta,
+  clearVideoMeta,
   pendingLiveIds,
   readPollState,
   writePollState,
@@ -396,6 +397,13 @@ export async function syncAlarms() {
   const settings = await readSettings();
   const alarms = chromeApi().alarms;
   if (!settings.poll.enabled) {
+    await alarms.clear(ALARM_ALL);
+    await alarms.clear(ALARM_FAV);
+    return;
+  }
+  // No channels means no sweep has anything to fetch, so the alarms stay
+  // cleared until the first channel lands again.
+  if ((await readChannels()).length === 0) {
     await alarms.clear(ALARM_ALL);
     await alarms.clear(ALARM_FAV);
     return;
@@ -962,6 +970,7 @@ export async function addChannelByInput(input) {
     avatar: isAvatarUrl(header.avatar) ? header.avatar : '',
   });
   if (!added) return { ok: false, error: 'already added', id };
+  await syncAlarms();
   const channel = (await readChannels()).find((ch) => ch.id === id);
   const state = await collectState();
   // Reply first. The silent seed runs after; if MV3 kills the worker, the
@@ -1006,6 +1015,7 @@ export async function importTakeout(text) {
   if (channels.length + fresh.length > MAX_TAKEOUT_CHANNELS) return { ok: false, error: 'count' };
   if (fresh.length) {
     await writeChannels([...channels, ...fresh]);
+    await syncAlarms();
     // Do not flushSeeds here: that would race the welcome page's own
     // all-check. A live sweep's finally picks the ids up.
     for (const ch of fresh) pendingSeeds.add(ch.id);
@@ -1049,6 +1059,7 @@ export async function undoRemove(id) {
   const next = channels.slice();
   next.splice(Math.min(Number(snap.index) || 0, next.length), 0, snap.channel);
   await writeChannels(next);
+  await syncAlarms();
   const settings = await readSettings();
   const rows = Array.isArray(snap.rows) ? snap.rows : [];
   await saveFeed(mergeFeedItems(await readFeed(), rows, settings.feed.maxItems).feed);
@@ -1064,6 +1075,7 @@ export async function clearChannels() {
   const removed = (await readChannels()).length;
   await writeChannels([]);
   await saveFeed([]);
+  await clearVideoMeta();
   await chromeApi().storage.session.remove(LAST_REMOVED_KEY);
   await syncAlarms();
   await refreshBadge();
@@ -1113,6 +1125,7 @@ export async function handleMessage(msg, sender) {
       case 'removeChannel': {
         await rememberRemoved(msg.id);
         await removeChannel(msg.id);
+        await syncAlarms();
         await refreshBadge();
         return { ok: true };
       }

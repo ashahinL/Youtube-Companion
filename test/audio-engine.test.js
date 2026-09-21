@@ -755,6 +755,24 @@ export default async function run(t) {
     /z-index:\s*10;/.test(overlayCss),
   );
 
+  const overlayNoComments = overlayCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  const overlayTokenHex = new Set(
+    [...overlayNoComments.matchAll(/--ytc-audio-[a-z-]+\s*:\s*(#[0-9a-fA-F]{6})/g)]
+      .map((m) => m[1].toLowerCase()),
+  );
+  const overlayStrayHex = (overlayNoComments.match(/#[0-9a-fA-F]{3,8}\b/g) || [])
+    .filter((h) => !overlayTokenHex.has(h.toLowerCase()));
+  t.check(
+    'overlay.css has no hex colour outside its token block',
+    overlayStrayHex.length === 0,
+    JSON.stringify(overlayStrayHex),
+  );
+  t.check(
+    'overlay text comes from --ytc-audio-text',
+    /--ytc-audio-text:\s*#f1f1f4/i.test(overlayNoComments)
+      && /color:\s*var\(--ytc-audio-text\)/.test(overlayNoComments),
+  );
+
   const cssRules = overlayCss.replace(/\/\*[\s\S]*?\*\//g, '');
   t.check(
     'overlay rules do not use rem (YouTube html is 10px)',

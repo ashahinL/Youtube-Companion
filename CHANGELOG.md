@@ -23,6 +23,10 @@ shipped yet waits under Unreleased. How a version ships:
 - The **New** marker on a feed row moved from in front of the title to the
   top of the row, above the buttons. In front of the title it pushed the
   whole title across, so new rows did not line up with the rest of the feed.
+- Background checks stop while the watchlist is empty, instead of running an
+  empty sweep on every schedule.
+- Clear watchlist also drops stored video details. Alert history is kept, so
+  channels added back still never alert twice.
 
 ## 2.0.0 — 2026-09-19
 

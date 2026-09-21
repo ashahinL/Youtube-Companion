@@ -22,6 +22,7 @@ import {
   readVideoMeta,
   saveVideoMeta,
   putVideoMeta,
+  clearVideoMeta,
   pendingLiveIds,
   updateChannels,
   readPollState,
@@ -395,6 +396,8 @@ export default async function run(t) {
     await saveVideoMeta({ a: { k: 'live', at: 1 } });
     t.check('saveVideoMeta / readVideoMeta round-trip',
       (await readVideoMeta()).a.k === 'live');
+    await clearVideoMeta();
+    t.check('clearVideoMeta empties the map', same(await readVideoMeta(), {}));
 
     t.section('pendingLiveIds');
 

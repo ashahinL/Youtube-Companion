@@ -308,6 +308,13 @@ export async function saveVideoMeta(map) {
   return next;
 }
 
+/* With no channels and no feed every record is dead weight, so Clear
+ * watchlist drops the whole map. Alert history is untouched on purpose. */
+export async function clearVideoMeta() {
+  await setKey('videoMeta', {});
+  return {};
+}
+
 export function putVideoMeta(map, entries) {
   const out = {};
   if (isPlainObject(map)) {

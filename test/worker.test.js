@@ -387,6 +387,7 @@ export default async function run(t) {
     t.section('syncAlarms');
 
     await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
     await syncAlarms();
     t.check(
       'poll-all period is 30',
@@ -501,6 +502,120 @@ export default async function run(t) {
     await syncAlarms();
     t.check('poll.enabled false clears poll-all', mock.alarms['poll-all'] === undefined);
     t.check('poll.enabled false clears poll-fav', mock.alarms['poll-fav'] === undefined);
+
+    t.section('syncAlarms with an empty list');
+
+    await wipe();
+    await syncAlarms();
+    t.check('an empty list clears poll-all', mock.alarms['poll-all'] === undefined);
+    t.check('an empty list clears poll-fav', mock.alarms['poll-fav'] === undefined);
+
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await syncAlarms();
+    t.check(
+      'one channel brings poll-all back',
+      mock.alarms['poll-all']?.periodInMinutes === 30,
+      JSON.stringify(mock.alarms['poll-all']),
+    );
+    t.check(
+      'one channel brings poll-fav back',
+      mock.alarms['poll-fav']?.periodInMinutes === 10,
+      JSON.stringify(mock.alarms['poll-fav']),
+    );
+
+    await wipe();
+    await syncAlarms();
+    installFetch({
+      resolveId: BEAST,
+      browse: headerJson(BEAST, 'MrBeast', '@MrBeast', 'https://yt3.ggpht.com/beast'),
+      feeds: {
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'alarmseed01', at: AT.newest }]),
+      },
+    });
+    const firstAdd = await handleMessage({ type: 'addChannel', input: '@MrBeast' });
+    t.check('Add on an empty list reports ok', firstAdd.ok === true, JSON.stringify(firstAdd));
+    t.check(
+      'Add brings poll-all back',
+      mock.alarms['poll-all']?.periodInMinutes === 30,
+      JSON.stringify(mock.alarms['poll-all']),
+    );
+    t.check(
+      'Add brings poll-fav back',
+      mock.alarms['poll-fav']?.periodInMinutes === 10,
+      JSON.stringify(mock.alarms['poll-fav']),
+    );
+    await waitForIdle();
+
+    await wipe();
+    await syncAlarms();
+    const takeoutFirst = await handleMessage({
+      type: 'importTakeout',
+      data: `Channel Id,Channel Url,Channel Title\n${BEAST},http://www.youtube.com/channel/${BEAST},MrBeast`,
+    });
+    t.check(
+      'Takeout import on an empty list reports ok',
+      takeoutFirst.ok === true && takeoutFirst.added === 1,
+      JSON.stringify(takeoutFirst),
+    );
+    t.check(
+      'Takeout import brings poll-all back',
+      mock.alarms['poll-all']?.periodInMinutes === 30,
+      JSON.stringify(mock.alarms['poll-all']),
+    );
+    t.check(
+      'Takeout import brings poll-fav back',
+      mock.alarms['poll-fav']?.periodInMinutes === 10,
+      JSON.stringify(mock.alarms['poll-fav']),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await syncAlarms();
+    const lastRemove = await handleMessage({ type: 'removeChannel', id: MKBHD });
+    t.check('removing the last channel reports ok', lastRemove.ok === true);
+    t.check('removing the last channel clears poll-all', mock.alarms['poll-all'] === undefined);
+    t.check('removing the last channel clears poll-fav', mock.alarms['poll-fav'] === undefined);
+    const undoneFirst = await handleMessage({ type: 'undoRemove', id: MKBHD });
+    t.check('undo of the last removal reports ok', undoneFirst.ok === true, JSON.stringify(undoneFirst));
+    t.check(
+      'undo brings poll-all back',
+      mock.alarms['poll-all']?.periodInMinutes === 30,
+      JSON.stringify(mock.alarms['poll-all']),
+    );
+    t.check(
+      'undo brings poll-fav back',
+      mock.alarms['poll-fav']?.periodInMinutes === 10,
+      JSON.stringify(mock.alarms['poll-fav']),
+    );
+
+    for (const mode of ['merge', 'replace']) {
+      await wipe();
+      await syncAlarms();
+      installFetch({
+        feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', []) },
+      });
+      const restored = await handleMessage({
+        type: 'importBackup',
+        mode,
+        data: backupJson([{ id: MKBHD, title: 'Marques Brownlee' }]),
+      });
+      t.check(
+        `${mode} backup on an empty list reports ok`,
+        restored.ok === true,
+        JSON.stringify(restored),
+      );
+      t.check(
+        `${mode} backup brings poll-all back`,
+        mock.alarms['poll-all']?.periodInMinutes === 30,
+        JSON.stringify(mock.alarms['poll-all']),
+      );
+      t.check(
+        `${mode} backup brings poll-fav back`,
+        mock.alarms['poll-fav']?.periodInMinutes === 10,
+        JSON.stringify(mock.alarms['poll-fav']),
+      );
+      await waitForIdle();
+    }
 
     t.section('reconcileRunning');
 
@@ -2902,11 +3017,13 @@ export default async function run(t) {
     await handleMessage({ type: 'removeChannel', id: BEAST });
     await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
     const notifiedBeforeClear = (await readPollState()).notified;
+    await saveVideoMeta({ clearmkb001: { k: 'video', d: 60, st: 0, at: AT.newest } });
     t.check('the list has channels and videos to clear', (await readFeed()).length === 1 && mock.session.lastRemovedChannel?.channel?.id === BEAST);
     const clearReply = await handleMessage({ type: 'clearChannels' });
     t.check('clearChannels reports how many channels it removed', clearReply.ok === true && clearReply.removed === 2, JSON.stringify(clearReply));
     t.check('the list is empty', (await readChannels()).length === 0);
     t.check('the feed is empty', (await readFeed()).length === 0);
+    t.check('stored video details are dropped', JSON.stringify(await readVideoMeta()) === '{}', JSON.stringify(await readVideoMeta()));
     t.check('the reply carries the empty list for the popup', clearReply.state?.channels?.length === 0 && clearReply.state?.feed?.length === 0);
     t.check('the badge is cleared', mock.badgeText === '', mock.badgeText);
     t.check('an Undo for an earlier removal is dropped', !('lastRemovedChannel' in mock.session));
