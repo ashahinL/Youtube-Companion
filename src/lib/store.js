@@ -6,6 +6,8 @@
 
 import {
   applyChannelGroup,
+  renameGroupInList,
+  deleteGroupFromList,
   sanitizeChannelGroups,
   queueEntryFromItem,
   sanitizeQueue,
@@ -160,6 +162,22 @@ export async function setMuted(id, on) {
 export async function setChannelGroup(id, name, on) {
   const channels = await readChannels();
   const result = applyChannelGroup(channels, id, name, on);
+  if (result.error) return { channels, error: result.error };
+  if (result.channels !== channels) await writeChannels(result.channels);
+  return { channels: result.channels, error: '' };
+}
+
+export async function renameGroup(from, to) {
+  const channels = await readChannels();
+  const result = renameGroupInList(channels, from, to);
+  if (result.error) return { channels, error: result.error };
+  if (result.channels !== channels) await writeChannels(result.channels);
+  return { channels: result.channels, error: '' };
+}
+
+export async function deleteGroup(name) {
+  const channels = await readChannels();
+  const result = deleteGroupFromList(channels, name);
   if (result.error) return { channels, error: result.error };
   if (result.channels !== channels) await writeChannels(result.channels);
   return { channels: result.channels, error: '' };

@@ -79,8 +79,9 @@ asks.
 - **Groups**: a channel can be in several named groups, put there from its ⋯
   menu; Feeds narrows to one group with a row of chips, alongside the search
   box and Favourites only, and the badge counts the same way. A group exists
-  only while a channel is in it — there is no rename, no delete and no
-  Settings screen. At most 20 groups, 8 on one channel, 24 characters a name.
+  only while a channel is in it. Rename and delete live in the Groups sheet:
+  renaming onto an existing name merges the two, and delete asks inline.
+  There is no Settings screen. At most 20 groups, 8 on one channel, 24 characters a name.
   Groups ride along in backups.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
@@ -167,6 +168,14 @@ skill, one job per dispatch, and reviewed and committed here. The pattern:
 5. Commit it here. Grok never commits.
 
 Rework goes out as a delta brief with `--resume-last`, not a restatement.
+
+**Lanes** (in `~/.config/delegate-skills/config.json`): `feature` is Grok, the
+first choice; `complex` is Claude; the third is the `opencode` lane, **Muse
+Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`, dispatched with
+`opencode-delegate`). When Grok is not available (not signed in, sandbox
+error, out of quota), send the job to Muse Spark with the same brief and the
+same review. Do not pick a paid `opencode/*` model: the account has no funds
+and those fail with 402.
 
 ## Commands
 
