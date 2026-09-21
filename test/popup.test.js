@@ -530,6 +530,43 @@ export default async function run(t) {
     'stats grid has four equal columns',
     /\.audio-stats\s*\{[\s\S]{0,80}grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/.test(css),
   );
+  t.check(
+    'stat values stay 14px weight 600 tabular-nums',
+    /\.audio-stat__value\s*\{[\s\S]{0,80}font-size:\s*14px/.test(css)
+      && /\.audio-stat__value\s*\{[\s\S]{0,120}font-weight:\s*600/.test(css)
+      && /\.audio-stat__value\s*\{[\s\S]{0,180}font-variant-numeric:\s*tabular-nums/.test(css),
+  );
+  t.check(
+    'stat value line box stays 21px so a shrunk number does not shorten its card',
+    /\.audio-stat__value\s*\{[\s\S]{0,240}line-height:\s*21px/.test(css),
+  );
+  t.check(
+    'stat values keep ellipsis as a last resort on one line',
+    /\.audio-stat__value\s*\{[\s\S]{0,240}text-overflow:\s*ellipsis/.test(css)
+      && /\.audio-stat__value\s*\{[\s\S]{0,280}white-space:\s*nowrap/.test(css),
+  );
+  const fitStat = (js.match(/\nfunction fitAudioStatValue\([\s\S]*?\n\}/) || [''])[0];
+  t.check(
+    'a long stat value shrinks by its font size times card/text width',
+    /style\.fontSize = ''/.test(fitStat)
+      && /const have = el\.clientWidth/.test(fitStat)
+      && /const need = el\.scrollWidth/.test(fitStat)
+      && /need <= have/.test(fitStat)
+      && /base \* have \/ need/.test(fitStat)
+      && /while \(el\.scrollWidth > have/.test(fitStat)
+      && /Math\.max\(9, px\)/.test(fitStat),
+    fitStat,
+  );
+  const statsRender = (js.match(/\nfunction renderAudioStats\(\) \{[\s\S]*?\n\}/) || [''])[0];
+  t.check(
+    'each stat value is fitted after its number is written',
+    /used\.textContent = Core\.formatData/.test(statsRender)
+      && statsRender.indexOf('used.textContent') < statsRender.indexOf('fitAudioStatValue(used)')
+      && statsRender.indexOf('saved.textContent') < statsRender.indexOf('fitAudioStatValue(saved)')
+      && statsRender.indexOf('listened.textContent') < statsRender.indexOf('fitAudioStatValue(listened)')
+      && statsRender.indexOf('active.textContent') < statsRender.indexOf('fitAudioStatValue(active)'),
+    statsRender,
+  );
   const rateNote = a.match(/<div[^>]*\bid="audio-rate-note"[^>]*>/);
   t.check(
     'the 1 GB note sits below the stats cards',

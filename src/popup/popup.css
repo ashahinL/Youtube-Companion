@@ -1984,11 +1984,14 @@ body.is-opening .tabs {
   background: var(--surface);
 }
 
+/* 21px is 14px × the inherited 1.5. A shrunk font would otherwise
+ * shorten this line and misalign the four cards. */
 .audio-stat__value {
   overflow: hidden;
   font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  line-height: 21px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
