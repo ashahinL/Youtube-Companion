@@ -30,6 +30,8 @@ import {
   setFavorite,
   setMuted,
   setChannelGroup,
+  renameGroup,
+  deleteGroup,
   readFeed,
   saveFeed,
   mergeFeedItems,
@@ -55,7 +57,14 @@ import {
   readWhatsNewSeen,
   writeWhatsNewSeen,
 } from '../lib/store.js';
-import { feedChannelIds, queueEntryFromItem, WHATS_NEW_VERSION } from '../lib/view.js';
+import {
+  feedChannelIds,
+  fold,
+  normalizeGroupName,
+  queueEntryFromItem,
+  resolvedFeedGroup,
+  WHATS_NEW_VERSION,
+} from '../lib/view.js';
 
 const OVERLAY_MESSAGE_KEYS = ['overlayTitle', 'overlayExit', 'overlayExitShortcut'];
 
@@ -1123,6 +1132,34 @@ export async function handleMessage(msg, sender) {
       case 'setChannelGroup': {
         const result = await setChannelGroup(msg.id, msg.name, msg.on);
         if (result.error) return { ok: false, error: result.error };
+        await refreshBadge();
+        return { ok: true };
+      }
+      case 'renameGroup': {
+        // Popup-only: a YouTube page must not be able to change groups, so
+        // this stays out of CONTENT_SCRIPT_MESSAGES with setChannelGroup.
+        const result = await renameGroup(msg.from, msg.to);
+        if (result.error) return { ok: false, error: result.error };
+        const settings = await readSettings();
+        const fromKey = fold(normalizeGroupName(msg.from));
+        if (fromKey && fold(String(settings?.feed?.group || '')) === fromKey) {
+          // After a merge the surviving spelling is the other group's, so
+          // resolve rather than writing the raw new name.
+          const follow = resolvedFeedGroup(result.channels, msg.to) || normalizeGroupName(msg.to);
+          await writeSettings({ feed: { group: follow } });
+        }
+        await refreshBadge();
+        return { ok: true };
+      }
+      case 'deleteGroup': {
+        // Popup-only, same as renameGroup above.
+        const result = await deleteGroup(msg.name);
+        if (result.error) return { ok: false, error: result.error };
+        const settings = await readSettings();
+        const key = fold(normalizeGroupName(msg.name));
+        if (key && fold(String(settings?.feed?.group || '')) === key) {
+          await writeSettings({ feed: { group: '' } });
+        }
         await refreshBadge();
         return { ok: true };
       }

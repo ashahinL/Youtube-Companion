@@ -1097,8 +1097,8 @@ export default async function run(t) {
       && !/function openGroupsSheet[\s\S]{0,500}\bsend\s*\(/.test(js),
   );
   t.check(
-    'Escape closes the groups sheet',
-    /if \(view\.groupsSheetId\)[\s\S]{0,80}closeGroupsSheet/.test(js),
+    'Escape closes the groups sheet when no row is being renamed or deleted',
+    /if \(view\.groupsSheetId\)[\s\S]{0,600}closeGroupsSheet\(\)/.test(js),
   );
   t.check(
     'ticking a group box sends setChannelGroup',
@@ -1143,6 +1143,74 @@ export default async function run(t) {
     'the chip row only scrolls when the selected group changed',
     /selected !== feedGroupsScrolledTo[\s\S]{0,120}scrollIntoView/.test(js)
       && /feedGroupsScrolledTo = selected/.test(js),
+  );
+  t.check(
+    'each group row has Rename and Delete buttons named for the group',
+    /t\('groupsRename', \[name\]\)/.test(js) && /t\('groupsDelete', \[name\]\)/.test(js)
+      && 'groupsRename' in en && 'groupsDelete' in en,
+  );
+  t.check(
+    'the row buttons name the group in both languages',
+    /Rename \$1/.test(en.groupsRename.message) && /Delete \$1/.test(en.groupsDelete.message)
+      && /[\u0600-\u06FF]/.test(ar.groupsRename.message) && /\$1/.test(ar.groupsRename.message)
+      && /[\u0600-\u06FF]/.test(ar.groupsDelete.message) && /\$1/.test(ar.groupsDelete.message),
+    `${en.groupsRename.message} / ${ar.groupsRename.message}`,
+  );
+  t.check(
+    'rename is an inline field with Save and Cancel',
+    /groups-row--edit/.test(js) && /void submitGroupRename\(name, input\.value\)/.test(js)
+      && /t\('groupsSave'\)/.test(js) && /t\('groupsCancel'\)/.test(js),
+  );
+  t.check(
+    'Escape cancels a rename or delete confirm instead of closing the sheet',
+    /if \(view\.groupEdit \|\| view\.groupConfirm\)[\s\S]{0,400}closeGroupsSheet/.test(js)
+      && !/if \(view\.groupEdit \|\| view\.groupConfirm\)[\s\S]{0,120}closeGroupsSheet\(\)/.test(js),
+  );
+  t.check(
+    'delete asks inline with the channel count, never confirm()',
+    /groups-row--confirm/.test(js) && /groupsDeleteConfirm/.test(js)
+      && 'groupsDeleteConfirm' in en && 'groupsDeleteConfirmOne' in en
+      && 'groupsDeleteConfirm' in ar && 'groupsDeleteConfirmOne' in ar
+      && /void confirmGroupDelete\(name\)/.test(js) && !/[^\w]confirm\s*\(/.test(js),
+  );
+  t.check(
+    'only one row edits or confirms at a time',
+    /function startGroupRename[\s\S]{0,240}view\.groupConfirm = ''/.test(js)
+      && /function askGroupDelete[\s\S]{0,240}view\.groupEdit = ''/.test(js),
+  );
+  for (const fn of ['submitGroupRename', 'confirmGroupDelete']) {
+    const start = js.indexOf(`async function ${fn}`);
+    const end = js.indexOf('\nasync function', start + 1);
+    const body = start >= 0 ? js.slice(start, end > start ? end : start + 1200) : '';
+    t.check(
+      `${fn} serialises through chainSerial(groupWrite`,
+      /chainSerial\(groupWrite/.test(body),
+      body.slice(0, 120),
+    );
+    t.check(
+      `${fn} shows errors on the groups sheet`,
+      /view\.groupsError\s*=/.test(body) && /groups-sheet-error/.test(js),
+      body.slice(0, 120),
+    );
+  }
+  for (const key of ['groupsRename', 'groupsDelete', 'groupsRenameName', 'groupsSave',
+    'groupsCancel', 'groupsDeleteConfirm', 'groupsDeleteConfirmOne', 'groupsDeleteConfirmYes',
+    'groupsRenameEmpty', 'groupsGone']) {
+    t.check(
+      `groups string ${key} is in both locales`,
+      typeof en[key]?.message === 'string' && en[key].message.length > 0
+        && typeof ar[key]?.message === 'string' && ar[key].message.length > 0,
+      `${en[key]?.message} / ${ar[key]?.message}`,
+    );
+  }
+  t.check(
+    'the group row buttons sit at the inline-end with logical properties',
+    /\.groups-row__actions\s*\{[^}]*margin-inline-start/.test(css)
+      && !/\.groups-row[^{]*\{[^}]*margin-(left|right)/.test(css),
+  );
+  t.check(
+    'the delete confirm wraps instead of running off the 400px sheet',
+    /\.groups-row--confirm \.confirm-prompt\s*\{[^}]*white-space:\s*normal/.test(css),
   );
 
   t.section('support sheet');

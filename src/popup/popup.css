@@ -1355,6 +1355,52 @@ body.is-opening .tabs {
   padding-inline-end: 10px;
 }
 
+/* One group row: the checkbox label takes the room, Rename and Delete
+ * sit at the inline-end. Wrapping confirm text, not nowrap, so a long
+ * name still fits the 400px sheet in both languages. */
+.groups-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.groups-row > .row {
+  flex: 1;
+  min-width: 0;
+}
+
+.groups-row__actions {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  margin-inline-start: auto;
+}
+
+.groups-row__btn {
+  padding: 5px;
+  color: var(--text-dim);
+}
+
+.groups-row--edit {
+  gap: 6px;
+}
+
+.groups-row--edit .add-row__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.groups-row--confirm {
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-block: 6px;
+}
+
+.groups-row--confirm .confirm-prompt {
+  flex: 1 1 100%;
+  white-space: normal;
+}
+
 #support-methods {
   display: flex;
   flex-direction: column;

@@ -499,6 +499,66 @@
     "message": "لا توجد مجموعات بعد. اكتب اسمًا لإنشاء واحدة.",
     "description": "Quiet line on the groups sheet when this channel is in no group and no groups exist yet."
   },
+  "groupsRename": {
+    "message": "إعادة تسمية $1",
+    "description": "Accessible name of the button that renames a channel group. $1 is the group name."
+  },
+  "groupsDelete": {
+    "message": "حذف $1",
+    "description": "Accessible name of the button that deletes a channel group. $1 is the group name."
+  },
+  "groupsRenameName": {
+    "message": "الاسم الجديد لـ $1",
+    "description": "Accessible name of the field that renames a channel group. $1 is the current name."
+  },
+  "groupsSave": {
+    "message": "حفظ",
+    "description": "Confirms the new name when renaming a channel group."
+  },
+  "groupsCancel": {
+    "message": "إلغاء",
+    "description": "Leaves renaming or deleting a channel group without changing anything."
+  },
+  "groupsDeleteConfirm": {
+    "message": "حذف «$NAME$»؟ عدد القنوات التي ستخرج منها: $COUNT$.",
+    "description": "Inline confirmation before a channel group is deleted. $NAME$ is the group name, $COUNT$ how many channels are in it.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Music"
+      },
+      "count": {
+        "content": "$2",
+        "example": "4"
+      }
+    }
+  },
+  "groupsDeleteConfirmOne": {
+    "message": "حذف «$NAME$»؟ ستخرج منها قناة واحدة.",
+    "description": "Inline confirmation before a channel group is deleted when one channel is in it. $NAME$ is the group name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Music"
+      },
+      "count": {
+        "content": "$2",
+        "example": "1"
+      }
+    }
+  },
+  "groupsDeleteConfirmYes": {
+    "message": "حذف",
+    "description": "Confirms deleting a channel group."
+  },
+  "groupsRenameEmpty": {
+    "message": "اكتب اسمًا أولًا.",
+    "description": "Error in the groups sheet when renaming a group to an empty name."
+  },
+  "groupsGone": {
+    "message": "هذه المجموعة لم تعد موجودة.",
+    "description": "Error in the groups sheet when renaming or deleting a group that another change already removed."
+  },
   "channelEmpty": {
     "message": "لا توجد فيديوهات",
     "description": "Empty state on the channel sheet when this channel has no stored videos to show."

@@ -36,6 +36,8 @@ import {
   resolvedFeedGroup,
   feedChannelIds,
   applyChannelGroup,
+  renameGroupInList,
+  deleteGroupFromList,
   chainSerial,
   watchlistView,
   audioTabView,
@@ -1177,6 +1179,46 @@ export default async function run(t) {
       && messy[2].groups.length === 4
       && messy[0].groups[0] === 'Music',
   );
+
+  t.section('renameGroupInList');
+
+  const duo = [
+    channel(FAV, { groups: ['tech', 'Music'] }),
+    channel(OTH, { groups: ['Tech', 'News'] }),
+  ];
+  const renamed = renameGroupInList(duo, 'TECH', '  Gadgets  ');
+  t.check('rename trims and reaches every channel', !renamed.error && same(renamed.channels[0].groups, ['Gadgets', 'Music']) && same(renamed.channels[1].groups, ['Gadgets', 'News']));
+  t.check('the input list is untouched', same(duo[0].groups, ['tech', 'Music']));
+  const caseOnly = renameGroupInList(duo, 'tech', 'Tech');
+  t.check('a case-only rename changes the spelling', !caseOnly.error && same(caseOnly.channels[0].groups, ['Tech', 'Music']) && same(caseOnly.channels[1].groups, ['Tech', 'News']));
+  const merged = renameGroupInList(
+    [channel(FAV, { groups: ['tech', 'Music'] }), channel(OTH, { groups: ['tech'] })],
+    'tech',
+    'music',
+  );
+  t.check(
+    'renaming onto an existing name merges into its spelling, one copy each',
+    !merged.error && same(merged.channels[0].groups, ['Music']) && same(merged.channels[1].groups, ['Music']),
+  );
+  t.check('empty new name is refused', renameGroupInList(duo, 'tech', '   ').error === 'empty');
+  const unknownRename = renameGroupInList(duo, 'Gone', 'Else');
+  t.check('unknown group is refused with the list unchanged', unknownRename.error === 'missing' && unknownRename.channels === duo);
+  const blankFrom = renameGroupInList(duo, '   ', 'Else');
+  t.check('blank old name is refused', blankFrom.error === 'missing' && blankFrom.channels === duo);
+
+  t.section('deleteGroupFromList');
+
+  const trio = [
+    channel(FAV, { groups: ['Music', 'tech'] }),
+    channel(OTH, { groups: ['music', 'News'] }),
+  ];
+  const cut = deleteGroupFromList(trio, 'MUSIC');
+  t.check('delete removes the group from all channels', !cut.error && same(cut.channels[0].groups, ['tech']) && same(cut.channels[1].groups, ['News']));
+  t.check('the input list is untouched', same(trio[0].groups, ['Music', 'tech']));
+  t.check('other groups keep their spelling', cut.channels[1].groups.includes('News'));
+  const unknownDelete = deleteGroupFromList(trio, 'Gone');
+  t.check('unknown group is refused with the list unchanged', unknownDelete.error === 'missing' && unknownDelete.channels === trio);
+  t.check('blank name is refused', deleteGroupFromList(trio, '  ').error === 'missing');
 
   t.section('feedsView group filter');
 

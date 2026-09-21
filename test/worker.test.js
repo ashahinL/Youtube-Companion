@@ -3405,6 +3405,92 @@ export default async function run(t) {
       JSON.stringify({ ok: full.ok, error: full.error, n: full.queue?.length }),
     );
 
+    t.section('renaming and deleting a group');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, groups: ['Music', 'tech'] });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true, groups: ['music'] });
+    await writeSettings({ feed: { group: 'music' } });
+    await saveFeed([{ v: 'badgevid001', c: MKBHD, t: 'Badge', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 }]);
+    await writePollState({ lastSeenAt: 0 });
+    mock.badgeText = 'stale';
+
+    const renamed = await handleMessage({ type: 'renameGroup', from: 'MUSIC', to: '  Audio  ' });
+    t.check('rename replies ok', renamed.ok === true, JSON.stringify(renamed));
+    const afterRename = await readChannels();
+    const mkbhdRenamed = afterRename.find((c) => c.id === MKBHD);
+    const beastRenamed = afterRename.find((c) => c.id === BEAST);
+    t.check(
+      'the new spelling reaches every channel with the group',
+      mkbhdRenamed.groups.includes('Audio') && beastRenamed.groups.includes('Audio')
+        && !mkbhdRenamed.groups.some((g) => g.toLowerCase() === 'music'),
+      JSON.stringify(afterRename.map((c) => c.groups)),
+    );
+    t.check('the other group is untouched', mkbhdRenamed.groups.includes('tech'));
+    t.check(
+      'the feed filter follows the rename',
+      (await handleMessage({ type: 'getState' })).settings.feed.group === 'Audio',
+      (await handleMessage({ type: 'getState' })).settings.feed.group,
+    );
+    t.check('the badge is refreshed', mock.badgeText === '1', mock.badgeText);
+
+    const merged = await handleMessage({ type: 'renameGroup', from: 'Audio', to: 'TECH' });
+    t.check('rename onto an existing name replies ok', merged.ok === true, JSON.stringify(merged));
+    const afterJoin = await readChannels();
+    t.check(
+      'a merge leaves one copy with the existing spelling',
+      afterJoin.every((c) => c.groups.length === 1 && c.groups[0] === 'tech'),
+      JSON.stringify(afterJoin.map((c) => c.groups)),
+    );
+    t.check(
+      'the feed filter follows into the surviving spelling',
+      (await handleMessage({ type: 'getState' })).settings.feed.group === 'tech',
+    );
+
+    const unknownRename = await handleMessage({ type: 'renameGroup', from: 'Gone', to: 'Else' });
+    t.check(
+      'renaming an unknown group is refused',
+      unknownRename.ok === false && unknownRename.error === 'missing',
+      JSON.stringify(unknownRename),
+    );
+    const emptyRename = await handleMessage({ type: 'renameGroup', from: 'tech', to: '   ' });
+    t.check(
+      'renaming to an empty name is refused',
+      emptyRename.ok === false && emptyRename.error === 'empty',
+      JSON.stringify(emptyRename),
+    );
+
+    await writeSettings({ feed: { group: 'tech' } });
+    mock.badgeText = 'stale';
+    const deleted = await handleMessage({ type: 'deleteGroup', name: 'TECH' });
+    t.check('delete replies ok', deleted.ok === true, JSON.stringify(deleted));
+    const afterDelete = await readChannels();
+    t.check(
+      'the group is gone from every channel and the channels stay',
+      afterDelete.length === 2 && afterDelete.every((c) => c.groups.length === 0),
+      JSON.stringify(afterDelete.map((c) => c.groups)),
+    );
+    t.check(
+      'the feed filter resets to All',
+      (await handleMessage({ type: 'getState' })).settings.feed.group === '',
+    );
+    t.check('the badge is refreshed after delete', mock.badgeText === '1', mock.badgeText);
+
+    await handleMessage({ type: 'setChannelGroup', id: MKBHD, name: 'News', on: true });
+    await writeSettings({ feed: { group: 'Other' } });
+    const otherDelete = await handleMessage({ type: 'deleteGroup', name: 'News' });
+    t.check('deleting with the filter elsewhere replies ok', otherDelete.ok === true, JSON.stringify(otherDelete));
+    t.check(
+      'a filter on another name is untouched',
+      (await handleMessage({ type: 'getState' })).settings.feed.group === 'Other',
+    );
+    const unknownDelete = await handleMessage({ type: 'deleteGroup', name: 'Gone' });
+    t.check(
+      'deleting an unknown group is refused',
+      unknownDelete.ok === false && unknownDelete.error === 'missing',
+      JSON.stringify(unknownDelete),
+    );
+
     t.section('who may send which message');
 
     const channelsBefore = JSON.stringify(await readChannels());
@@ -3427,12 +3513,15 @@ export default async function run(t) {
 
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
-      'importBackup', 'importTakeout', 'undoRemove',
+      'importBackup', 'importTakeout', 'undoRemove', 'renameGroup', 'deleteGroup',
       'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen',
       'whatsNew.seen']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }
+
+    t.check('renameGroup is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('renameGroup'));
+    t.check('deleteGroup is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('deleteGroup'));
 
     t.check('queue.ended is in CONTENT_SCRIPT_MESSAGES', CONTENT_SCRIPT_MESSAGES.has('queue.ended'));
     t.check('queue.add is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.add'));
