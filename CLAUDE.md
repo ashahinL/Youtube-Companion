@@ -172,9 +172,10 @@ Rework goes out as a delta brief with `--resume-last`, not a restatement.
 **Lanes** (in `~/.config/delegate-skills/config.json`): `feature` is Grok, the
 first choice; `complex` is Claude; the third is the `opencode` lane, **Muse
 Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`, dispatched with
-`opencode-delegate`). When Grok is not available (not signed in, sandbox
-error, out of quota), send the job to Muse Spark with the same brief and the
-same review. Do not pick a paid `opencode/*` model: the account has no funds
+`opencode-delegate`). Muse Spark is Grok's fallback, not a peer: use it only
+when the owner explicitly says to use opencode, or when Grok is not available
+(not signed in, sandbox error, out of quota). Then send the job to Muse Spark
+with the same brief and the same review. Do not pick a paid `opencode/*` model: the account has no funds
 and those fail with 402.
 
 ## Commands
