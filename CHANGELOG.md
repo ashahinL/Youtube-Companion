@@ -6,6 +6,10 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**New**
+- Channel groups can be renamed and deleted from the Groups sheet: renaming
+  onto an existing name merges the two, and deleting asks inline first.
+
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the
   block takes two rows instead of three.

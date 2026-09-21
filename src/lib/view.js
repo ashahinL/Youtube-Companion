@@ -184,6 +184,64 @@ export function applyChannelGroup(channels, channelId, rawName, on) {
   return { channels: next, error: '' };
 }
 
+/**
+ * Rename `fromName` to `toName` on every channel that has it. Matching
+ * uses the same case-folding as `channelInGroup`. A case-only rename
+ * keeps the new spelling; renaming onto another existing group's name
+ * merges the two, keeping that group's spelling. The result goes back
+ * through the list sanitizers, and merging can only lower counts, so
+ * neither cap can be exceeded. Error is `empty` | `missing` | ''.
+ */
+export function renameGroupInList(channels, fromName, toName) {
+  const list = Array.isArray(channels) ? channels : [];
+  const fromKey = groupKey(fromName);
+  if (!fromKey) return { channels: list, error: 'missing' };
+  const to = normalizeGroupName(toName);
+  if (!to) return { channels: list, error: 'empty' };
+  const existing = groupNamesInList(list);
+  if (!existing.some((name) => fold(name) === fromKey)) {
+    return { channels: list, error: 'missing' };
+  }
+  const toKey = fold(to);
+  const target = toKey === fromKey
+    ? to
+    : existing.find((name) => fold(name) === toKey) || to;
+  let changed = false;
+  const next = list.map((ch) => {
+    const groups = sanitizeChannelGroups(ch?.groups);
+    if (!groups.some((name) => fold(name) === fromKey)) return ch;
+    const renamed = groups.map((name) => (fold(name) === fromKey ? target : name));
+    if (renamed.join('\n') === groups.join('\n')) return ch;
+    changed = true;
+    return { ...ch, groups: renamed };
+  });
+  if (!changed) return { channels: list, error: '' };
+  return { channels: sanitizeListGroups(next), error: '' };
+}
+
+/**
+ * Remove `name` from every channel that has it. The channels stay on
+ * the list; the group is gone once no channel names it. Error is
+ * `missing` | ''.
+ */
+export function deleteGroupFromList(channels, name) {
+  const list = Array.isArray(channels) ? channels : [];
+  const key = groupKey(name);
+  if (!key) return { channels: list, error: 'missing' };
+  if (!groupNamesInList(list).some((existing) => fold(existing) === key)) {
+    return { channels: list, error: 'missing' };
+  }
+  let changed = false;
+  const next = list.map((ch) => {
+    const groups = sanitizeChannelGroups(ch?.groups);
+    if (!groups.some((existing) => fold(existing) === key)) return ch;
+    changed = true;
+    return { ...ch, groups: groups.filter((existing) => fold(existing) !== key) };
+  });
+  if (!changed) return { channels: list, error: '' };
+  return { channels: next, error: '' };
+}
+
 export function isChannelRef(input) {
   return normalizeChannelInput(String(input || '').trim()) != null;
 }

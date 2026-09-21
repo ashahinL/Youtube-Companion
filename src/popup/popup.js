@@ -42,6 +42,7 @@ import {
   fold,
   feedsView,
   groupNamesInList,
+  channelInGroup,
   sanitizeChannelGroups,
   normalizeGroupName,
   chainSerial,
@@ -101,6 +102,10 @@ const view = {
   sheetError: '',
   groupsSheetId: null,
   groupsError: '',
+  // Name of the one group row showing the rename field or the delete
+  // confirm. Only one row is ever in either state.
+  groupEdit: '',
+  groupConfirm: '',
   // fold(name) → desired on/off for ticks that have not landed yet.
   groupPending: {},
   // { id, title } of the last removed channel while Undo is on offer.
@@ -154,6 +159,9 @@ let feedLimit = FEED_PAGE;
 let feedPageKey = '';
 let feedGroupsScrolledTo;
 let groupWrite = Promise.resolve();
+// Unsent rename text, kept across re-renders so a checkbox tick landing
+// mid-typing does not wipe the field.
+let groupRenameDraft = { name: '', value: '' };
 let audioPickerKey = '';
 let queueListSig = '';
 let supportOpenerId = null;
@@ -360,6 +368,9 @@ function openGroupsSheet(id) {
   view.sheetError = '';
   view.groupsSheetId = id;
   view.groupsError = '';
+  view.groupEdit = '';
+  view.groupConfirm = '';
+  groupRenameDraft = { name: '', value: '' };
   render();
   const names = groupNamesInList(view.channels, locale);
   if (!names.length) document.getElementById('groups-sheet-input')?.focus?.();
@@ -371,6 +382,9 @@ function closeGroupsSheet() {
   const returnId = view.groupsSheetId;
   view.groupsSheetId = null;
   view.groupsError = '';
+  view.groupEdit = '';
+  view.groupConfirm = '';
+  groupRenameDraft = { name: '', value: '' };
   const input = document.getElementById('groups-sheet-input');
   if (input) input.value = '';
   render();
@@ -1319,6 +1333,9 @@ function renderGroupsSheet() {
   if (!id || !ch) {
     const wasShown = !sheet.hidden;
     view.groupsSheetId = null;
+    view.groupEdit = '';
+    view.groupConfirm = '';
+    groupRenameDraft = { name: '', value: '' };
     sheet.hidden = true;
     if (wasShown && id) focusGroupsOpener(id);
     return;
@@ -1336,11 +1353,32 @@ function renderGroupsSheet() {
   const emptyEl = document.getElementById('groups-sheet-empty');
   if (emptyEl) emptyEl.hidden = names.length > 0;
   if (listEl) listEl.hidden = names.length === 0;
+  if (!names.includes(view.groupEdit)) {
+    view.groupEdit = '';
+    groupRenameDraft = { name: '', value: '' };
+  }
+  if (!names.includes(view.groupConfirm)) view.groupConfirm = '';
+  // The rename field is rebuilt on every render; hold on to unsent text so
+  // a tick landing mid-typing does not wipe it.
+  const liveDraft = listEl.querySelector('.groups-row--edit input');
+  if (liveDraft && view.groupEdit) {
+    groupRenameDraft = { name: view.groupEdit, value: liveDraft.value };
+  }
   const prevName = document.activeElement?.dataset?.groupName;
   listEl.replaceChildren();
   for (const name of names) {
-    const row = document.createElement('label');
-    row.className = 'row';
+    if (view.groupEdit === name) {
+      listEl.appendChild(groupRenameRow(name));
+      continue;
+    }
+    if (view.groupConfirm === name) {
+      listEl.appendChild(groupDeleteRow(name));
+      continue;
+    }
+    const row = document.createElement('div');
+    row.className = 'groups-row';
+    const label = document.createElement('label');
+    label.className = 'row';
     const box = document.createElement('input');
     box.type = 'checkbox';
     const key = fold(name);
@@ -1351,8 +1389,32 @@ function renderGroupsSheet() {
     box.addEventListener('change', () => {
       void applyGroup(ch.id, name, box.checked);
     });
-    row.appendChild(box);
-    row.appendChild(textEl('span', '', name));
+    label.appendChild(box);
+    label.appendChild(textEl('span', '', name));
+    row.appendChild(label);
+    const actions = document.createElement('span');
+    actions.className = 'groups-row__actions';
+    const renameBtn = document.createElement('button');
+    renameBtn.type = 'button';
+    renameBtn.className = 'icon-btn groups-row__btn';
+    renameBtn.dataset.groupName = name;
+    renameBtn.setAttribute('aria-label', t('groupsRename', [name]));
+    renameBtn.appendChild(groupIcon(PENCIL_PATH));
+    renameBtn.addEventListener('click', () => {
+      startGroupRename(name);
+    });
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'icon-btn groups-row__btn';
+    deleteBtn.dataset.groupName = name;
+    deleteBtn.setAttribute('aria-label', t('groupsDelete', [name]));
+    deleteBtn.appendChild(groupIcon(TRASH_PATH));
+    deleteBtn.addEventListener('click', () => {
+      askGroupDelete(name);
+    });
+    actions.appendChild(renameBtn);
+    actions.appendChild(deleteBtn);
+    row.appendChild(actions);
     listEl.appendChild(row);
   }
 
@@ -1368,11 +1430,155 @@ function renderGroupsSheet() {
   }
 
   if (prevName) {
-    const again = [...listEl.querySelectorAll('input')].find((el) => el.dataset.groupName === prevName);
+    const again = [...listEl.querySelectorAll('input, button')].find((el) => el.dataset.groupName === prevName);
     again?.focus();
   } else if (!sheet.contains(document.activeElement)) {
     document.getElementById('groups-sheet-close')?.focus?.();
   }
+}
+
+// 16×16 pencil and trash outlines for the group row buttons. The
+// aria-label names the group, so the drawing carries no meaning.
+const PENCIL_PATH = 'M13.7 2.3a1 1 0 0 0-1.4 0L4 10.6V14h3.4l8.3-8.3a1 1 0 0 0 0-1.4l-2-2zM6.1 12H4.5V10.4L11 3.9l1.6 1.6-6.5 6.5z';
+const TRASH_PATH = 'M6.5 2h3a.5.5 0 0 1 .5.5V3h2.6a.5.5 0 0 1 0 1H3.4a.5.5 0 0 1 0-1H6v-.5a.5.5 0 0 1 .5-.5zm-2.6 3h8.2l-.7 8.4a.5.5 0 0 1-.5.6H5.1a.5.5 0 0 1-.5-.6L3.9 5z';
+
+function groupIcon(path) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('viewBox', '0 0 16 16');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const draw = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  draw.setAttribute('d', path);
+  draw.setAttribute('fill', 'currentColor');
+  svg.appendChild(draw);
+  return svg;
+}
+
+// The rename state of one group row: a field prefilled with the name plus
+// Save and Cancel. Submit saves, Escape cancels through the sheet's own
+// key handler, which must not close the sheet while this is showing.
+function groupRenameRow(name) {
+  const form = document.createElement('form');
+  form.className = 'groups-row groups-row--edit';
+  const input = document.createElement('input');
+  input.className = 'add-row__input';
+  input.type = 'text';
+  input.maxLength = 24;
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.value = groupRenameDraft.name === name ? groupRenameDraft.value : name;
+  input.dataset.groupName = name;
+  input.setAttribute('aria-label', t('groupsRenameName', [name]));
+  const save = document.createElement('button');
+  save.type = 'submit';
+  save.className = 'btn btn--primary';
+  save.dataset.groupName = name;
+  save.textContent = t('groupsSave');
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn';
+  cancel.dataset.groupName = name;
+  cancel.textContent = t('groupsCancel');
+  cancel.addEventListener('click', () => {
+    cancelGroupEdit(name);
+  });
+  form.appendChild(input);
+  form.appendChild(save);
+  form.appendChild(cancel);
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitGroupRename(name, input.value);
+  });
+  return form;
+}
+
+// The delete state of one group row: an inline confirm naming the group
+// and how many channels lose it, with Delete and Cancel. A modal dialog
+// would wedge the popup, so the question lives in the row instead.
+function groupDeleteRow(name) {
+  const row = document.createElement('div');
+  row.className = 'groups-row groups-row--confirm';
+  const count = view.channels.filter((ch) => channelInGroup(ch, name)).length;
+  const prompt = document.createElement('span');
+  prompt.className = 'confirm-prompt';
+  prompt.textContent = tCount('groupsDeleteConfirm', count, [isolate(name), String(count)]);
+  const yes = document.createElement('button');
+  yes.type = 'button';
+  yes.className = 'btn btn--primary';
+  yes.dataset.groupName = name;
+  yes.textContent = t('groupsDeleteConfirmYes');
+  yes.addEventListener('click', () => {
+    void confirmGroupDelete(name);
+  });
+  const no = document.createElement('button');
+  no.type = 'button';
+  no.className = 'btn';
+  no.dataset.groupName = name;
+  no.textContent = t('groupsCancel');
+  no.addEventListener('click', () => {
+    cancelGroupDelete(name);
+  });
+  row.appendChild(prompt);
+  row.appendChild(yes);
+  row.appendChild(no);
+  return row;
+}
+
+// Back on the row's Rename button when it is still there, otherwise the
+// first one, otherwise Close — a deleted row has nowhere to return to.
+function focusGroupRow(name) {
+  const listEl = document.getElementById('groups-sheet-list');
+  const again = name && [...(listEl?.querySelectorAll('button') || [])]
+    .find((el) => el.dataset.groupName === name && !el.closest('[hidden]'));
+  if (again) {
+    again.focus();
+    return;
+  }
+  const first = listEl?.querySelector('.groups-row__actions button');
+  if (first) {
+    first.focus();
+    return;
+  }
+  document.getElementById('groups-sheet-close')?.focus?.();
+}
+
+function startGroupRename(name) {
+  view.groupEdit = name;
+  view.groupConfirm = '';
+  groupRenameDraft = { name: '', value: '' };
+  view.groupsError = '';
+  render();
+  const input = document.getElementById('groups-sheet-list')?.querySelector('.groups-row--edit input');
+  if (input) {
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
+}
+
+function cancelGroupEdit(name) {
+  view.groupEdit = '';
+  groupRenameDraft = { name: '', value: '' };
+  render();
+  focusGroupRow(name);
+}
+
+function askGroupDelete(name) {
+  view.groupConfirm = name;
+  view.groupEdit = '';
+  groupRenameDraft = { name: '', value: '' };
+  view.groupsError = '';
+  render();
+  const yes = [...(document.getElementById('groups-sheet-list')?.querySelectorAll('button') || [])]
+    .find((el) => el.dataset.groupName === name && el.classList.contains('btn--primary'));
+  yes?.focus();
+}
+
+function cancelGroupDelete(name) {
+  view.groupConfirm = '';
+  render();
+  focusGroupRow(name);
 }
 
 function collapseSupportQr() {
@@ -2376,7 +2582,11 @@ function groupsErrorText(error) {
     ? 'groupsChannelCap'
     : error === 'listCap'
       ? 'groupsListCap'
-      : '';
+      : error === 'empty'
+        ? 'groupsRenameEmpty'
+        : error === 'missing'
+          ? 'groupsGone'
+          : '';
   return key ? t(key) : formatError(error);
 }
 
@@ -2406,6 +2616,67 @@ async function applyGroup(id, name, on) {
       }
       render();
     }
+  });
+  groupWrite = write;
+  return write;
+}
+
+async function submitGroupRename(from, to) {
+  const name = normalizeGroupName(to);
+  if (!name) {
+    view.groupsError = groupsErrorText('empty');
+    render();
+    document.getElementById('groups-sheet-list')?.querySelector('.groups-row--edit input')?.focus();
+    return;
+  }
+  view.groupsError = '';
+  render();
+  const write = chainSerial(groupWrite, async () => {
+    try {
+      const res = await send({ type: 'renameGroup', from, to: name });
+      view.groupEdit = '';
+      groupRenameDraft = { name: '', value: '' };
+      if (res && res.ok === false) {
+        view.groupsError = groupsErrorText(res.error);
+      } else {
+        view.groupsError = '';
+      }
+      await refreshState();
+    } catch (err) {
+      view.groupEdit = '';
+      groupRenameDraft = { name: '', value: '' };
+      view.groupsError = formatError(err?.message || err);
+    }
+    render();
+    // A merge lands on the other group's spelling; resolve it so focus
+    // finds the row the name merged into.
+    const landed = groupNamesInList(view.channels, locale).find((n) => fold(n) === fold(name)) || '';
+    focusGroupRow(landed);
+  });
+  groupWrite = write;
+  return write;
+}
+
+async function confirmGroupDelete(name) {
+  if (!name) return;
+  view.groupsError = '';
+  render();
+  const write = chainSerial(groupWrite, async () => {
+    try {
+      const res = await send({ type: 'deleteGroup', name });
+      view.groupConfirm = '';
+      if (res && res.ok === false) {
+        view.groupsError = groupsErrorText(res.error);
+      } else {
+        view.groupsError = '';
+      }
+      await refreshState();
+    } catch (err) {
+      view.groupConfirm = '';
+      view.groupsError = formatError(err?.message || err);
+    }
+    render();
+    focusGroupRow('');
   });
   groupWrite = write;
   return write;
@@ -3470,6 +3741,18 @@ function bindChannelSheet() {
       return;
     }
     if (view.groupsSheetId) {
+      // Escape backs out of a rename or a delete confirm first; only a
+      // second press closes the sheet.
+      if (view.groupEdit || view.groupConfirm) {
+        const name = view.groupEdit || view.groupConfirm;
+        event.preventDefault();
+        view.groupEdit = '';
+        view.groupConfirm = '';
+        groupRenameDraft = { name: '', value: '' };
+        render();
+        focusGroupRow(name);
+        return;
+      }
       event.preventDefault();
       closeGroupsSheet();
       return;
