@@ -1070,6 +1070,70 @@
     "message": "تم",
     "description": "Button that closes the YouTube tab after the scan finishes."
   },
+  "scanAccounts": {
+    "message": "جارٍ البحث عن حساباتك",
+    "description": "Headline while the subscriptions pages of each signed-in Google account are read."
+  },
+  "scanChoose": {
+    "message": "اختر حسابًا",
+    "description": "Headline of the account picker when more than one Google account has subscriptions."
+  },
+  "scanAccount": {
+    "message": "الحساب: $NUMBER$",
+    "description": "Name of a signed-in Google account. The page does not include the real name. $NUMBER$ is the account number, starting at 1. Arabic keeps label then number.",
+    "placeholders": {
+      "number": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountChannels": {
+    "message": "القنوات: $COUNT$",
+    "description": "How many subscriptions the first page of an account listed, when that page was the whole list. Arabic does not inflect the count.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountChannelsOne": {
+    "message": "القنوات: $COUNT$",
+    "description": "Same words as the plural form: Arabic is not inflected. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountMore": {
+    "message": "القنوات: $COUNT$+",
+    "description": "How many subscriptions the first page listed when more pages follow. $COUNT$ is a lower bound. Arabic keeps label then number.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountNone": {
+    "message": "لا اشتراكات",
+    "description": "An account that has no subscribed channels. It stays in the picker without a Scan button."
+  },
+  "scanAccountHere": {
+    "message": "هذا التبويب",
+    "description": "Marks the Google account the open YouTube tab is already using."
+  },
+  "scanAccountScan": {
+    "message": "فحص",
+    "description": "Button on an account row that reads that account's subscriptions."
+  },
+  "scanAnother": {
+    "message": "استيراد حساب آخر",
+    "description": "Button on the scan result that returns to the account picker in the same tab."
+  },
+  "scanExpired": {
+    "message": "ابدأ الاستيراد من جديد من الإضافة",
+    "description": "Shown on the YouTube tab when the account picker has waited too long for a click. The worker has stopped."
+  },
   "audioModeLabel": {
     "message": "وضع الصوت",
     "description": "Label next to the master audio-mode toggle on the Player tab."

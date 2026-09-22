@@ -85,6 +85,17 @@ const OVERLAY_MESSAGE_KEYS = [
   'scanSignedOutFile',
   'scanFailed',
   'scanDone',
+  'scanAccounts',
+  'scanChoose',
+  'scanAccount',
+  'scanAccountChannels',
+  'scanAccountChannelsOne',
+  'scanAccountMore',
+  'scanAccountNone',
+  'scanAccountHere',
+  'scanAccountScan',
+  'scanAnother',
+  'scanExpired',
   'subsGroupsAll',
   'subsGroupsLabel',
   'subsGroupsMatch',
@@ -121,6 +132,10 @@ const HEADER_RETRY_MS = 24 * 60 * 60_000;
 const KEEPALIVE_MS = 25_000;
 // A subscription scan waits on a tab for longer than that too.
 const SCAN_KEEPALIVE_MS = 20_000;
+// Chrome kills a service worker when one event runs longer than 5 minutes.
+// The keepalive ping does not reset that clock, so the account picker
+// gives up with a minute to spare. The content script uses the same wait.
+const ACCOUNT_PICK_MS = 4 * 60 * 1000;
 const SCAN_READY_MS = 30_000;
 const SCAN_READY_GAP_MS = 300;
 const CHANNELS_PAGE = 'https://www.youtube.com/feed/channels';
@@ -1123,12 +1138,16 @@ async function sendToTab(tabId, message) {
 }
 
 async function tellTab(tabId, fields) {
+  const account = accountIndex(fields && fields.account);
+  const avatar = isAvatarUrl(fields && fields.avatar) ? fields.avatar : '';
   try {
     await chromeApi().tabs.sendMessage(tabId, {
       type: 'subscriptions.result',
       added: Number(fields && fields.added) || 0,
       skipped: Number(fields && fields.skipped) || 0,
       error: (fields && fields.error) || '',
+      account,
+      avatar,
     });
   } catch {
     // The tab can close while the scan runs.
@@ -1141,11 +1160,16 @@ async function tellTab(tabId, fields) {
  * the current one. A tab that is still loading has no listener and rejects,
  * which is not a reason to reload it.
  */
-async function requestScan(tabId) {
+function accountIndex(value) {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 9) return null;
+  return value;
+}
+
+async function requestTab(tabId, message) {
   const deadline = Date.now() + SCAN_READY_MS;
   let reloaded = false;
   while (Date.now() <= deadline) {
-    const sent = await sendToTab(tabId, { type: 'subscriptions.scan' });
+    const sent = await sendToTab(tabId, message);
     if (!sent.rejected && sent.reply && typeof sent.reply === 'object') return sent.reply;
     if (!sent.rejected && !reloaded) {
       reloaded = true;
@@ -1155,6 +1179,25 @@ async function requestScan(tabId) {
     await sleep(SCAN_READY_GAP_MS);
   }
   return { ok: false, error: 'no script' };
+}
+
+async function requestAccounts(tabId, message) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve({ ok: false, error: 'timeout' }), ACCOUNT_PICK_MS);
+  });
+  try {
+    return await Promise.race([requestTab(tabId, message), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function openAccount(tabId, index) {
+  await chromeApi().tabs.update(tabId, {
+    url: `https://www.youtube.com/feed/channels?authuser=${index}`,
+    active: true,
+  });
 }
 
 /**
@@ -1170,21 +1213,56 @@ export async function importFromYouTube() {
     const tab = await openChannelsTab();
     const tabId = tab && tab.id;
     if (typeof tabId !== 'number') return { ok: false, error: 'no tab' };
-    const scanned = await requestScan(tabId);
-    if (!scanned || scanned.ok !== true) {
-      const error = (scanned && scanned.error) || 'failed';
-      await tellTab(tabId, { error });
-      return { ok: false, error };
+    let last = null;
+    for (let round = 0; round < 10; round++) {
+      const choice = await requestAccounts(tabId, {
+        type: 'subscriptions.accounts',
+        again: round > 0,
+      });
+      if (!choice || choice.ok !== true) {
+        if (choice && choice.error === 'timeout') return last || { ok: false, error: 'timeout' };
+        if (choice && choice.error === 'done' && last) return last;
+        const error = (choice && choice.error) || 'failed';
+        if (error !== 'done') await tellTab(tabId, { error });
+        return last || { ok: false, error };
+      }
+      const index = accountIndex(choice.index);
+      if (index == null) {
+        await tellTab(tabId, { error: 'failed' });
+        return { ok: false, error: 'failed' };
+      }
+      const current = accountIndex(choice.current);
+      // Unknown current still navigates: the open tab may be a later account.
+      if (current == null || current !== index) {
+        try {
+          await openAccount(tabId, index);
+        } catch (err) {
+          await tellTab(tabId, { error: 'failed' });
+          return { ok: false, error: 'failed' };
+        }
+      }
+      const scanned = await requestTab(tabId, { type: 'subscriptions.scan' });
+      if (!scanned || scanned.ok !== true) {
+        const error = (scanned && scanned.error) || 'failed';
+        await tellTab(tabId, { error, account: index, avatar: choice.avatar });
+        return { ok: false, error };
+      }
+      const imported = await addImportedChannels(scanned.channels);
+      if (!imported.ok) {
+        await tellTab(tabId, { error: imported.error || 'failed', account: index, avatar: choice.avatar });
+        return { ok: false, error: imported.error || 'failed' };
+      }
+      await tellTab(tabId, {
+        added: imported.added,
+        skipped: imported.skipped,
+        account: index,
+        avatar: choice.avatar,
+      });
+      // Not awaited: a first check of hundreds of channels takes minutes.
+      void runSweep({ scope: 'all' }).catch(() => {});
+      last = { ok: true, added: imported.added, skipped: imported.skipped };
     }
-    const imported = await addImportedChannels(scanned.channels);
-    if (!imported.ok) {
-      await tellTab(tabId, { error: imported.error || 'failed' });
-      return { ok: false, error: imported.error || 'failed' };
-    }
-    await tellTab(tabId, { added: imported.added, skipped: imported.skipped });
-    // Not awaited: a first check of hundreds of channels takes minutes.
-    void runSweep({ scope: 'all' }).catch(() => {});
-    return { ok: true, added: imported.added, skipped: imported.skipped };
+    return last || { ok: false, error: 'failed' };
   } catch (err) {
     return { ok: false, error: errMessage(err) };
   } finally {

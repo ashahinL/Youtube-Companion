@@ -1070,6 +1070,70 @@
     "message": "Done",
     "description": "Button that closes the YouTube tab after the scan finishes."
   },
+  "scanAccounts": {
+    "message": "Finding your accounts",
+    "description": "Headline while the subscriptions pages of each signed-in Google account are read."
+  },
+  "scanChoose": {
+    "message": "Choose an account",
+    "description": "Headline of the account picker when more than one Google account has subscriptions."
+  },
+  "scanAccount": {
+    "message": "Account $NUMBER$",
+    "description": "Name of a signed-in Google account. The page does not include the real name. $NUMBER$ is the account number, starting at 1.",
+    "placeholders": {
+      "number": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountChannels": {
+    "message": "$COUNT$ channels",
+    "description": "How many subscriptions the first page of an account listed, when that page was the whole list. $COUNT$ is the number.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountChannelsOne": {
+    "message": "$COUNT$ channel",
+    "description": "How many subscriptions an account listed when the number is 1 and the page was the whole list. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountMore": {
+    "message": "$COUNT$+ channels",
+    "description": "How many subscriptions the first page listed when more pages follow. $COUNT$ is the first page's count, a lower bound.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAccountNone": {
+    "message": "No subscriptions",
+    "description": "An account that has no subscribed channels. It stays in the picker without a Scan button."
+  },
+  "scanAccountHere": {
+    "message": "This tab",
+    "description": "Marks the Google account the open YouTube tab is already using."
+  },
+  "scanAccountScan": {
+    "message": "Scan",
+    "description": "Button on an account row that reads that account's subscriptions."
+  },
+  "scanAnother": {
+    "message": "Import another account",
+    "description": "Button on the scan result that returns to the account picker in the same tab."
+  },
+  "scanExpired": {
+    "message": "Start the import again from the extension",
+    "description": "Shown on the YouTube tab when the account picker has waited too long for a click. The worker has stopped."
+  },
   "audioModeLabel": {
     "message": "Audio mode",
     "description": "Label next to the master audio-mode toggle on the Player tab."

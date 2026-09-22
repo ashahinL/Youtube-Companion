@@ -341,6 +341,119 @@ html[dark] #ytc-scan-overlay {
   outline-offset: 3px;
 }
 
+#ytc-scan-overlay .ytc-scan-who {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0;
+  max-width: 420px;
+}
+
+#ytc-scan-overlay .ytc-scan-who-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#ytc-scan-overlay .ytc-scan-avatar {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(127, 127, 127, 0.25);
+}
+
+#ytc-scan-overlay .ytc-scan-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, 100%);
+  margin: 8px 0 0;
+}
+
+#ytc-scan-overlay .ytc-scan-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(127, 127, 127, 0.12);
+  text-align: start;
+}
+
+#ytc-scan-overlay .ytc-scan-row--empty {
+  opacity: 0.5;
+}
+
+#ytc-scan-overlay .ytc-scan-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+#ytc-scan-overlay .ytc-scan-row-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+#ytc-scan-overlay .ytc-scan-row-detail {
+  font-size: 13px;
+  opacity: 0.72;
+}
+
+#ytc-scan-overlay .ytc-scan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-block-start: 8px;
+}
+
+#ytc-scan-overlay .ytc-scan-scan,
+#ytc-scan-overlay .ytc-scan-another {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding-block: 8px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-scan {
+  background: var(--ytc-scan-accent);
+  color: var(--ytc-scan-on-accent);
+}
+
+#ytc-scan-overlay .ytc-scan-another {
+  border: 1px solid currentColor;
+  color: inherit;
+  opacity: 0.85;
+}
+
+#ytc-scan-overlay .ytc-scan-scan:focus-visible,
+#ytc-scan-overlay .ytc-scan-another:focus-visible {
+  outline: 2px solid var(--ytc-scan-accent);
+  outline-offset: 3px;
+}
+
+#ytc-scan-overlay .ytc-scan-expired {
+  margin: 8px 0 0;
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0.72;
+  text-align: center;
+}
+
 /* Group chips on /feed/subscriptions. Lengths are px because YouTube sets
    the root font size to 10px, so rem would render small. The selected chip
    is our purple so it reads as ours beside YouTube's own chips. */

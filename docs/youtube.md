@@ -317,3 +317,36 @@ bottom added none: the whole list arrived in the first response, and
   `shelfRenderer.title.runs[0].text`. The row itself is the language-free
   test: `.data.subscriptionButton` reads `{"subscribed": true}` in both
   shelves, so take every row where that is true and dedupe by `channelId`.
+
+### Several signed-in Google accounts
+
+Measured 2026-09-23 in a browser signed in to four Google accounts.
+
+- **Plain `youtube.com` is not always the first account.** Here it opened
+  `ytcfg` `SESSION_INDEX` `1`, the second account, with 40 subscriptions.
+  The first account had 126. An import that reads only the default account
+  silently reads the wrong list.
+- **`?authuser=N` picks the account.** `/feed/channels?authuser=N` loads with
+  `SESSION_INDEX` `N`, and YouTube strips the parameter from the address.
+- **Past the last account it falls back to 0, without an error.** A
+  same-origin fetch of `/feed/channels?authuser=N` for N = 0…9 returned
+  status 200 every time, with `SESSION_INDEX` 0, 1, 2, 3, then 0 for every
+  N from 4 up. "The index that came back is not the one asked for" is the end
+  of the list. `LOGGED_IN` was `true` throughout.
+- **The first page of the list is in the HTML; the rest is not.** Account 0's
+  HTML held 83 `"channelRenderer":` and a `continuationItemRenderer`;
+  scrolling the page grew the list to 126, after which the
+  `ytd-continuation-item-renderer` was gone. That growth came in one round
+  well inside 1.5 s, but the end is the sentinel disappearing, not a round
+  that did not grow.
+- **The account's picture is in that HTML**, at
+  `ytInitialData.topbar.desktopTopbarRenderer.topbarButtons[2]
+  .topbarMenuButtonRenderer.avatar.thumbnails` (host `yt3.ggpht.com`). Find
+  the button by the key, not the index. The HTML assigns the data either as
+  `var ytInitialData = …;` or as `window["ytInitialData"] = …;` — one of
+  the two accounts used the second form.
+- **The account's name is not on the page.** The topbar avatar's `alt` is
+  the generic "Avatar image"; the name arrives only when the account menu
+  is opened.
+- Two of the four accounts had an empty list: the page rendered only the
+  "Most relevant" sort label and no `channelRenderer` at all.

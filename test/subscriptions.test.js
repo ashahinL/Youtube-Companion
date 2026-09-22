@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
+import { parseSubscriptionsHtml, takeAccountPage } from '../src/lib/subscriptions-page.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -157,6 +158,14 @@ function loadContent() {
       scanSignedOutFile: 'A Google Takeout file works too.',
       scanFailed: 'Could not read your subscriptions',
       scanDone: 'Done',
+      scanAccount: 'Account $1',
+      scanAccountScan: 'Scan',
+      scanAnother: 'Import another account',
+      scanExpired: 'Start the import again from the extension',
+      scanChoose: 'Choose an account',
+      scanStay: 'Do not close this tab',
+      scanAccountChannels: '$1 channels',
+      scanAccountNone: 'No subscriptions',
     },
     ar: {
       scanTitle: 'جارٍ فحص قنواتك',
@@ -172,6 +181,8 @@ function loadContent() {
       scanSignedOutFile: 'ملف Google Takeout يعمل أيضًا.',
       scanFailed: 'تعذّر قراءة اشتراكاتك',
       scanDone: 'تم',
+      scanAccount: 'الحساب: $1',
+      scanAnother: 'استيراد حساب آخر',
     },
   };
   let locale = 'en';
@@ -222,6 +233,7 @@ function loadContent() {
     packs,
     setLocale(next) { locale = next; },
     api: sandbox.AudioModeContent || win.AudioModeContent,
+    win,
   };
 }
 
@@ -309,6 +321,25 @@ export default async function run(t) {
       && posted.result[0].handle === '@alpha',
     JSON.stringify(posted),
   );
+  t.check('sessionIndex takes no arguments', bridge.isAllowedCall('sessionIndex', []) === true);
+  t.check('sessionIndex refuses an argument', bridge.isAllowedCall('sessionIndex', [0]) === false);
+  loaded.win.ytcfg = { get(key) { return key === 'SESSION_INDEX' ? 1 : undefined; } };
+  t.check('sessionIndex reads ytcfg.get', bridge.readSessionIndex() === 1);
+  loaded.posts.length = 0;
+  loaded.fire({
+    source: loaded.win,
+    origin: PAGE,
+    data: { type: TOKEN, dir: 'request', id: 8, method: 'sessionIndex', args: [] },
+  });
+  t.check(
+    'a sessionIndex request is answered with the number',
+    loaded.posts[0]?.data?.ok === true && loaded.posts[0]?.data?.result === 1,
+    JSON.stringify(loaded.posts[0]?.data),
+  );
+  loaded.win.ytcfg = { data_: { SESSION_INDEX: '3' } };
+  t.check('sessionIndex falls back to ytcfg.data_', bridge.readSessionIndex() === 3);
+  loaded.win.ytcfg = { get() { throw new Error('no'); } };
+  t.check('a throwing ytcfg answers null', bridge.readSessionIndex() === null);
 
   t.section('the scan overlay');
 
@@ -398,5 +429,136 @@ export default async function run(t) {
   t.check(
     'the overlay is not created again',
     page.doc.documentElement.children.filter((node) => node.id === 'ytc-scan-overlay').length === 1,
+  );
+
+  t.section('account pages');
+
+  const varHtml = read('test/fixtures/channels.account-var.html');
+  const windowHtml = read('test/fixtures/channels.account-window.html');
+  const emptyHtml = read('test/fixtures/channels.account-empty.html');
+  const fromVar = parseSubscriptionsHtml(varHtml);
+  t.check(
+    'var ytInitialData keeps subscribed rows, the continuation, and the largest avatar',
+    fromVar.sessionIndex === 0
+      && fromVar.subscribed === 2
+      && fromVar.continuation === true
+      && fromVar.avatar === 'https://yt3.ggpht.com/acct=s176',
+    JSON.stringify(fromVar),
+  );
+  const fromWindow = parseSubscriptionsHtml(windowHtml);
+  t.check(
+    'window["ytInitialData"] reads a string session index and drops a bad picture',
+    fromWindow.sessionIndex === 1
+      && fromWindow.subscribed === 1
+      && fromWindow.continuation === false
+      && fromWindow.avatar === '',
+    JSON.stringify(fromWindow),
+  );
+  const fromEmpty = parseSubscriptionsHtml(emptyHtml);
+  t.check(
+    'an account with no channel rows is still that account',
+    fromEmpty.sessionIndex === 2 && fromEmpty.subscribed === 0 && fromEmpty.continuation === false,
+    JSON.stringify(fromEmpty),
+  );
+  const pages = [];
+  t.check('account 0 is kept', takeAccountPage(pages, varHtml) === true);
+  t.check('account 1 is kept', takeAccountPage(pages, windowHtml) === true);
+  t.check('account 2 with an empty list is kept', takeAccountPage(pages, emptyHtml) === true);
+  t.check(
+    'a page whose SESSION_INDEX is not the next account ends the list',
+    takeAccountPage(pages, varHtml) === false && pages.length === 3,
+    JSON.stringify(pages.map((row) => row.index)),
+  );
+  t.check(
+    'the content script parses the same pages',
+    JSON.stringify(page.api.parseSubscriptionsHtml(varHtml)) === JSON.stringify(fromVar)
+      && JSON.stringify(page.api.parseSubscriptionsHtml(windowHtml)) === JSON.stringify(fromWindow)
+      && JSON.stringify(page.api.parseSubscriptionsHtml(emptyHtml)) === JSON.stringify(fromEmpty),
+  );
+  const fromScript = [];
+  page.api.takeAccountPage(fromScript, varHtml);
+  page.api.takeAccountPage(fromScript, windowHtml);
+  page.api.takeAccountPage(fromScript, varHtml);
+  t.check(
+    'the content script stops when the index falls back',
+    fromScript.length === 2 && fromScript[0].subscribed === 2 && fromScript[1].subscribed === 1,
+    JSON.stringify(fromScript),
+  );
+
+  page.setLocale('en');
+  await page.api.showScanResult({ added: 4, skipped: 0, account: 0, avatar: 'https://yt3.ggpht.com/acct=s176' });
+  t.check(
+    'the result names the account above the count',
+    textOf(overlay, 'ytc-scan-who-label') === 'Account 1'
+      && textOf(overlay, 'ytc-scan-title') === 'Added 4 channels'
+      && overlay.querySelector('.ytc-scan-avatar').getAttribute('src') === 'https://yt3.ggpht.com/acct=s176'
+      && !overlay.querySelector('.ytc-scan-another').hasAttribute('hidden'),
+    `${textOf(overlay, 'ytc-scan-who-label')} | ${textOf(overlay, 'ytc-scan-title')}`,
+  );
+
+  t.section('the account wait');
+
+  const workerSrc = read('src/background/service-worker.js');
+  const contentLive = read('src/content/content.js');
+  const pickMs = (src) => {
+    const match = src.match(/const ACCOUNT_PICK_MS = ([^;]+);/);
+    return match && match[1].trim();
+  };
+  t.check(
+    'both sides give the picker the same 4 minutes',
+    pickMs(workerSrc) === '4 * 60 * 1000' && pickMs(workerSrc) === pickMs(contentLive),
+    JSON.stringify({ worker: pickMs(workerSrc), content: pickMs(contentLive) }),
+  );
+
+  const long = [];
+  const realSetTimeout = page.win.setTimeout.bind(page.win);
+  const realClearTimeout = page.win.clearTimeout.bind(page.win);
+  page.win.setTimeout = (fn, ms) => {
+    if (ms >= 60_000) {
+      long.push({ fn, ms, cleared: false });
+      return { long: long.length };
+    }
+    return realSetTimeout(fn, ms);
+  };
+  page.win.clearTimeout = (id) => {
+    if (id && id.long) {
+      const row = long[id.long - 1];
+      if (row) row.cleared = true;
+      return;
+    }
+    return realClearTimeout(id);
+  };
+  page.api.openAccountPicker({
+    current: 0,
+    accounts: [
+      { index: 0, subscribed: 2, continuation: false, avatar: '' },
+      { index: 1, subscribed: 5, continuation: true, avatar: '' },
+    ],
+  }, () => {});
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+  const scans = [];
+  const walkScans = (node) => {
+    if (!node) return;
+    if (node.className === 'ytc-scan-scan') scans.push(node);
+    for (const child of node.children || []) walkScans(child);
+  };
+  walkScans(overlay);
+  t.check('each account with channels has Scan', scans.length === 2 && long.length === 1, `${scans.length} ${long.length}`);
+  long[0].fn();
+  t.check(
+    'the cap replaces Scan with the restart line and leaves Done',
+    scans.every((btn) => btn.hasAttribute('hidden'))
+      && textOf(overlay, 'ytc-scan-expired') === 'Start the import again from the extension'
+      && !overlay.querySelector('.ytc-scan-expired').hasAttribute('hidden')
+      && !overlay.querySelector('.ytc-scan-done').hasAttribute('hidden'),
+    textOf(overlay, 'ytc-scan-expired'),
+  );
+  const done = overlay.querySelector('.ytc-scan-done');
+  const doneClick = done.listeners.find((entry) => entry.type === 'click');
+  const sentBefore = page.sent.length;
+  doneClick.fn({ preventDefault() {}, stopPropagation() {} });
+  t.check(
+    'Done still asks the worker to close the tab',
+    page.sent.slice(sentBefore).some((msg) => msg && msg.type === 'subscriptions.close'),
   );
 }

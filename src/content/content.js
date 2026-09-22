@@ -1350,12 +1350,204 @@
     }
   }
 
+  // Same reader as src/lib/subscriptions-page.js. This file cannot import.
+  const SCAN_AVATAR_HOSTS = {
+    'yt3.ggpht.com': true,
+    'yt3.googleusercontent.com': true,
+  };
+  const SCAN_EMPTY_PAGE = {
+    sessionIndex: null,
+    subscribed: 0,
+    continuation: false,
+    avatar: '',
+  };
+
+  function scanSessionIndexIn(html) {
+    const match = /["']SESSION_INDEX["']\s*:\s*"?(\d+)"?/.exec(html);
+    if (!match) return null;
+    const n = Number(match[1]);
+    return isFinite(n) ? n : null;
+  }
+
+  function scanAssignmentAt(html) {
+    const forms = [
+      /var\s+ytInitialData\s*=\s*/g,
+      /window\[\s*["']ytInitialData["']\s*\]\s*=\s*/g,
+    ];
+    let best = -1;
+    let end = -1;
+    for (let f = 0; f < forms.length; f++) {
+      forms[f].lastIndex = 0;
+      const match = forms[f].exec(html);
+      if (!match) continue;
+      if (best === -1 || match.index < best) {
+        best = match.index;
+        end = match.index + match[0].length;
+      }
+    }
+    return end;
+  }
+
+  function scanJsonEnd(text, start) {
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+      if (ch === '{') depth += 1;
+      else if (ch === '}') {
+        depth -= 1;
+        if (depth === 0) return i + 1;
+      }
+    }
+    return -1;
+  }
+
+  function scanInitialData(html) {
+    const start = scanAssignmentAt(html);
+    if (start < 0 || html[start] !== '{') return null;
+    const end = scanJsonEnd(html, start);
+    if (end < 0) return null;
+    try {
+      return JSON.parse(html.slice(start, end));
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function scanAvatarUrl(value) {
+    if (typeof value !== 'string') return '';
+    let raw = value.trim();
+    if (!raw) return '';
+    if (raw.startsWith('//')) raw = 'https:' + raw;
+    try {
+      const url = new URL(raw);
+      if (url.protocol !== 'https:' || !SCAN_AVATAR_HOSTS[url.hostname]) return '';
+      return url.href;
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function scanBestThumbnail(thumbs) {
+    if (!Array.isArray(thumbs)) return '';
+    let best = '';
+    let bestWidth = -1;
+    for (let i = 0; i < thumbs.length; i++) {
+      const thumb = thumbs[i];
+      const url = scanAvatarUrl(thumb && thumb.url);
+      if (!url) continue;
+      const width = Number(thumb && thumb.width);
+      const rank = isFinite(width) ? width : 0;
+      if (!best || rank >= bestWidth) {
+        best = url;
+        bestWidth = rank;
+      }
+    }
+    return best;
+  }
+
+  function scanAccountAvatar(data) {
+    const buttons = data
+      && data.topbar
+      && data.topbar.desktopTopbarRenderer
+      && data.topbar.desktopTopbarRenderer.topbarButtons;
+    if (!Array.isArray(buttons)) return '';
+    for (let i = 0; i < buttons.length; i++) {
+      const menu = buttons[i] && buttons[i].topbarMenuButtonRenderer;
+      if (!menu || !menu.avatar) continue;
+      return scanBestThumbnail(menu.avatar.thumbnails);
+    }
+    return '';
+  }
+
+  function scanCountRows(node, acc) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) scanCountRows(node[i], acc);
+      return;
+    }
+    const row = node.channelRenderer;
+    if (row && typeof row === 'object') {
+      const button = row.subscriptionButton;
+      if (button && button.subscribed === true) acc.subscribed += 1;
+    }
+    if (node.continuationItemRenderer) acc.continuation = true;
+    const keys = Object.keys(node);
+    for (let i = 0; i < keys.length; i++) scanCountRows(node[keys[i]], acc);
+  }
+
+  function parseSubscriptionsHtml(html) {
+    if (typeof html !== 'string' || !html) {
+      return {
+        sessionIndex: SCAN_EMPTY_PAGE.sessionIndex,
+        subscribed: 0,
+        continuation: false,
+        avatar: '',
+      };
+    }
+    try {
+      const data = scanInitialData(html);
+      const acc = { subscribed: 0, continuation: false };
+      if (data) scanCountRows(data, acc);
+      return {
+        sessionIndex: scanSessionIndexIn(html),
+        subscribed: acc.subscribed,
+        continuation: acc.continuation,
+        avatar: data ? scanAccountAvatar(data) : '',
+      };
+    } catch (err) {
+      return {
+        sessionIndex: null,
+        subscribed: 0,
+        continuation: false,
+        avatar: '',
+      };
+    }
+  }
+
+  // Past the last account the same HTML comes back with SESSION_INDEX 0
+  // and status 200. The index that came back has to be the one we asked for.
+  function takeAccountPage(accounts, html) {
+    if (!Array.isArray(accounts) || accounts.length >= 10) return false;
+    const parsed = parseSubscriptionsHtml(html);
+    if (!parsed || parsed.sessionIndex !== accounts.length) return false;
+    accounts.push({
+      index: accounts.length,
+      subscribed: parsed.subscribed,
+      continuation: parsed.continuation === true,
+      avatar: parsed.avatar || '',
+    });
+    return true;
+  }
+
   const SCAN_OVERLAY_ID = 'ytc-scan-overlay';
   const SCAN_ROW_WAIT_MS = 15000;
   const SCAN_ROW_POLL_MS = 250;
-  const SCAN_SCROLL_WAIT_MS = 1200;
-  const SCAN_SCROLL_ROUNDS = 20;
+  const SCAN_GROW_MS = 4000;
+  const SCAN_GROW_POLL_MS = 200;
+  const SCAN_SCROLL_ROUNDS = 40;
+  // Chrome kills the worker when one event runs longer than 5 minutes.
+  // The keepalive ping does not reset that clock, so the picker gives up
+  // with a minute to spare. Same value as ACCOUNT_PICK_MS in the service worker.
+  const ACCOUNT_PICK_MS = 4 * 60 * 1000;
   let scanTask = null;
+  let accountPickTimer = null;
+  let accountPickPack = null;
+  let accountPickTeardown = false;
+  let heldChoice = null;
+  let pickerSend = null;
+  let pickerWanted = false;
 
   function pagePath() {
     try {
@@ -1511,13 +1703,73 @@
     }
   }
 
+  function clearAccountPickTimer() {
+    if (accountPickTimer == null) return;
+    try { clearTimeout(accountPickTimer); } catch (err) { /* swallow */ }
+    accountPickTimer = null;
+  }
+
+  function hideScanChoices(el) {
+    const walk = function (node) {
+      if (!node) return;
+      const cls = typeof node.className === 'string' ? node.className : '';
+      const names = cls.split(/\s+/);
+      if (names.indexOf('ytc-scan-scan') !== -1 || names.indexOf('ytc-scan-another') !== -1) {
+        setScanHidden(node, true);
+      }
+      const kids = node.children || [];
+      for (let i = 0; i < kids.length; i++) walk(kids[i]);
+    };
+    walk(el);
+  }
+
+  function onAccountPickExpired() {
+    accountPickTimer = null;
+    let el = null;
+    try { el = document.getElementById(SCAN_OVERLAY_ID); } catch (err) { el = null; }
+    if (!el) return;
+    hideScanChoices(el);
+    const line = el.querySelector && el.querySelector('.ytc-scan-expired');
+    if (!line) return;
+    line.textContent = messageOf(accountPickPack, 'scanExpired');
+    setScanHidden(line, false);
+  }
+
+  function startAccountPickTimer(pack) {
+    clearAccountPickTimer();
+    accountPickPack = pack || null;
+    if (!accountPickTeardown) {
+      accountPickTeardown = true;
+      try {
+        const win = root.window || root;
+        if (win && win.addEventListener) win.addEventListener('pagehide', clearAccountPickTimer);
+      } catch (err) { /* swallow */ }
+    }
+    try {
+      accountPickTimer = setTimeout(onAccountPickExpired, ACCOUNT_PICK_MS);
+    } catch (err) {
+      accountPickTimer = null;
+    }
+  }
+
+  function finishAccountChoice(payload) {
+    const held = heldChoice;
+    const picking = pickerSend;
+    heldChoice = null;
+    pickerSend = null;
+    try { if (held && held.send) held.send(payload); } catch (err) { /* swallow */ }
+    try { if (picking) picking(payload); } catch (err) { /* swallow */ }
+  }
+
   function onScanDone(ev) {
+    clearAccountPickTimer();
     stopFaceEvent(ev);
     try {
       if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
     } catch (err) {
       // swallow
     }
+    finishAccountChoice({ ok: false, error: 'done' });
     try {
       const ch = root.chrome;
       if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
@@ -1528,6 +1780,22 @@
     } catch (err) {
       // swallow
     }
+  }
+
+  function onScanAnother(ev) {
+    clearAccountPickTimer();
+    stopFaceEvent(ev);
+    try {
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    } catch (err) {
+      // swallow
+    }
+    pickerWanted = true;
+    if (!heldChoice) return;
+    const send = heldChoice.send;
+    const info = heldChoice.info;
+    heldChoice = null;
+    openAccountPicker(info, send);
   }
 
   function scanNode(className) {
@@ -1557,16 +1825,41 @@
       count.appendChild(label);
       count.appendChild(num);
       const loaded = scanNode('ytc-scan-loaded');
+      const who = document.createElement('div');
+      who.className = 'ytc-scan-who';
+      const whoImg = document.createElement('img');
+      whoImg.className = 'ytc-scan-avatar';
+      whoImg.alt = '';
+      try { whoImg.referrerPolicy = 'no-referrer'; } catch (err) { /* swallow */ }
+      const whoLabel = document.createElement('span');
+      whoLabel.className = 'ytc-scan-who-label';
+      who.appendChild(whoImg);
+      who.appendChild(whoLabel);
+      const picker = document.createElement('div');
+      picker.className = 'ytc-scan-picker';
+      const actions = document.createElement('div');
+      actions.className = 'ytc-scan-actions';
+      const another = document.createElement('button');
+      another.type = 'button';
+      another.className = 'ytc-scan-another';
+      another.addEventListener('click', onScanAnother);
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ytc-scan-done';
       btn.addEventListener('click', onScanDone);
+      const expired = scanNode('ytc-scan-expired');
+      setScanHidden(expired, true);
+      actions.appendChild(another);
+      actions.appendChild(btn);
       el.appendChild(spinner);
+      el.appendChild(who);
       el.appendChild(title);
       el.appendChild(sub);
       el.appendChild(count);
       el.appendChild(loaded);
-      el.appendChild(btn);
+      el.appendChild(picker);
+      el.appendChild(expired);
+      el.appendChild(actions);
       const parent = document.documentElement || document.body;
       if (parent && typeof parent.appendChild === 'function') parent.appendChild(el);
     }
@@ -1590,9 +1883,36 @@
     setScanHidden(loaded, !paging);
   }
 
+  function knownAccount(info) {
+    const n = info && info.account;
+    return typeof n === 'number' && isFinite(n) && n >= 0 && n <= 9 && Math.floor(n) === n;
+  }
+
+  function paintWho(el, pack, info) {
+    const who = el.querySelector('.ytc-scan-who');
+    if (!who) return;
+    const show = knownAccount(info);
+    setScanHidden(who, !show);
+    if (!show) return;
+    const label = who.querySelector('.ytc-scan-who-label');
+    const img = who.querySelector('.ytc-scan-avatar');
+    if (label) label.textContent = messageOf(pack, 'scanAccount', [String(info.account + 1)]);
+    const avatar = scanAvatarUrl(info && info.avatar);
+    if (!img) return;
+    if (avatar) {
+      try { img.setAttribute('src', avatar); } catch (err) { img.src = avatar; }
+      setScanHidden(img, false);
+    } else {
+      try { img.removeAttribute('src'); } catch (err) { /* swallow */ }
+      setScanHidden(img, true);
+    }
+  }
+
   function paintScanMode(got, mode, info) {
+    clearAccountPickTimer();
     const el = ensureScanOverlay(got);
     if (!el || typeof el.querySelector !== 'function') return;
+    setScanHidden(el.querySelector('.ytc-scan-expired'), true);
     const pack = got && got.pack;
     const title = el.querySelector('.ytc-scan-title');
     const sub = el.querySelector('.ytc-scan-sub');
@@ -1600,17 +1920,41 @@
     const loaded = el.querySelector('.ytc-scan-loaded');
     const spinner = el.querySelector('.ytc-scan-spinner');
     const btn = el.querySelector('.ytc-scan-done');
-    const scanning = mode === 'scanning';
-    setScanHidden(spinner, !scanning);
-    setScanHidden(count, !scanning);
+    const another = el.querySelector('.ytc-scan-another');
+    const picker = el.querySelector('.ytc-scan-picker');
+    const result = mode === 'added' || mode === 'nothing';
+    const spinning = mode === 'scanning' || mode === 'accounts';
+    setScanHidden(spinner, !spinning);
+    setScanHidden(count, mode !== 'scanning');
     setScanHidden(loaded, true);
-    setScanHidden(btn, scanning);
+    setScanHidden(picker, mode !== 'picker');
+    setScanHidden(btn, mode === 'scanning');
     if (btn) btn.textContent = messageOf(pack, 'scanDone');
+    if (another) another.textContent = messageOf(pack, 'scanAnother');
+    const showAnother = result && knownAccount(info);
+    setScanHidden(another, !showAnother);
+    if (result) paintWho(el, pack, info);
+    else {
+      const who = el.querySelector('.ytc-scan-who');
+      setScanHidden(who, true);
+    }
     if (mode === 'scanning') {
       if (title) title.textContent = messageOf(pack, 'scanTitle');
       if (sub) sub.textContent = messageOf(pack, 'scanStay');
       setScanHidden(sub, false);
       paintScanProgress(got, channelRowCount(), false);
+      return;
+    }
+    if (mode === 'accounts') {
+      if (title) title.textContent = messageOf(pack, 'scanAccounts');
+      if (sub) sub.textContent = messageOf(pack, 'scanStay');
+      setScanHidden(sub, false);
+      return;
+    }
+    if (mode === 'picker') {
+      if (title) title.textContent = messageOf(pack, 'scanChoose');
+      if (sub) sub.textContent = messageOf(pack, 'scanStay');
+      setScanHidden(sub, false);
       return;
     }
     if (mode === 'added') {
@@ -1642,16 +1986,48 @@
     try { fn(); } catch (err) { /* A DOM change must not drop the list. */ }
   }
 
+  function continuationPresent() {
+    try {
+      if (!document || typeof document.querySelector !== 'function') return false;
+      return !!document.querySelector('ytd-continuation-item-renderer');
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // The sentinel leaving is the end of the list. A round that does not
+  // grow is not: the next page can arrive after the first second
+  // (docs/youtube.md).
+  function waitForMoreRows(got, before) {
+    return new Promise(function (resolve) {
+      const start = Date.now();
+      function poll() {
+        const after = channelRowCount();
+        if (after > before) {
+          safePaint(function () { paintScanProgress(got, after, true); });
+          resolve(true);
+          return;
+        }
+        if (!continuationPresent() || Date.now() - start >= SCAN_GROW_MS) {
+          resolve(false);
+          return;
+        }
+        setTimeout(poll, SCAN_GROW_POLL_MS);
+      }
+      poll();
+    });
+  }
+
   async function loadRemainingRows(got) {
     try {
+      if (!continuationPresent()) return;
       for (let round = 0; round < SCAN_SCROLL_ROUNDS; round++) {
         const before = channelRowCount();
         safePaint(function () { paintScanProgress(got, before, true); });
         scrollToBottom();
-        await wait(SCAN_SCROLL_WAIT_MS);
-        const after = channelRowCount();
-        safePaint(function () { paintScanProgress(got, after, true); });
-        if (after <= before) break;
+        await waitForMoreRows(got, before);
+        safePaint(function () { paintScanProgress(got, channelRowCount(), true); });
+        if (!continuationPresent()) break;
       }
     } finally {
       scrollToTop();
@@ -1698,19 +2074,213 @@
     return scanTask;
   }
 
+  function resultInfo(msg) {
+    const added = Number(msg && msg.added) || 0;
+    const skipped = Number(msg && msg.skipped) || 0;
+    const account = msg && msg.account;
+    return {
+      added: added,
+      skipped: skipped,
+      account: typeof account === 'number' ? account : null,
+      avatar: msg && typeof msg.avatar === 'string' ? msg.avatar : '',
+    };
+  }
+
   async function showScanResult(msg) {
     try {
       const got = await scanCopy();
       const error = msg && typeof msg.error === 'string' ? msg.error : '';
-      const added = Number(msg && msg.added) || 0;
-      const skipped = Number(msg && msg.skipped) || 0;
-      if (error === 'signedOut') paintScanMode(got, 'signedOut', {});
-      else if (error) paintScanMode(got, 'failed', {});
-      else if (added > 0) paintScanMode(got, 'added', { added: added, skipped: skipped });
-      else paintScanMode(got, 'nothing', {});
+      const info = resultInfo(msg);
+      if (error === 'signedOut') paintScanMode(got, 'signedOut', info);
+      else if (error) paintScanMode(got, 'failed', info);
+      else if (info.added > 0) paintScanMode(got, 'added', info);
+      else paintScanMode(got, 'nothing', info);
+      if (!error) startAccountPickTimer(got.pack);
     } catch (err) {
       // Done can still close the tab if a later paint works.
     }
+  }
+
+  function accountCountText(pack, account) {
+    if (!account || !account.subscribed) return messageOf(pack, 'scanAccountNone');
+    if (account.continuation) return messageOf(pack, 'scanAccountMore', [String(account.subscribed)]);
+    return countMessage(pack, 'scanAccountChannels', account.subscribed);
+  }
+
+  function clearNode(node) {
+    if (!node) return;
+    while (node.firstChild) {
+      try { node.removeChild(node.firstChild); } catch (err) { break; }
+    }
+  }
+
+  function sendAccountChoice(send, info, account) {
+    clearAccountPickTimer();
+    pickerSend = null;
+    try {
+      send({
+        ok: true,
+        index: account.index,
+        current: info && typeof info.current === 'number' ? info.current : null,
+        avatar: account.avatar || '',
+      });
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function openAccountPicker(info, send) {
+    pickerWanted = false;
+    pickerSend = send;
+    scanCopy().then(function (got) {
+      safePaint(function () { paintScanMode(got, 'picker', {}); });
+      let list = null;
+      try { list = document.getElementById(SCAN_OVERLAY_ID); } catch (err) { list = null; }
+      const picker = list && list.querySelector ? list.querySelector('.ytc-scan-picker') : null;
+      clearNode(picker);
+      if (!picker) return;
+      const accounts = info && info.accounts;
+      const pack = got && got.pack;
+      for (let i = 0; accounts && i < accounts.length; i++) {
+        const account = accounts[i];
+        const row = document.createElement('div');
+        row.className = account.subscribed
+          ? 'ytc-scan-row'
+          : 'ytc-scan-row ytc-scan-row--empty';
+        const avatar = scanAvatarUrl(account.avatar);
+        if (avatar) {
+          const img = document.createElement('img');
+          img.className = 'ytc-scan-avatar';
+          img.alt = '';
+          try { img.referrerPolicy = 'no-referrer'; } catch (err) { /* swallow */ }
+          try { img.setAttribute('src', avatar); } catch (err) { img.src = avatar; }
+          row.appendChild(img);
+        }
+        const text = document.createElement('div');
+        text.className = 'ytc-scan-row-text';
+        const name = document.createElement('span');
+        name.className = 'ytc-scan-row-name';
+        name.textContent = messageOf(pack, 'scanAccount', [String(account.index + 1)]);
+        if (info && info.current === account.index) {
+          name.textContent += ' · ' + messageOf(pack, 'scanAccountHere');
+        }
+        const detail = document.createElement('span');
+        detail.className = 'ytc-scan-row-detail';
+        detail.textContent = accountCountText(pack, account);
+        text.appendChild(name);
+        text.appendChild(detail);
+        row.appendChild(text);
+        if (account.subscribed) {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'ytc-scan-scan';
+          button.textContent = messageOf(pack, 'scanAccountScan');
+          button.addEventListener('click', function (ev) {
+            stopFaceEvent(ev);
+            if (pickerSend !== send) return;
+            sendAccountChoice(send, info, account);
+          });
+          row.appendChild(button);
+        }
+        picker.appendChild(row);
+      }
+      startAccountPickTimer(pack);
+    }, function () {});
+  }
+
+  async function readCurrentSession() {
+    try {
+      await ensureBridge();
+      const value = await callPlayer('sessionIndex', []);
+      if (typeof value === 'number' && isFinite(value) && value >= 0 && Math.floor(value) === value) {
+        return value;
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+
+  async function fetchAccountHtml(index) {
+    const fetchFn = root.fetch || fetch;
+    const res = await fetchFn('https://www.youtube.com/feed/channels?authuser=' + index, {
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    if (!res || res.ok !== true) return null;
+    return await res.text();
+  }
+
+  async function collectAccounts(again) {
+    if (pagePath() !== '/feed/channels') return { error: 'wrongPage' };
+    // A follow-up ask arrives while the result is on screen. Fetching
+    // quietly leaves that result up until Import another account.
+    if (!again || pickerWanted) {
+      const got = await scanCopy();
+      safePaint(function () { paintScanMode(got, 'accounts', {}); });
+    }
+    const accounts = [];
+    for (let n = 0; n < 10; n++) {
+      let html = null;
+      try {
+        html = await fetchAccountHtml(n);
+      } catch (err) {
+        break;
+      }
+      if (typeof html !== 'string') break;
+      if (!takeAccountPage(accounts, html)) break;
+    }
+    if (!accounts.length) return null;
+    const current = await readCurrentSession();
+    return { accounts: accounts, current: current };
+  }
+
+  function chooseAccounts(info, send, again) {
+    const accounts = info.accounts;
+    const rich = [];
+    for (let i = 0; i < accounts.length; i++) {
+      if (accounts[i].subscribed > 0) rich.push(accounts[i]);
+    }
+    // again is the worker asking after a result. A navigation loads a new
+    // script, so this flag, not memory, is what keeps the result on screen.
+    if (!again && !pickerWanted && rich.length === 1) {
+      sendAccountChoice(send, info, rich[0]);
+      return;
+    }
+    if (again && !pickerWanted) {
+      heldChoice = { send: send, info: info };
+      return;
+    }
+    openAccountPicker(info, send);
+  }
+
+  function listAccountsForImport(again) {
+    return collectAccounts(again).then(function (info) {
+      if (!info) return { ok: false, error: 'signedOut' };
+      if (info.error) return { ok: false, error: info.error };
+      return info;
+    }, function () {
+      return { ok: false, error: 'failed' };
+    });
+  }
+
+  function answerAccounts(msg, sendResponse) {
+    const again = !!(msg && msg.again);
+    listAccountsForImport(again).then(function (info) {
+      if (!info || info.ok === false) {
+        const error = info && info.error ? info.error : 'failed';
+        if (error === 'signedOut') {
+          scanCopy().then(function (got) {
+            safePaint(function () { paintScanMode(got, 'signedOut', {}); });
+          }, function () {});
+        }
+        sendResponse({ ok: false, error: error });
+        return;
+      }
+      chooseAccounts(info, sendResponse, again);
+    }, function () {
+      sendResponse({ ok: false, error: 'failed' });
+    });
   }
 
   // Group names, membership and handle folding. Same functions as
@@ -2580,6 +3150,10 @@
           );
           return true;
         }
+        if (msg.type === 'subscriptions.accounts') {
+          answerAccounts(msg, sendResponse);
+          return true;
+        }
         if (msg.type === 'subscriptions.scan') {
           scanSubscriptions().then(
             function (res) { sendResponse(res || { ok: false, error: 'failed' }); },
@@ -2651,6 +3225,9 @@
     disable,
     scanSubscriptions,
     showScanResult,
+    parseSubscriptionsHtml,
+    takeAccountPage,
+    openAccountPicker,
     fold,
     normalizeGroupName,
     groupNamesInList,

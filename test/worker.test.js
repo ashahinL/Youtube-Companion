@@ -2047,9 +2047,20 @@ export default async function run(t) {
         'overlayExit',
         'overlayExitShortcut',
         'overlayTitle',
+        'scanAccount',
+        'scanAccountChannels',
+        'scanAccountChannelsOne',
+        'scanAccountHere',
+        'scanAccountMore',
+        'scanAccountNone',
+        'scanAccountScan',
+        'scanAccounts',
         'scanAdded',
         'scanAddedOne',
+        'scanAnother',
+        'scanChoose',
         'scanDone',
+        'scanExpired',
         'scanFailed',
         'scanFound',
         'scanLoaded',
@@ -2832,7 +2843,13 @@ export default async function run(t) {
       },
     });
     mock.urlTabs = [{ id: 8, windowId: 4, url: 'https://www.youtube.com/feed/channels' }];
+    let accountAsks = 0;
     mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') {
+        accountAsks += 1;
+        if (accountAsks > 1) return { ok: false, error: 'done' };
+        return { ok: true, index: 0, current: 0, avatar: '' };
+      }
       if (message.type === 'subscriptions.scan') {
         return {
           ok: true,
@@ -2886,6 +2903,98 @@ export default async function run(t) {
     );
     await waitForIdle();
 
+    let otherAsks = 0;
+    const updatesBefore = mock.tabsUpdated.length;
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') {
+        otherAsks += 1;
+        if (otherAsks > 1) return { ok: false, error: 'done' };
+        return { ok: true, index: 1, current: 0, avatar: 'https://yt3.ggpht.com/pic' };
+      }
+      if (message.type === 'subscriptions.scan') return { ok: true, channels: [] };
+      return { ok: true };
+    };
+    const otherAccount = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'a different account is opened before the scan',
+      otherAccount.ok === true
+        && mock.tabsUpdated.slice(updatesBefore).some((row) => row.url === 'https://www.youtube.com/feed/channels?authuser=1'),
+      JSON.stringify(mock.tabsUpdated.slice(updatesBefore)),
+    );
+    t.check(
+      'the result names that account',
+      mock.messagesSent.some((row) => row.message?.type === 'subscriptions.result'
+        && row.message.account === 1
+        && row.message.avatar === 'https://yt3.ggpht.com/pic'
+        && !row.message.error),
+      JSON.stringify(mock.messagesSent.map((row) => row.message)),
+    );
+    await waitForIdle();
+
+    let sameAsks = 0;
+    const sameBefore = mock.tabsUpdated.length;
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') {
+        sameAsks += 1;
+        if (sameAsks > 1) return { ok: false, error: 'done' };
+        return { ok: true, index: 0, current: 0 };
+      }
+      if (message.type === 'subscriptions.scan') return { ok: true, channels: [] };
+      return { ok: true };
+    };
+    const sameAccount = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'the account already open is not navigated',
+      sameAccount.ok === true
+        && !mock.tabsUpdated.slice(sameBefore).some((row) => row.url && String(row.url).includes('authuser=')),
+      JSON.stringify(mock.tabsUpdated.slice(sameBefore)),
+    );
+    await waitForIdle();
+
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') return { ok: true, index: 10, current: 0 };
+      return { ok: true };
+    };
+    const badAccount = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'an account number past 9 is refused',
+      badAccount.ok === false && badAccount.error === 'failed',
+      JSON.stringify(badAccount),
+    );
+
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    const pickTimers = [];
+    globalThis.setTimeout = (fn, ms) => {
+      if (ms === 4 * 60 * 1000) {
+        pickTimers.push(fn);
+        return { pick: pickTimers.length };
+      }
+      return realSetTimeout(fn, ms);
+    };
+    globalThis.clearTimeout = (id) => {
+      if (id && id.pick) return;
+      return realClearTimeout(id);
+    };
+    mock.onTabMessage = () => new Promise(() => {});
+    const silentMessages = mock.messagesSent.length;
+    const silentImport = handleMessage({ type: 'importFromYouTube' });
+    try {
+      for (let i = 0; i < 30 && pickTimers.length === 0; i++) await Promise.resolve();
+      t.check('a silent tab schedules the account cap', pickTimers.length === 1, String(pickTimers.length));
+      pickTimers[0]();
+      const silent = await silentImport;
+      t.check(
+        'the account wait ends at the cap without telling the tab',
+        silent.ok === false && silent.error === 'timeout'
+          && !mock.messagesSent.slice(silentMessages).some((row) => row.message?.type === 'subscriptions.result'),
+        JSON.stringify(silent),
+      );
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    }
+
     mock.onTabMessage = async () => ({ ok: false, error: 'signedOut' });
     const beforeFailedScan = (await readChannels()).length;
     const failedScan = await handleMessage({ type: 'importFromYouTube' });
@@ -2898,7 +3007,15 @@ export default async function run(t) {
     );
 
     mock.urlTabs = [];
-    mock.onTabMessage = async () => ({ ok: true, channels: [] });
+    let openAsks = 0;
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') {
+        openAsks += 1;
+        if (openAsks > 1) return { ok: false, error: 'done' };
+        return { ok: true, index: 0, current: 0 };
+      }
+      return { ok: true, channels: [] };
+    };
     const openedScan = await handleMessage({ type: 'importFromYouTube' });
     const openedTab = mock.tabsCreated[mock.tabsCreated.length - 1];
     t.check(

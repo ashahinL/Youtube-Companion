@@ -11,8 +11,10 @@ shipped yet waits under Unreleased. How a version ships:
   one to hide videos from other channels, or All to show everything again.
   Turn it off under Settings → My groups on YouTube.
 - Import your subscriptions straight from a YouTube tab you're signed in to.
-  **Import from YouTube** opens All subscriptions, reads the channels there,
-  and adds the ones you don't have yet. Nothing signs in, and nothing leaves
+  **Import from YouTube** opens All subscriptions. If more than one Google
+  account is signed in, you pick which one — each is shown with its picture
+  and how many channels it has. The extension reads that account's list and
+  adds the ones you don't have yet. Nothing signs in, and nothing leaves
   the device. A Google Takeout file is still there for when you're signed out.
 - With several YouTube tabs open, each one in the Player tab's list has a
   ↗ button that takes you straight to that tab, even in another window.

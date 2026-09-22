@@ -91,8 +91,11 @@ asks.
   tab. **No name search, no bulk paste.** Typing in either box only filters.
 - **Import from YouTube**: the popup and the welcome page open the signed-in
   YouTube tab on `/feed/channels` and read the subscription list there, on
-  the device, with no sign-in of ours. Google Takeout's `subscriptions.csv`
-  stays on the welcome page for people who are signed out. Only channel ids,
+  the device, with no sign-in of ours. When more than one Google account is
+  signed in, the person picks which account to read; an account with no
+  subscriptions is shown but not scanned. One account with subscriptions is
+  read without an extra click. Google Takeout's `subscriptions.csv` stays
+  on the welcome page for people who are signed out. Only channel ids,
   titles and handles are kept. Imported channels start unseeded, so their
   first check is silent; pictures fill in a few per check.
 - **Welcome page** opens once on a fresh install, never on an update: import
@@ -235,6 +238,12 @@ Most live as comments at the line they protect. These span files or tools:
   `videoId` is there 210 times on nested endpoint objects, so harvesting it
   returns each video several times. `parseChannelVideos` reads the rows when a
   channel's feed fails.
+- **Plain youtube.com is not the first Google account.** With several
+  accounts signed in, the tab can open on a later one (`SESSION_INDEX` was
+  1 on a browser whose first account held the real list).
+  `/feed/channels?authuser=N` selects account N. Past the last account
+  YouTube answers 200 and falls back to account 0, so a `SESSION_INDEX`
+  that is not N is the end of the list, not an error.
 - **Subscription shelves on `/feed/channels` are translated and have no
   stable id.** Take every `ytd-channel-renderer` whose
   `.data.subscriptionButton.subscribed` is true. Matching the heading

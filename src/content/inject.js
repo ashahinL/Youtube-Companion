@@ -31,6 +31,7 @@
     // Not player methods: read-only page data, answered without the player.
     collaborators: 0,
     subscribedChannels: 0,
+    sessionIndex: 0,
   };
 
   const MAX_COLLABORATORS = 10;
@@ -270,6 +271,35 @@
     }
   }
 
+  function coerceSessionIndex(value) {
+    if (typeof value === 'number' && isFinite(value) && value >= 0 && Math.floor(value) === value) {
+      return value;
+    }
+    if (typeof value === 'string' && /^\d+$/.test(value)) return Number(value);
+    return null;
+  }
+
+  // ytcfg is the page's own object. The isolated world cannot see it, and
+  // plain youtube.com is not always account 0 (docs/youtube.md).
+  function readSessionIndex() {
+    try {
+      const cfg = root.ytcfg;
+      if (!cfg || typeof cfg !== 'object') return null;
+      if (typeof cfg.get === 'function') {
+        const fromGet = coerceSessionIndex(cfg.get('SESSION_INDEX'));
+        if (fromGet != null) return fromGet;
+      }
+      const data = cfg.data_;
+      if (data && typeof data === 'object') {
+        const fromData = coerceSessionIndex(data.SESSION_INDEX);
+        if (fromData != null) return fromData;
+      }
+    } catch (err) {
+      return null;
+    }
+    return null;
+  }
+
   function postToPage(msg) {
     try {
       win.postMessage(msg, PAGE_ORIGIN);
@@ -355,6 +385,10 @@
         reply(req.id, { ok: true, result: readSubscribedChannels() });
         return;
       }
+      if (req.method === 'sessionIndex') {
+        reply(req.id, { ok: true, result: readSessionIndex() });
+        return;
+      }
       const player = getPlayer();
       if (!player || typeof player[req.method] !== 'function') {
         reply(req.id, { ok: false, error: 'no player' });
@@ -395,6 +429,7 @@
     readRequest,
     readCollaborators,
     readSubscribedChannels,
+    readSessionIndex,
     onMessage,
     getToken: function () { return adopted; },
   };
