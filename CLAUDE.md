@@ -82,7 +82,10 @@ asks.
   only while a channel is in it. Rename and delete live in the Groups sheet:
   renaming onto an existing name merges the two, and delete asks inline.
   There is no Settings screen. At most 20 groups, 8 on one channel, 24 characters a name.
-  Groups ride along in backups.
+  Groups ride along in backups. The same groups show as chips on YouTube's
+  own `/feed/subscriptions` page (a Settings switch, on by default); a chip
+  hides the cards of channels outside it, matched by handle, then by name.
+  Its choice is its own key, not the popup's Feeds chip.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
   tab. **No name search, no bulk paste.** Typing in either box only filters.

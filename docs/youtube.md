@@ -295,6 +295,12 @@ it scrolls into view. The renderer's own `#title-container` is `hidden`.
 - Hiding cards shortens the page, which brings the continuation sentinel into
   view and makes YouTube fetch the next page by itself. That is the whole
   auto-fill mechanism — it needs a round cap, not a scroll.
+- **Earlier pages stay in the document.** Measured 2026-09-22: after
+  opening Home and then Subscriptions from the side menu, the page held two
+  `ytd-browse`, `page-subtype="home"` (`hidden`) and
+  `page-subtype="subscriptions"`, each with its own `ytd-rich-grid-renderer`.
+  `document.querySelector('ytd-rich-grid-renderer')` returned Home's. Find
+  the grid under `ytd-browse[page-subtype="subscriptions"]`.
 
 **`/feed/channels`** ("All subscriptions") is the list to import. It held 40
 `ytd-channel-renderer` in 2 `ytd-item-section-renderer`, and scrolling to the

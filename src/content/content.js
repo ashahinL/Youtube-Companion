@@ -1,8 +1,9 @@
 /**
- * Isolated-world audio-mode engine, and the scan of the All subscriptions
- * page. Pins the player to 144p, covers the video, accounts listening
- * time, and tears the session down on one AbortSignal. Also tells the
- * worker when the main video ends, so a listen-later queue can advance.
+ * Isolated-world audio-mode engine, the scan of the All subscriptions
+ * page, and group chips on the subscriptions feed. Pins the player to
+ * 144p, covers the video, accounts listening time, and tears the session
+ * down on one AbortSignal. Also tells the worker when the main video
+ * ends, so a listen-later queue can advance.
  * Classic script: content scripts cannot use import.
  */
 
@@ -1712,6 +1713,844 @@
     }
   }
 
+  // Group names, membership and handle folding. Same functions as
+  // src/lib/view.js. This file is a classic script, so it cannot import them.
+  const GROUP_NAME_MAX = 24;
+  const GROUP_MAX_PER_CHANNEL = 8;
+
+  function fold(value) {
+    return String(value || '').normalize('NFKC').toLowerCase();
+  }
+
+  function normalizeGroupName(raw) {
+    const collapsed = String(raw ?? '').trim().replace(/\s+/g, ' ');
+    if (!collapsed) return '';
+    const chars = [...collapsed];
+    return chars.length > GROUP_NAME_MAX ? chars.slice(0, GROUP_NAME_MAX).join('') : collapsed;
+  }
+
+  function groupKey(name) {
+    const normalised = normalizeGroupName(name);
+    return normalised ? fold(normalised) : '';
+  }
+
+  function sanitizeChannelGroups(raw) {
+    if (!Array.isArray(raw)) return [];
+    const out = [];
+    const seen = new Set();
+    for (const item of raw) {
+      if (typeof item !== 'string') continue;
+      const name = normalizeGroupName(item);
+      if (!name) continue;
+      const key = fold(name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(name);
+      if (out.length >= GROUP_MAX_PER_CHANNEL) break;
+    }
+    return out;
+  }
+
+  function groupNamesInList(channels, locale) {
+    const names = [];
+    const seen = new Set();
+    for (const ch of channels || []) {
+      for (const name of sanitizeChannelGroups(ch?.groups)) {
+        const key = fold(name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        names.push(name);
+      }
+    }
+    const loc = locale === 'ar' ? 'ar' : locale === 'en' ? 'en' : undefined;
+    names.sort((a, b) => a.localeCompare(b, loc, { sensitivity: 'base' }));
+    return names;
+  }
+
+  function channelInGroup(ch, groupName) {
+    const key = groupKey(groupName);
+    if (!key) return false;
+    return sanitizeChannelGroups(ch?.groups).some((name) => fold(name) === key);
+  }
+
+  function resolvedFeedGroup(channels, raw) {
+    const key = fold(String(raw || '').trim());
+    if (!key) return '';
+    return groupNamesInList(channels).find((name) => fold(name) === key) || '';
+  }
+
+  function handleKey(handle) {
+    return fold(String(handle || '').replace(/^@/, ''));
+  }
+
+  // Not settings.feed.group. That key is the popup's Feeds chip, and
+  // picking a chip here must not move it.
+  const SUBS_PAGE_GROUP_KEY = 'subsPageGroup';
+  const SUBS_PATH = '/feed/subscriptions';
+  const SUBS_ROW_ID = 'ytc-subs-groups';
+  const SUBS_HIDDEN_CLASS = 'ytc-subs-hidden';
+  const SUBS_SPACER_CLASS = 'ytc-subs-spacer';
+  // Each continuation round is another fetch. Twelve matching cards, or
+  // ten shelves, is enough: the spacer then holds the sentinel below the
+  // fold so the rest loads only when the person scrolls. A narrow group
+  // would otherwise keep fetching until YouTube answers with a block page.
+  const SUBS_MIN_VISIBLE = 12;
+  const SUBS_MAX_ROUNDS = 10;
+
+  const subs = {
+    active: false,
+    channels: [],
+    locale: 'en',
+    selected: '',
+    rounds: 0,
+    brake: false,
+    painting: false,
+    storageBound: false,
+    resizeBound: false,
+    observer: null,
+    observerTarget: null,
+    waitObserver: null,
+  };
+  let subsGen = 0;
+  let subsWrite = 0;
+  let subsStarted = false;
+
+  function groupsOnYouTubeEnabled(settings) {
+    const feed = settings && typeof settings === 'object' ? settings.feed : null;
+    if (!feed || typeof feed !== 'object' || Array.isArray(feed)) return true;
+    if (!Object.prototype.hasOwnProperty.call(feed, 'groupsOnYouTube')) return true;
+    return !!feed.groupsOnYouTube;
+  }
+
+  function subsPathname() {
+    let path = pagePath();
+    if (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
+    return path;
+  }
+
+  function pageDocument() {
+    try {
+      if (root.document) return root.document;
+    } catch (err) {
+      // fall through
+    }
+    try {
+      return document;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function subsMatchNote(pack, count) {
+    const n = Math.max(0, Math.floor(Number(count) || 0));
+    return countMessage(pack, 'subsGroupsMatch', n);
+  }
+
+  function subsBrakeDue(visible, rounds) {
+    return visible >= SUBS_MIN_VISIBLE || rounds >= SUBS_MAX_ROUNDS;
+  }
+
+  function subsSpacerPx(docHeight, viewport) {
+    const view = Number(viewport);
+    const docH = Number(docHeight);
+    if (!Number.isFinite(view) || view <= 0) return 0;
+    if (!Number.isFinite(docH) || docH <= 0) return Math.round(view * 2);
+    return Math.max(0, Math.round(view * 2 - docH));
+  }
+
+  function parsePx(value) {
+    const n = parseFloat(value);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function tagNameOf(el) {
+    if (!el) return '';
+    return String(el.tagName || el.localName || '').toLowerCase();
+  }
+
+  function hasClass(el, name) {
+    if (!el || !el.classList || typeof el.classList.contains !== 'function') return false;
+    try { return el.classList.contains(name); } catch (err) { return false; }
+  }
+
+  function addClass(el, name) {
+    if (!el || hasClass(el, name) || !el.classList || typeof el.classList.add !== 'function') return;
+    try { el.classList.add(name); } catch (err) { /* swallow */ }
+  }
+
+  function removeClass(el, name) {
+    if (!hasClass(el, name) || typeof el.classList.remove !== 'function') return;
+    try { el.classList.remove(name); } catch (err) { /* swallow */ }
+  }
+
+  function nameKey(value) {
+    return fold(String(value || '').trim());
+  }
+
+  function handleFromHref(href) {
+    const raw = String(href || '').trim();
+    if (!raw) return '';
+    try {
+      const url = new URL(raw, PAGE_ORIGIN);
+      let head = url.pathname.split('/').filter(Boolean)[0] || '';
+      try { head = decodeURIComponent(head); } catch (err) { /* keep the raw segment */ }
+      if (head.charAt(0) !== '@') return '';
+      return handleKey(head);
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function linkHref(link) {
+    if (!link) return '';
+    try {
+      if (typeof link.getAttribute === 'function') {
+        const attr = link.getAttribute('href');
+        if (attr) return attr;
+      }
+    } catch (err) {
+      // fall through
+    }
+    return typeof link.href === 'string' ? link.href : '';
+  }
+
+  function cardChannelLink(card) {
+    if (!card || typeof card.querySelector !== 'function') return null;
+    try {
+      return card.querySelector('a[href^="/@"]');
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // The avatar link is often the first a[href^="/@"] and has no text.
+  // The name a person reads sits on the metadata line.
+  function cardVisibleName(card) {
+    if (!card || typeof card.querySelector !== 'function') return '';
+    let meta = null;
+    try {
+      meta = card.querySelector('yt-content-metadata-view-model a[href^="/@"]');
+    } catch (err) {
+      meta = null;
+    }
+    const metaText = meta ? String(meta.textContent || '').trim() : '';
+    if (metaText) return metaText;
+    const link = cardChannelLink(card);
+    return link ? String(link.textContent || '').trim() : '';
+  }
+
+  // A stored handle can stay empty until a later check fills it in. The
+  // card still shows the channel's name, so that is the fallback. A card
+  // with no channel link has nothing safe to match, so it stays hidden.
+  function cardInGroup(card, channels, groupName) {
+    const link = cardChannelLink(card);
+    if (!link) return false;
+    const handle = handleFromHref(linkHref(link));
+    const visible = nameKey(cardVisibleName(card));
+    const list = Array.isArray(channels) ? channels : [];
+    for (let i = 0; i < list.length; i++) {
+      const ch = list[i];
+      if (!channelInGroup(ch, groupName)) continue;
+      const stored = handleKey(ch && ch.handle);
+      if (stored) {
+        if (handle && stored === handle) return true;
+        continue;
+      }
+      if (visible && nameKey(ch && ch.title) === visible) return true;
+    }
+    return false;
+  }
+
+  function childElements(parent) {
+    if (!parent || !parent.children) return [];
+    const out = [];
+    const kids = parent.children;
+    for (let i = 0; i < kids.length; i++) out.push(kids[i]);
+    return out;
+  }
+
+  function applySubsFilter(contents, channels, groupName) {
+    const kids = childElements(contents);
+    const group = resolvedFeedGroup(channels, groupName);
+    let loaded = 0;
+    let visible = 0;
+    if (!group) {
+      for (let i = 0; i < kids.length; i++) removeClass(kids[i], SUBS_HIDDEN_CLASS);
+      for (let i = 0; i < kids.length; i++) {
+        if (tagNameOf(kids[i]) === 'ytd-rich-item-renderer') {
+          loaded += 1;
+          visible += 1;
+        }
+      }
+      return { visible: visible, loaded: loaded, filtered: false, group: '' };
+    }
+    for (let i = 0; i < kids.length; i++) {
+      const el = kids[i];
+      if (tagNameOf(el) !== 'ytd-rich-item-renderer') continue;
+      loaded += 1;
+      const show = cardInGroup(el, channels, group);
+      if (show) {
+        removeClass(el, SUBS_HIDDEN_CLASS);
+        visible += 1;
+      } else {
+        addClass(el, SUBS_HIDDEN_CLASS);
+      }
+    }
+    for (let i = 0; i < kids.length; i++) {
+      const el = kids[i];
+      if (tagNameOf(el) !== 'ytd-rich-section-renderer') continue;
+      let followed = false;
+      for (let j = i + 1; j < kids.length; j++) {
+        if (tagNameOf(kids[j]) === 'ytd-rich-section-renderer') break;
+        if (tagNameOf(kids[j]) === 'ytd-rich-item-renderer' && !hasClass(kids[j], SUBS_HIDDEN_CLASS)) {
+          followed = true;
+          break;
+        }
+      }
+      if (followed) removeClass(el, SUBS_HIDDEN_CLASS);
+      else addClass(el, SUBS_HIDDEN_CLASS);
+    }
+    return { visible: visible, loaded: loaded, filtered: true, group: group };
+  }
+
+  function findChild(contents, pred) {
+    const kids = childElements(contents);
+    for (let i = 0; i < kids.length; i++) {
+      if (pred(kids[i])) return kids[i];
+    }
+    return null;
+  }
+
+  function removeNode(node) {
+    if (!node || !node.parentNode || typeof node.parentNode.removeChild !== 'function') return;
+    try { node.parentNode.removeChild(node); } catch (err) { /* swallow */ }
+  }
+
+  function removeSubsSpacer(contents) {
+    if (!contents) return;
+    const spacer = findChild(contents, function (el) { return hasClass(el, SUBS_SPACER_CLASS); });
+    removeNode(spacer);
+  }
+
+  function readViewport() {
+    try {
+      const win = root.window || root;
+      const h = win && win.innerHeight;
+      if (typeof h === 'number' && h > 0) return h;
+    } catch (err) {
+      // swallow
+    }
+    return 0;
+  }
+
+  function applySpacerHeight(spacer) {
+    if (!spacer) return;
+    const doc = pageDocument();
+    const scroller = doc && (doc.scrollingElement || doc.documentElement);
+    const total = scroller && typeof scroller.scrollHeight === 'number' ? scroller.scrollHeight : 0;
+    const current = spacer.offsetHeight || parsePx(spacer.style && spacer.style.height) || 0;
+    const without = Math.max(0, total - current);
+    const px = subsSpacerPx(without, readViewport());
+    const next = px ? (px + 'px') : '0px';
+    if (!spacer.style) spacer.style = {};
+    if (spacer.style.height !== next) spacer.style.height = next;
+  }
+
+  // The sentinel loads the next shelf when it scrolls into view. Height
+  // placed after it would not move it, so the spacer sits in front of it.
+  function placeSubsSpacer(contents) {
+    if (!contents || typeof contents.insertBefore !== 'function') return null;
+    const doc = pageDocument();
+    if (!doc || typeof doc.createElement !== 'function') return null;
+    let spacer = findChild(contents, function (el) { return hasClass(el, SUBS_SPACER_CLASS); });
+    if (!spacer) {
+      spacer = doc.createElement('div');
+      spacer.className = SUBS_SPACER_CLASS;
+      if (typeof spacer.setAttribute === 'function') spacer.setAttribute('aria-hidden', 'true');
+    }
+    const sentinel = findChild(contents, function (el) {
+      return tagNameOf(el) === 'ytd-continuation-item-renderer';
+    });
+    if (sentinel) {
+      if (spacer.parentNode !== contents || spacer.nextSibling !== sentinel) {
+        contents.insertBefore(spacer, sentinel);
+      }
+    } else if (spacer.parentNode !== contents || contents.lastChild !== spacer) {
+      contents.appendChild(spacer);
+    }
+    applySpacerHeight(spacer);
+    return spacer;
+  }
+
+  function renderSubsContents(contents, channels, groupName, rounds, pack) {
+    const applied = applySubsFilter(contents, channels, groupName);
+    let brake = false;
+    let note = '';
+    if (!applied.group) {
+      removeSubsSpacer(contents);
+    } else {
+      brake = subsBrakeDue(applied.visible, rounds);
+      if (brake) placeSubsSpacer(contents);
+      else removeSubsSpacer(contents);
+      if (brake && applied.visible < SUBS_MIN_VISIBLE) note = subsMatchNote(pack, applied.visible);
+    }
+    return {
+      visible: applied.visible,
+      loaded: applied.loaded,
+      filtered: applied.filtered,
+      group: applied.group,
+      brake: brake,
+      note: note,
+    };
+  }
+
+  function findGrid() {
+    const doc = pageDocument();
+    if (!doc || typeof doc.querySelector !== 'function') return null;
+    // Home stays mounted, hidden, and its grid is the first one in the document.
+    try {
+      return doc.querySelector('ytd-browse[page-subtype="subscriptions"] ytd-rich-grid-renderer');
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function findContents() {
+    const grid = findGrid();
+    if (!grid) return null;
+    const kids = childElements(grid);
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i] && kids[i].id === 'contents') return kids[i];
+    }
+    return null;
+  }
+
+  function findChipRow() {
+    const grid = findGrid();
+    if (!grid) return null;
+    const kids = childElements(grid);
+    for (let i = 0; i < kids.length; i++) {
+      if (kids[i] && kids[i].id === SUBS_ROW_ID) return kids[i];
+    }
+    return null;
+  }
+
+  function chipLabel(name, pack) {
+    if (name) return name;
+    return messageOf(pack, 'subsGroupsAll');
+  }
+
+  function buildChipRow(names, selected, locale, pack) {
+    const doc = pageDocument();
+    if (!doc || typeof doc.createElement !== 'function') return null;
+    const row = doc.createElement('div');
+    row.id = SUBS_ROW_ID;
+    row.className = 'ytc-subs-groups';
+    const dir = locale === 'ar' ? 'rtl' : 'ltr';
+    const lang = locale === 'ar' ? 'ar' : 'en';
+    if (typeof row.setAttribute === 'function') {
+      row.setAttribute('dir', dir);
+      row.setAttribute('lang', lang);
+    }
+    const bar = doc.createElement('div');
+    bar.className = 'ytc-subs-groups__bar';
+    if (typeof bar.setAttribute === 'function') {
+      bar.setAttribute('role', 'group');
+      bar.setAttribute('aria-label', messageOf(pack, 'subsGroupsLabel'));
+    }
+    const chips = [{ name: '', label: chipLabel('', pack) }];
+    for (let i = 0; i < names.length; i++) chips.push({ name: names[i], label: names[i] });
+    for (let i = 0; i < chips.length; i++) {
+      const chip = chips[i];
+      const btn = doc.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ytc-subs-groups__chip';
+      btn.textContent = chip.label;
+      if (typeof btn.setAttribute === 'function') {
+        btn.setAttribute('data-group', chip.name);
+        btn.setAttribute('aria-pressed', chip.name === selected ? 'true' : 'false');
+      }
+      if (typeof btn.addEventListener === 'function') {
+        btn.addEventListener('click', function (ev) {
+          try {
+            if (ev && ev.preventDefault) ev.preventDefault();
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+          } catch (err) {
+            // swallow
+          }
+          chooseSubsGroup(chip.name);
+        });
+      }
+      bar.appendChild(btn);
+    }
+    const note = doc.createElement('p');
+    note.className = 'ytc-subs-groups__note';
+    if (typeof note.setAttribute === 'function') note.setAttribute('hidden', '');
+    row.appendChild(bar);
+    row.appendChild(note);
+    return row;
+  }
+
+  function paintPressed(row, selected) {
+    if (!row || !row.firstChild) return;
+    const buttons = childElements(row.firstChild);
+    const current = selected || '';
+    for (let i = 0; i < buttons.length; i++) {
+      const btn = buttons[i];
+      if (!btn || typeof btn.getAttribute !== 'function' || typeof btn.setAttribute !== 'function') continue;
+      const name = btn.getAttribute('data-group') || '';
+      btn.setAttribute('aria-pressed', name === current ? 'true' : 'false');
+    }
+  }
+
+  function paintSubsNote(row, text) {
+    if (!row) return;
+    const kids = childElements(row);
+    let note = null;
+    for (let i = 0; i < kids.length; i++) {
+      if (hasClass(kids[i], 'ytc-subs-groups__note')) note = kids[i];
+    }
+    if (!note) return;
+    if (!text) {
+      note.textContent = '';
+      if (typeof note.setAttribute === 'function') note.setAttribute('hidden', '');
+      return;
+    }
+    if (typeof note.removeAttribute === 'function') note.removeAttribute('hidden');
+    note.textContent = text;
+  }
+
+  function ensureChipRow(contents, pack) {
+    if (!contents || !contents.parentNode || typeof contents.parentNode.insertBefore !== 'function') return null;
+    const names = groupNamesInList(subs.channels, subs.locale);
+    const sig = subs.locale + '\n' + (messageOf(pack, 'subsGroupsAll') || '') + '\n' + names.join('\n');
+    let row = findChipRow();
+    if (!row || row._ytcSig !== sig) {
+      const fresh = buildChipRow(names, subs.selected, subs.locale, pack);
+      if (!fresh) return null;
+      fresh._ytcSig = sig;
+      if (row) removeNode(row);
+      contents.parentNode.insertBefore(fresh, contents);
+      row = fresh;
+    } else if (row.parentNode !== contents.parentNode || row.nextSibling !== contents) {
+      contents.parentNode.insertBefore(row, contents);
+    }
+    paintPressed(row, subs.selected);
+    return row;
+  }
+
+  function paintSubsNow(pack) {
+    if (subs.painting) return;
+    subs.painting = true;
+    try {
+      const contents = findContents();
+      if (!contents) return;
+      const rendered = renderSubsContents(
+        contents,
+        subs.channels,
+        subs.selected,
+        subs.rounds,
+        pack,
+      );
+      subs.brake = rendered.brake;
+      subs.selected = rendered.group;
+      const row = ensureChipRow(contents, pack);
+      if (row) paintSubsNote(row, rendered.note);
+    } catch (err) {
+      // swallow
+    } finally {
+      subs.painting = false;
+    }
+  }
+
+  // The pack is fetched once per language. A cached pack paints in this
+  // turn, so a burst of new cards is not dropped while a message is in flight.
+  function paintSubs() {
+    const locale = subs.locale;
+    const loc = locale === 'ar' ? 'ar' : 'en';
+    if (overlayByLocale[loc]) {
+      paintSubsNow(overlayByLocale[loc]);
+      return Promise.resolve();
+    }
+    return overlayPackFor(locale).then(function (pack) {
+      if (!subs.active || (subs.locale === 'ar' ? 'ar' : 'en') !== loc) return;
+      paintSubsNow(pack);
+    }, function () {});
+  }
+
+  function isForeignSubsNode(node) {
+    if (!node || node.nodeType !== 1) return false;
+    if (node.id === SUBS_ROW_ID) return false;
+    if (hasClass(node, SUBS_SPACER_CLASS)) return false;
+    return true;
+  }
+
+  function watchContents(contents) {
+    if (!contents) return;
+    const Ctor = root.MutationObserver;
+    if (typeof Ctor !== 'function') return;
+    if (subs.observer && subs.observerTarget === contents) return;
+    if (subs.observer) {
+      try { subs.observer.disconnect(); } catch (err) { /* swallow */ }
+      subs.observer = null;
+      subs.observerTarget = null;
+    }
+    let obs = null;
+    try {
+      obs = new Ctor(function (records) {
+        if (!subs.active || subs.painting) return;
+        let foreign = false;
+        const list = records || [];
+        for (let i = 0; i < list.length; i++) {
+          const nodes = list[i] && list[i].addedNodes;
+          if (!nodes) continue;
+          for (let j = 0; j < nodes.length; j++) {
+            if (isForeignSubsNode(nodes[j])) foreign = true;
+          }
+        }
+        if (foreign && subs.selected && !subs.brake) subs.rounds += 1;
+        paintSubs();
+      });
+      obs.observe(contents, { childList: true });
+      subs.observer = obs;
+      subs.observerTarget = contents;
+    } catch (err) {
+      subs.observer = null;
+      subs.observerTarget = null;
+    }
+  }
+
+  function watchForGrid() {
+    if (subs.waitObserver) return;
+    const Ctor = root.MutationObserver;
+    if (typeof Ctor !== 'function') return;
+    const doc = pageDocument();
+    const body = doc && doc.body;
+    if (!body) return;
+    let obs = null;
+    try {
+      obs = new Ctor(function () {
+        if (subsPathname() !== SUBS_PATH || !subs.active) {
+          try { obs.disconnect(); } catch (err) { /* swallow */ }
+          if (subs.waitObserver === obs) subs.waitObserver = null;
+          return;
+        }
+        const contents = findContents();
+        if (!contents) return;
+        try { obs.disconnect(); } catch (err) { /* swallow */ }
+        if (subs.waitObserver === obs) subs.waitObserver = null;
+        paintSubs();
+        watchContents(contents);
+      });
+      obs.observe(body, { childList: true, subtree: true });
+      subs.waitObserver = obs;
+    } catch (err) {
+      subs.waitObserver = null;
+    }
+  }
+
+  function onSubsResize() {
+    if (!subs.active || !subs.brake || !subs.selected) return;
+    const contents = findContents();
+    if (!contents) return;
+    const spacer = findChild(contents, function (el) { return hasClass(el, SUBS_SPACER_CLASS); });
+    if (spacer) applySpacerHeight(spacer);
+  }
+
+  function bindSubsResize() {
+    if (subs.resizeBound) return;
+    const win = root.window || root;
+    if (!win || typeof win.addEventListener !== 'function') return;
+    try {
+      win.addEventListener('resize', onSubsResize);
+      subs.resizeBound = true;
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function unbindSubsResize() {
+    if (!subs.resizeBound) return;
+    const win = root.window || root;
+    if (win && typeof win.removeEventListener === 'function') {
+      try { win.removeEventListener('resize', onSubsResize); } catch (err) { /* swallow */ }
+    }
+    subs.resizeBound = false;
+  }
+
+  function teardownSubsDom() {
+    subs.active = false;
+    subs.brake = false;
+    subs.rounds = 0;
+    subs.painting = false;
+    subs.selected = '';
+    if (subs.observer) {
+      try { subs.observer.disconnect(); } catch (err) { /* swallow */ }
+    }
+    subs.observer = null;
+    subs.observerTarget = null;
+    if (subs.waitObserver) {
+      try { subs.waitObserver.disconnect(); } catch (err) { /* swallow */ }
+    }
+    subs.waitObserver = null;
+    unbindSubsResize();
+    try {
+      const contents = findContents();
+      if (contents) {
+        applySubsFilter(contents, subs.channels, '');
+        removeSubsSpacer(contents);
+      }
+      removeNode(findChipRow());
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  async function readSubsStored() {
+    const empty = { channels: [], settings: null, selected: '' };
+    const ch = root.chrome;
+    if (!ch || !ch.storage || !ch.storage.local || typeof ch.storage.local.get !== 'function') return empty;
+    try {
+      const got = await ch.storage.local.get(['channels', 'settings', SUBS_PAGE_GROUP_KEY]);
+      return {
+        channels: got && Array.isArray(got.channels) ? got.channels : [],
+        settings: got ? got.settings : null,
+        selected: got && typeof got[SUBS_PAGE_GROUP_KEY] === 'string' ? got[SUBS_PAGE_GROUP_KEY] : '',
+      };
+    } catch (err) {
+      return empty;
+    }
+  }
+
+  function writeSubsGroup(name) {
+    const ch = root.chrome;
+    if (!ch || !ch.storage || !ch.storage.local || typeof ch.storage.local.set !== 'function') return;
+    const payload = {};
+    payload[SUBS_PAGE_GROUP_KEY] = name;
+    try {
+      const pending = ch.storage.local.set(payload);
+      if (pending && typeof pending.then === 'function') pending.then(function () {}, function () {});
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function chooseSubsGroup(name) {
+    const resolved = name ? resolvedFeedGroup(subs.channels, name) : '';
+    if (subs.active && resolved === subs.selected) return;
+    subsWrite += 1;
+    subs.selected = resolved;
+    subs.rounds = 0;
+    subs.brake = false;
+    const contents = findContents();
+    if (contents) removeSubsSpacer(contents);
+    if (subs.active) paintSubs();
+    writeSubsGroup(resolved);
+  }
+
+  async function refreshSubsGroups() {
+    const gen = ++subsGen;
+    const writeAt = subsWrite;
+    if (subsPathname() !== SUBS_PATH) {
+      teardownSubsDom();
+      return;
+    }
+    const stored = await readSubsStored();
+    if (gen !== subsGen) return;
+    if (subsPathname() !== SUBS_PATH) {
+      teardownSubsDom();
+      return;
+    }
+    const channels = stored.channels;
+    const settings = stored.settings;
+    subs.locale = localeFromSettings(settings, navigatorLanguage());
+    const names = groupNamesInList(channels, subs.locale);
+    // Off, or a list with no groups: the page stays as YouTube drew it.
+    if (!groupsOnYouTubeEnabled(settings) || names.length === 0) {
+      teardownSubsDom();
+      return;
+    }
+    subs.channels = channels;
+    if (writeAt === subsWrite) {
+      const resolved = resolvedFeedGroup(channels, stored.selected);
+      if (!subs.active || resolved !== subs.selected) {
+        if (resolved !== subs.selected) {
+          subs.rounds = 0;
+          subs.brake = false;
+        }
+        subs.selected = resolved;
+      }
+    }
+    subs.active = true;
+    await paintSubs();
+    const contents = findContents();
+    if (contents) {
+      if (subs.waitObserver) {
+        try { subs.waitObserver.disconnect(); } catch (err) { /* swallow */ }
+        subs.waitObserver = null;
+      }
+      watchContents(contents);
+    } else {
+      watchForGrid();
+    }
+    bindSubsResize();
+  }
+
+  function syncSubsPage() {
+    if (subsPathname() !== SUBS_PATH) {
+      teardownSubsDom();
+      return;
+    }
+    refreshSubsGroups();
+  }
+
+  function onSubsStorage(changes, area) {
+    try {
+      if (area !== 'local' || !changes) return;
+      if (subsPathname() !== SUBS_PATH) return;
+      const groupChange = changes[SUBS_PAGE_GROUP_KEY];
+      const channelsChange = changes.channels;
+      const settingsChange = changes.settings;
+      if (!groupChange && !channelsChange && !settingsChange) return;
+      if (groupChange && !channelsChange && !settingsChange) {
+        const next = typeof groupChange.newValue === 'string'
+          ? resolvedFeedGroup(subs.channels, groupChange.newValue)
+          : '';
+        if (next === subs.selected) return;
+      }
+      refreshSubsGroups();
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function bindSubsStorage() {
+    if (subs.storageBound) return;
+    const ch = root.chrome;
+    if (!ch || !ch.storage || !ch.storage.onChanged || typeof ch.storage.onChanged.addListener !== 'function') return;
+    try {
+      ch.storage.onChanged.addListener(onSubsStorage);
+      subs.storageBound = true;
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function startSubsGroups() {
+    if (subsStarted) return;
+    subsStarted = true;
+    const doc = pageDocument();
+    if (doc && typeof doc.addEventListener === 'function') {
+      try { doc.addEventListener('yt-navigate-finish', syncSubsPage); } catch (err) { /* swallow */ }
+    }
+    const win = root.window || root;
+    if (win && typeof win.addEventListener === 'function') {
+      try { win.addEventListener('popstate', syncSubsPage); } catch (err) { /* swallow */ }
+    }
+    bindSubsStorage();
+    syncSubsPage();
+  }
+
   function boot() {
     try {
       const win = root.window || root;
@@ -1776,6 +2615,7 @@
     }
     // The worker says whether this tab was opened in audio mode.
     requestAudioModeBoot();
+    try { startSubsGroups(); } catch (err) { /* swallow */ }
   }
 
   const api = {
@@ -1811,6 +2651,25 @@
     disable,
     scanSubscriptions,
     showScanResult,
+    fold,
+    normalizeGroupName,
+    groupNamesInList,
+    channelInGroup,
+    resolvedFeedGroup,
+    handleKey,
+    groupsOnYouTubeEnabled,
+    subsMatchNote,
+    subsBrakeDue,
+    subsSpacerPx,
+    applySubsFilter,
+    renderSubsContents,
+    refreshSubsGroups,
+    chooseSubsGroup,
+    syncSubsPage,
+    SUBS_PAGE_GROUP_KEY,
+    SUBS_HIDDEN_CLASS,
+    SUBS_MIN_VISIBLE,
+    SUBS_MAX_ROUNDS,
   };
 
   // Named API is for the Node suite only. A youtube.com script that can

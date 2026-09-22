@@ -323,6 +323,34 @@
     "message": "All",
     "description": "Chip and empty-state button that shows every channel's videos, not one group."
   },
+  "subsGroupsAll": {
+    "message": "All",
+    "description": "First chip on YouTube's subscriptions page. Shows every video."
+  },
+  "subsGroupsLabel": {
+    "message": "Groups",
+    "description": "Accessible name of the group chip row on YouTube's subscriptions page."
+  },
+  "subsGroupsMatch": {
+    "message": "$COUNT$ of the loaded videos match this group. Scroll to load more.",
+    "description": "Line under the group chips when more than one loaded video matches. $COUNT$ is how many. Scrolling loads more.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "subsGroupsMatchOne": {
+    "message": "$COUNT$ of the loaded videos matches this group. Scroll to load more.",
+    "description": "Line under the group chips when one loaded video matches. $COUNT$ is 1. Scrolling loads more.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "feedRefresh": {
     "message": "Refresh",
     "description": "Accessible name of the Feeds refresh control, and the label of the refresh button in the empty-feed state."
@@ -650,6 +678,14 @@
   "settingsShowShortsTitle": {
     "message": "Off hides shorts from the feed and from the toolbar badge.",
     "description": "Tooltip on the show-shorts switch."
+  },
+  "settingsGroupsOnYouTube": {
+    "message": "My groups on YouTube",
+    "description": "Switch that shows group chips on YouTube's subscriptions page."
+  },
+  "settingsGroupsOnYouTubeTitle": {
+    "message": "Puts your group chips on YouTube's subscriptions page.",
+    "description": "Tooltip on the switch that shows group chips on YouTube's subscriptions page."
   },
   "settingsKeys": {
     "message": "Keyboard shortcuts",

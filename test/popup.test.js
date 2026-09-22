@@ -809,6 +809,14 @@ export default async function run(t) {
   t.check('the old language select label key is gone', !('settingsLocale' in en) && !('settingsLocale' in ar));
   t.check('the old language select title key is gone', !('settingsLocaleTitle' in en) && !('settingsLocaleTitle' in ar));
   t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
+  const feedGroup = s.match(/<fieldset\b[^>]*\bid="settings-feed"[^>]*>[\s\S]*?<\/fieldset>/);
+  t.check(
+    'feed group has the YouTube groups switch',
+    !!feedGroup
+      && /data-setting="feed\.groupsOnYouTube"/.test(feedGroup[0])
+      && /data-i18n="settingsGroupsOnYouTube"/.test(feedGroup[0])
+      && /data-i18n-title="settingsGroupsOnYouTubeTitle"/.test(feedGroup[0]),
+  );
 
   // An on/off setting takes effect the moment it is clicked, so it wears a
   // switch. The one tick box left in the popup is the Feeds filter, which
@@ -816,13 +824,13 @@ export default async function run(t) {
   const settingBoxes = [...s.matchAll(/<input type="checkbox" data-setting="([^"]+)" \/>/g)].map((m) => m[1]);
   t.check(
     'every on/off setting is a switch',
-    settingBoxes.length === 5
+    settingBoxes.length === 6
       && settingBoxes.every((name) => new RegExp(`<span class="switch">\\s*<input type="checkbox" data-setting="${name.replace('.', '\\.')}"`).test(s)),
     JSON.stringify(settingBoxes),
   );
   t.check(
     'a switch row puts its label and its switch at opposite ends',
-    (s.match(/class="row row--switch"/g) || []).length === 5
+    (s.match(/class="row row--switch"/g) || []).length === 6
       && /\.row--switch\s*\{[^}]*justify-content:\s*space-between/.test(css),
   );
   // Sizing it down to a tick box would shrink the switch's hit area to 15px

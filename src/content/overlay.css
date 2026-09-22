@@ -340,3 +340,115 @@ html[dark] #ytc-scan-overlay {
   outline: 2px solid var(--ytc-scan-accent);
   outline-offset: 3px;
 }
+
+/* Group chips on /feed/subscriptions. Lengths are px because YouTube sets
+   the root font size to 10px, so rem would render small. The selected chip
+   is our purple so it reads as ours beside YouTube's own chips. */
+.ytc-subs-groups {
+  --ytc-subs-text: #0f0f0f;
+  --ytc-subs-text-dim: #606060;
+  --ytc-subs-text-dark: #f1f1f1;
+  --ytc-subs-text-dim-dark: #aaaaaa;
+  --ytc-subs-accent: #7c5cf0;
+  --ytc-subs-on-accent: #ffffff;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 8px 16px 4px;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--ytc-subs-text);
+}
+
+.ytc-subs-groups__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ytc-subs-groups__chip {
+  appearance: none;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  background-image: none;
+  box-shadow: none;
+  color: var(--ytc-subs-text);
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ytc-subs-groups__chip:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+html[dark] .ytc-subs-groups,
+html[dark] .ytc-subs-groups__chip {
+  color: var(--ytc-subs-text-dark);
+}
+
+html[dark] .ytc-subs-groups__chip {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+html[dark] .ytc-subs-groups__chip:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.ytc-subs-groups__chip[aria-pressed='true'],
+.ytc-subs-groups__chip[aria-pressed='true']:hover,
+html[dark] .ytc-subs-groups__chip[aria-pressed='true'],
+html[dark] .ytc-subs-groups__chip[aria-pressed='true']:hover {
+  background: var(--ytc-subs-accent);
+  color: var(--ytc-subs-on-accent);
+}
+
+.ytc-subs-groups__chip:focus-visible {
+  outline: 2px solid var(--ytc-subs-accent);
+  outline-offset: 2px;
+}
+
+.ytc-subs-groups__note {
+  margin: 8px 0 0;
+  color: var(--ytc-subs-text-dim);
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+html[dark] .ytc-subs-groups__note {
+  color: var(--ytc-subs-text-dim-dark);
+}
+
+.ytc-subs-groups__note[hidden] {
+  display: none;
+}
+
+/* YouTube sets display on these renderers. A class beats that only with
+   !important; an inline style would be overwritten on the next render. */
+ytd-rich-item-renderer.ytc-subs-hidden,
+ytd-rich-section-renderer.ytc-subs-hidden {
+  display: none !important;
+}
+
+.ytc-subs-spacer {
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  pointer-events: none;
+}

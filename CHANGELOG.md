@@ -7,6 +7,9 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- Your groups show up as chips on YouTube's own subscriptions page. Pick
+  one to hide videos from other channels, or All to show everything again.
+  Turn it off under Settings → My groups on YouTube.
 - Import your subscriptions straight from a YouTube tab you're signed in to.
   **Import from YouTube** opens All subscriptions, reads the channels there,
   and adds the ones you don't have yet. Nothing signs in, and nothing leaves

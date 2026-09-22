@@ -85,6 +85,10 @@ const OVERLAY_MESSAGE_KEYS = [
   'scanSignedOutFile',
   'scanFailed',
   'scanDone',
+  'subsGroupsAll',
+  'subsGroupsLabel',
+  'subsGroupsMatch',
+  'subsGroupsMatchOne',
 ];
 
 const ALARM_ALL = 'poll-all';

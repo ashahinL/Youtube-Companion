@@ -323,6 +323,34 @@
     "message": "الكل",
     "description": "Chip and empty-state button that shows every channel's videos, not one group."
   },
+  "subsGroupsAll": {
+    "message": "الكل",
+    "description": "First chip on YouTube's subscriptions page. Shows every video."
+  },
+  "subsGroupsLabel": {
+    "message": "المجموعات",
+    "description": "Accessible name of the group chip row on YouTube's subscriptions page."
+  },
+  "subsGroupsMatch": {
+    "message": "من الفيديوهات المحمّلة، $COUNT$ في هذه المجموعة. مرّر لتحميل المزيد.",
+    "description": "Line under the group chips on YouTube's subscriptions page. Arabic does not inflect the count. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "subsGroupsMatchOne": {
+    "message": "من الفيديوهات المحمّلة، $COUNT$ في هذه المجموعة. مرّر لتحميل المزيد.",
+    "description": "Same words as subsGroupsMatch. Arabic is not inflected. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
   "feedRefresh": {
     "message": "تحديث",
     "description": "Accessible name of the Feeds refresh control, and the label of the refresh button in the empty-feed state."
@@ -650,6 +678,14 @@
   "settingsShowShortsTitle": {
     "message": "الإيقاف يخفي المقاطع القصيرة من الموجز ومن شارة شريط الأدوات.",
     "description": "Tooltip on the show-shorts switch."
+  },
+  "settingsGroupsOnYouTube": {
+    "message": "مجموعاتي على يوتيوب",
+    "description": "Switch that shows group chips on YouTube's subscriptions page."
+  },
+  "settingsGroupsOnYouTubeTitle": {
+    "message": "يضع شرائح مجموعاتك في صفحة الاشتراكات على يوتيوب.",
+    "description": "Tooltip on the switch that shows group chips on YouTube's subscriptions page."
   },
   "settingsKeys": {
     "message": "اختصارات لوحة المفاتيح",

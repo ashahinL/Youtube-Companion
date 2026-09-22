@@ -136,6 +136,23 @@ export default async function run(t) {
   const ar = json('_locales/ar/messages.json');
   t.check('en has tabAudio', 'tabAudio' in en);
   t.check('ar has tabAudio', 'tabAudio' in ar);
+  t.check(
+    'en groups-on-YouTube label',
+    en.settingsGroupsOnYouTube?.message === 'My groups on YouTube',
+    en.settingsGroupsOnYouTube?.message,
+  );
+  t.check(
+    'en groups-on-YouTube title names the subscriptions page',
+    /subscriptions page/.test(en.settingsGroupsOnYouTubeTitle?.message || ''),
+    en.settingsGroupsOnYouTubeTitle?.message,
+  );
+  t.check(
+    'ar groups-on-YouTube strings exist',
+    typeof ar.settingsGroupsOnYouTube?.message === 'string'
+      && ar.settingsGroupsOnYouTube.message.length > 0
+      && typeof ar.settingsGroupsOnYouTubeTitle?.message === 'string'
+      && ar.settingsGroupsOnYouTubeTitle.message.length > 0,
+  );
   const enKeys = Object.keys(en).sort();
   const arKeys = Object.keys(ar).sort();
   t.check(

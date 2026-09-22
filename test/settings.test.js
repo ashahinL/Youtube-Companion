@@ -208,6 +208,35 @@ export default async function run(t) {
         feed: { ...DEFAULT_SETTINGS.feed, group: 1 },
       }).feed.group === '',
     );
+    t.check(
+      'groupsOnYouTube defaults on',
+      DEFAULT_SETTINGS.feed.groupsOnYouTube === true,
+    );
+    t.check(
+      'groupsOnYouTube 0 coerces to false',
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        feed: { ...DEFAULT_SETTINGS.feed, groupsOnYouTube: 0 },
+      }).feed.groupsOnYouTube === false,
+    );
+    t.check(
+      'groupsOnYouTube 1 coerces to true',
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        feed: { ...DEFAULT_SETTINGS.feed, groupsOnYouTube: 1 },
+      }).feed.groupsOnYouTube === true,
+    );
+    t.check(
+      'groupsOnYouTube false stays false',
+      clampSettings({
+        ...DEFAULT_SETTINGS,
+        feed: { ...DEFAULT_SETTINGS.feed, groupsOnYouTube: false },
+      }).feed.groupsOnYouTube === false,
+    );
+    t.check(
+      'a missing groupsOnYouTube stays on',
+      clampSettings({ feed: { showShorts: true } }).feed.groupsOnYouTube === true,
+    );
 
     t.section('clamp: audio.restoreQuality');
 
@@ -430,6 +459,10 @@ export default async function run(t) {
     t.check(
       'a later feed patch keeps group',
       keptGroup.feed.group === 'Podcasts' && keptGroup.feed.showShorts === true,
+    );
+    t.check(
+      'groupsOnYouTube stays on across a feed patch',
+      keptGroup.feed.groupsOnYouTube === true,
     );
 
     await writeSettings({ poll: { intervalMinutes: 45 } });

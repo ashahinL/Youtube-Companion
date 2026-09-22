@@ -50,6 +50,7 @@
       showShorts: false,
       favoritesOnly: false,
       group: '',
+      groupsOnYouTube: true,
     },
     ui: {
       locale: 'auto',

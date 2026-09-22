@@ -2060,6 +2060,10 @@ export default async function run(t) {
         'scanSkippedOne',
         'scanStay',
         'scanTitle',
+        'subsGroupsAll',
+        'subsGroupsLabel',
+        'subsGroupsMatch',
+        'subsGroupsMatchOne',
       ]),
       JSON.stringify(Object.keys(bootEn.overlay || {})),
     );

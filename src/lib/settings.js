@@ -28,6 +28,8 @@ export const DEFAULT_SETTINGS = {
     favoritesOnly: false,
     // '' is All. A name that is not on any channel is treated as All.
     group: '',
+    // Chips on youtube.com/feed/subscriptions. Off leaves that page alone.
+    groupsOnYouTube: true,
   },
   ui: {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
@@ -161,6 +163,7 @@ export function clampSettings(s) {
       showShorts: boolOf(feed, 'showShorts', d.feed.showShorts),
       favoritesOnly: boolOf(feed, 'favoritesOnly', d.feed.favoritesOnly),
       group: typeof feed.group === 'string' ? normalizeGroupName(feed.group) : d.feed.group,
+      groupsOnYouTube: boolOf(feed, 'groupsOnYouTube', d.feed.groupsOnYouTube),
     },
     ui: {
       // Anything outside the shipped locales follows the browser language.

@@ -757,7 +757,7 @@ export default async function run(t) {
 
   const overlayNoComments = overlayCss.replace(/\/\*[\s\S]*?\*\//g, '');
   const overlayTokenHex = new Set(
-    [...overlayNoComments.matchAll(/--ytc-(?:audio|scan)-[a-z-]+\s*:\s*(#[0-9a-fA-F]{3,8})/g)]
+    [...overlayNoComments.matchAll(/--ytc-(?:audio|scan|subs)-[a-z-]+\s*:\s*(#[0-9a-fA-F]{3,8})/g)]
       .map((m) => m[1].toLowerCase()),
   );
   const overlayStrayHex = (overlayNoComments.match(/#[0-9a-fA-F]{3,8}\b/g) || [])

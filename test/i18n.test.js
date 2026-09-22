@@ -232,6 +232,29 @@ export default async function run(t) {
     if (!countedPlural(entry.message)) continue;
     t.check(`${key} has a One sibling`, `${key}One` in en && `${key}One` in ar);
   }
+  t.check(
+    'settingsGroupsOnYouTube is translated',
+    en.settingsGroupsOnYouTube?.message === 'My groups on YouTube'
+      && en.settingsGroupsOnYouTube.message !== ar.settingsGroupsOnYouTube?.message
+      && en.settingsGroupsOnYouTubeTitle?.message !== ar.settingsGroupsOnYouTubeTitle?.message
+      && /subscriptions page/.test(en.settingsGroupsOnYouTubeTitle?.message || ''),
+    JSON.stringify({
+      en: en.settingsGroupsOnYouTube?.message,
+      ar: ar.settingsGroupsOnYouTube?.message,
+    }),
+  );
+  t.check(
+    'subscriptions chips name All, the row, and the match count',
+    en.subsGroupsAll?.message === 'All'
+      && en.subsGroupsLabel?.message === 'Groups'
+      && /\$COUNT\$ of the loaded videos match this group\. Scroll to load more\./.test(en.subsGroupsMatch?.message || '')
+      && /\$COUNT\$ of the loaded videos matches this group\. Scroll to load more\./.test(en.subsGroupsMatchOne?.message || '')
+      && ar.subsGroupsAll?.message === 'الكل'
+      && ar.subsGroupsLabel?.message === 'المجموعات'
+      && ar.subsGroupsMatch?.message === ar.subsGroupsMatchOne?.message
+      && /\$COUNT\$/.test(ar.subsGroupsMatch?.message || '')
+      && /مرّر لتحميل المزيد/.test(ar.subsGroupsMatch?.message || ''),
+  );
   t.check('en has audioSeek', 'audioSeek' in en && en.audioSeek.message.length > 0);
   t.check('ar has audioSeek', 'audioSeek' in ar && ar.audioSeek.message.length > 0);
   t.check(
