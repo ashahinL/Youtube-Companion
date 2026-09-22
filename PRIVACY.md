@@ -4,6 +4,9 @@ _Effective 13 September 2026._
 
 _Changes for 2.0 take effect when 2.0 is published._
 
+_Import from your signed-in YouTube tab, and your groups on YouTube's
+Subscriptions page, take effect when the next version is published._
+
 Companion for YouTube is a browser extension for Chrome and Edge. It has no
 server, no account and no analytics. This page says exactly what it touches.
 
@@ -24,10 +27,19 @@ Everything stays in your browser's extension storage, on your device:
 Nothing is copied off your device. Removing the extension deletes all of it.
 **Export** in Settings writes a file to your computer; nothing else sees it.
 
-**Import from YouTube** reads a `subscriptions.csv` file that you download
-from Google Takeout yourself. The extension reads it on your device and keeps
-only each channel's id and name. It does not sign in to Google, and the file
-is not sent anywhere.
+**Import from YouTube** runs in your own YouTube tab, only when you press it.
+It opens your All subscriptions page (`www.youtube.com/feed/channels`) there,
+signed in as you already are, and reads the channels listed on it. If more
+than one Google account is signed in to your browser, it loads that same page
+once for each account so you can choose one. For each account it shows only
+the account's picture and how many channels it follows, never its name or
+email address. The extension keeps only each imported channel's id, name and
+handle. It does not sign in to Google itself, and the list is not sent
+anywhere.
+
+If you are signed out of YouTube, a Google Takeout file works too: you
+download `subscriptions.csv` from Google Takeout yourself, and the extension
+reads it on your device and keeps only each channel's id and name.
 
 ## What it requests from the internet
 
@@ -38,6 +50,10 @@ is not sent anywhere.
 - **`i.ytimg.com`, `yt3.ggpht.com`, `yt3.googleusercontent.com`** — video
   thumbnails and channel pictures, loaded as images, including the channel
   picture on an alert.
+
+The one request made with your YouTube session is **Import from YouTube**
+(above): it reads your own subscriptions page from inside your YouTube tab,
+the way YouTube loads that page for you.
 
 It sends nothing to any other server, and it never sends your channel list,
 settings, listening totals or cover picture anywhere.
@@ -55,9 +71,18 @@ quality, cover the video and control playback. It reads the title and channel
 of the video you are playing to show them in the popup. That information stays
 on your device.
 
+When you press **Import from YouTube**, a script on your All subscriptions
+page reads the channels listed there, as described above.
+
+On YouTube's Subscriptions page, the extension shows your groups as buttons
+above the videos. To hide the videos of channels outside the group you pick,
+it reads the channel name and handle on each video and compares them with your
+list, on your device. Nothing is sent anywhere. A switch in Settings turns
+this off.
+
 ## What it does not do
 
-- No sign-in, no Google account, no API key.
+- No sign-in of its own and no API key. It never sees your Google password.
 - No analytics, no crash reporting, no ads, no tracking.
 - No selling or sharing of data — there is no data to share.
 - No reading of your browsing outside `www.youtube.com`.
@@ -77,7 +102,7 @@ happens on PayPal's or your bank's own service, under their privacy policies.
 | `notifications` | Telling you when a channel uploads. |
 | `activeTab` | Adding the channel of the tab you are on, only when you press **Add**. |
 | `declarativeNetRequestWithHostAccess` | YouTube rejects requests that come from an extension address. One rule sets the origin and referrer of this extension's own `www.youtube.com` requests to YouTube's, and touches no other request. |
-| `https://www.youtube.com/*` | Reading public channel data, and running audio mode on YouTube pages. |
+| `https://www.youtube.com/*` | Reading public channel data, running audio mode on YouTube pages, reading your All subscriptions page when you import, and showing your groups on YouTube's Subscriptions page. |
 
 ## Changes and contact
 

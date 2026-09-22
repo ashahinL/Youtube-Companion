@@ -69,13 +69,20 @@
   them on.
 - Type to filter by title or channel. Tick **Favourites only** to narrow it
   down.
+- Your groups also show as chips on YouTube's own Subscriptions page. Pick
+  one to see only that group's videos there. A Settings switch turns this
+  off. *(coming in the next version)*
 
 **Watchlist**
 - Add a channel by pasting its URL or `@handle`, or press **Add** with an
   empty box to add the channel of the tab you are on.
-- Bring all your YouTube subscriptions at once: download `subscriptions.csv`
-  from Google Takeout and pick it in the extension. No sign-in, and the file
-  stays on your device. *(coming in 2.0)*
+- Bring all your YouTube subscriptions at once: **Import from YouTube** reads
+  them from your signed-in YouTube tab. If several Google accounts are
+  signed in, you pick which one. Nothing is sent anywhere. *(coming in the
+  next version)*
+- Signed out of YouTube? Download `subscriptions.csv` from Google Takeout and
+  pick it on the welcome page instead. The file stays on your device.
+  *(coming in 2.0)*
 - On a YouTube channel or video you don't follow yet, the Player tab shows
   that channel with a **Follow** button. A video made by several channels
   lists each one, with a ✔ on those you already follow. *(coming in 2.0)*
@@ -123,9 +130,13 @@ There is no build step. The folder is the extension.
 
 ## Privacy
 
-- No sign-in, no Google account, no API key.
+- No sign-in of its own, no API key.
 - Channel and video data comes only from public `www.youtube.com` endpoints
   that anyone can open. Those requests go out without your YouTube cookies.
+- **Import from YouTube** reads your All subscriptions page inside your own
+  signed-in YouTube tab, only when you press it, and keeps each channel's
+  id, name and handle. The groups on YouTube's Subscriptions page compare
+  channel names on the page with your list, on your device.
 - Thumbnails and channel pictures load from YouTube's own image servers.
 - Your channels, feed, settings and stats stay in your browser's extension
   storage. Nothing is sent anywhere else. There are no analytics.
@@ -167,8 +178,8 @@ touch the network. `npm run shots` needs Chrome or Edge installed (or
 ```
 src/
   background/   service worker: scheduled checks, alerts, badge
-  content/      audio mode on youtube.com pages
-  lib/          YouTube parsing, storage, settings, backup, Takeout import, i18n
+  content/      audio mode, the subscription import and the group chips on youtube.com
+  lib/          YouTube parsing, storage, settings, backup, imports, i18n
   popup/        the popup: Audio, Feeds, Watchlist, Settings
   welcome/      the page opened on install
 _locales/       English and Arabic strings

@@ -19,8 +19,10 @@ Sibling of `../poppo-companion` and `../bigo-companion`. Same house shape:
 **no build step, no dependencies, plain ES modules.** What is in `src/` is what
 Chrome loads.
 
-Nothing is authenticated. No Google account, no API key, no OAuth. The feed
-only reads public `youtube.com` endpoints. Audio mode injects an isolated
+Nothing is authenticated by us. No API key, no OAuth, and the feed only reads
+public `youtube.com` endpoints, without cookies. The one use of the person's
+own YouTube session is Import from YouTube, which reads `/feed/channels`
+inside their signed-in tab, only when they press it. Audio mode injects an isolated
 content script on youtube.com to pin the player to 144p; `#movie_player`
 methods are reached through a MAIN-world bridge.
 
