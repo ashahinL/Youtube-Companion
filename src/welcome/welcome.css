@@ -172,6 +172,14 @@ a {
   line-height: 34px;
 }
 
+.step__sub {
+  margin: 22px 0 8px;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+
 .howto {
   margin: 0 0 18px;
   padding-inline-start: 22px;

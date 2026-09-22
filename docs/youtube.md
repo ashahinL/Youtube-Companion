@@ -272,3 +272,42 @@ to it in a browser by hand. The bullets under it were measured.
 Not measured yet: that `#movie_player` exists at `document_idle` on a fresh
 watch page, how much video has buffered by then, and that a short plays in the
 ordinary player at `/watch?v=`.
+
+## The subscriptions page and the All subscriptions page
+
+Measured in a signed-in browser on 2026-09-22, on an account with 40
+subscriptions.
+
+**`/feed/subscriptions`** is one `ytd-rich-grid-renderer`. Its
+`#contents` is `display: flex; flex-wrap: wrap` with the cards as direct
+children, so hiding a card with `display: none` reflows the grid without a
+gap. A first load held 103 `ytd-rich-item-renderer`, 2
+`ytd-rich-section-renderer` (the "Latest" divider and a shelf) and one
+`ytd-continuation-item-renderer`, the sentinel that loads the next page when
+it scrolls into view. The renderer's own `#title-container` is `hidden`.
+
+- **A card names its channel only by handle.** 98 of the 103 cards held an
+  `a[href^="/@"]`, inside `yt-content-metadata-view-model`; the other 5 had no
+  channel link at all. The card's `.data` is `{content, trackingParams,
+  onFocusEffect, rowIndex, colIndex}` and a walk of it nine levels deep found
+  **no `UC…` id anywhere**. So a filter on this page matches on the handle,
+  or on the channel name text, never on a channel id.
+- Hiding cards shortens the page, which brings the continuation sentinel into
+  view and makes YouTube fetch the next page by itself. That is the whole
+  auto-fill mechanism — it needs a round cap, not a scroll.
+
+**`/feed/channels`** ("All subscriptions") is the list to import. It held 40
+`ytd-channel-renderer` in 2 `ytd-item-section-renderer`, and scrolling to the
+bottom added none: the whole list arrived in the first response, and
+`ytInitialData` held no `continuationItemRenderer`.
+
+- **A row carries the channel id**: `.data.channelId`, with `.data.title
+  .simpleText` the name and an `a[href^="/@"]` the handle. Like the collab
+  owner line, `.data` is readable only from the page's own JavaScript world.
+- **The sections are not all subscriptions, and their headings are
+  translated.** The two shelves read "Purchased" (1 row) and "Subscribed"
+  (39). Neither `ytd-item-section-renderer.data` nor its `shelfRenderer` has a
+  `sectionIdentifier` or a `targetId` — only the translated
+  `shelfRenderer.title.runs[0].text`. The row itself is the language-free
+  test: `.data.subscriptionButton` reads `{"subscribed": true}` in both
+  shelves, so take every row where that is true and dedupe by `channelId`.

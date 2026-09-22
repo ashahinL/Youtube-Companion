@@ -957,6 +957,83 @@
       }
     }
   },
+  "scanTitle": {
+    "message": "Scanning your channels",
+    "description": "Headline of the overlay while subscriptions are read from the YouTube tab."
+  },
+  "scanStay": {
+    "message": "Do not close this tab",
+    "description": "Line under the scan headline."
+  },
+  "scanFound": {
+    "message": "channels found",
+    "description": "Label under the live count on the scan overlay."
+  },
+  "scanLoaded": {
+    "message": "Channels loaded ($COUNT$)",
+    "description": "Small line on the scan overlay while more rows are still loading. $COUNT$ is how many rows are on the page.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAdded": {
+    "message": "Added $COUNT$ channels",
+    "description": "Headline when the scan added more than one channel. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanAddedOne": {
+    "message": "Added $COUNT$ channel",
+    "description": "Headline when the scan added one channel. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanSkipped": {
+    "message": "$COUNT$ were already on your list",
+    "description": "Second line when some scanned channels were already on the list. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanSkippedOne": {
+    "message": "$COUNT$ was already on your list",
+    "description": "Second line when one scanned channel was already on the list. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1"
+      }
+    }
+  },
+  "scanNothing": {
+    "message": "Every channel is already on your list",
+    "description": "Headline when the scan added no channels."
+  },
+  "scanSignedOut": {
+    "message": "Sign in to YouTube to import your subscriptions",
+    "description": "Headline when the subscriptions page has no channel rows."
+  },
+  "scanSignedOutFile": {
+    "message": "A Google Takeout file works too.",
+    "description": "Second line of the signed-out scan overlay."
+  },
+  "scanFailed": {
+    "message": "Could not read your subscriptions",
+    "description": "Headline when the scan fails for any other reason."
+  },
+  "scanDone": {
+    "message": "Done",
+    "description": "Button that closes the YouTube tab after the scan finishes."
+  },
   "audioModeLabel": {
     "message": "Audio mode",
     "description": "Label next to the master audio-mode toggle on the Player tab."
@@ -1439,6 +1516,10 @@
     "message": "Pick subscriptions.csv from its subscriptions folder.",
     "description": "Takeout instructions, 5."
   },
+  "welcomeTakeoutHeading": {
+    "message": "Signed out of YouTube? Use a Google Takeout file.",
+    "description": "Heading above the Takeout steps, the way in when the YouTube tab is signed out."
+  },
   "welcomeImportButton": {
     "message": "Choose subscriptions.csv",
     "description": "Button that opens the file picker for the Takeout file."
@@ -1454,6 +1535,10 @@
   "welcomeImportBusy": {
     "message": "Reading the file…",
     "description": "Status while the Takeout file is imported."
+  },
+  "welcomeImportOpened": {
+    "message": "A YouTube tab is reading your subscriptions. The result shows in that tab.",
+    "description": "Status on the welcome page after Import from YouTube opens the scan. The counts are shown on the YouTube tab."
   },
   "welcomeImportAdded": {
     "message": "Added $COUNT$ channels. Their latest videos arrive over the next few minutes, with no alerts.",
@@ -1631,10 +1716,10 @@
   },
   "importFromYouTube": {
     "message": "Import from YouTube",
-    "description": "Popup button that opens the Takeout import on the welcome page."
+    "description": "Button that reads subscriptions from a signed-in YouTube tab."
   },
   "importFromYouTubeTitle": {
-    "message": "Bring your YouTube subscriptions across with a Google Takeout file. No sign-in.",
+    "message": "Read the channels you subscribe to from your signed-in YouTube tab. No file and no sign-in.",
     "description": "Tooltip of the Import from YouTube button."
   },
   "whatsNewTitleBare": {

@@ -1,9 +1,9 @@
 /**
- * Isolated-world audio-mode engine. Pins the player to 144p, covers the
- * video, accounts listening time, and tears the session down on one
- * AbortSignal. Also tells the worker when the main video ends, so a
- * listen-later queue can advance. Classic script: content scripts
- * cannot use import.
+ * Isolated-world audio-mode engine, and the scan of the All subscriptions
+ * page. Pins the player to 144p, covers the video, accounts listening
+ * time, and tears the session down on one AbortSignal. Also tells the
+ * worker when the main video ends, so a listen-later queue can advance.
+ * Classic script: content scripts cannot use import.
  */
 
 (function (root) {
@@ -1349,6 +1349,369 @@
     }
   }
 
+  const SCAN_OVERLAY_ID = 'ytc-scan-overlay';
+  const SCAN_ROW_WAIT_MS = 15000;
+  const SCAN_ROW_POLL_MS = 250;
+  const SCAN_SCROLL_WAIT_MS = 1200;
+  const SCAN_SCROLL_ROUNDS = 20;
+  let scanTask = null;
+
+  function pagePath() {
+    try {
+      if (root.location && typeof root.location.pathname === 'string') return root.location.pathname;
+    } catch (err) {
+      // fall through
+    }
+    try {
+      return String(location.pathname || '');
+    } catch (err) {
+      return '';
+    }
+  }
+
+  function channelRowCount() {
+    try {
+      if (!document || typeof document.querySelectorAll !== 'function') return 0;
+      const found = document.querySelectorAll('ytd-channel-renderer');
+      return found && typeof found.length === 'number' ? found.length : 0;
+    } catch (err) {
+      return 0;
+    }
+  }
+
+  function scrollToY(y) {
+    try {
+      const win = root.window || (typeof window !== 'undefined' ? window : null);
+      if (win && typeof win.scrollTo === 'function') win.scrollTo(0, y);
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function scrollToBottom() {
+    let height = 0;
+    try {
+      const scroller = document.scrollingElement || document.documentElement;
+      if (scroller && typeof scroller.scrollHeight === 'number') height = scroller.scrollHeight;
+    } catch (err) {
+      height = 0;
+    }
+    scrollToY(height);
+  }
+
+  function waitForChannelRow() {
+    return new Promise(function (resolve) {
+      const start = Date.now();
+      function poll() {
+        if (channelRowCount() > 0) {
+          resolve(true);
+          return;
+        }
+        if (Date.now() - start >= SCAN_ROW_WAIT_MS) {
+          resolve(false);
+          return;
+        }
+        setTimeout(poll, SCAN_ROW_POLL_MS);
+      }
+      poll();
+    });
+  }
+
+  function countMessage(pack, key, n) {
+    const count = Number(n) || 0;
+    const one = key + 'One';
+    const use = count === 1 && pack && typeof pack[one] === 'string' && pack[one] ? one : key;
+    return messageOf(pack, use, [String(count)]);
+  }
+
+  async function scanCopy() {
+    const settings = await readStoredSettings();
+    const locale = localeFromSettings(settings, navigatorLanguage());
+    let pack = null;
+    try {
+      pack = await overlayPackFor(locale);
+    } catch (err) {
+      pack = null;
+    }
+    return { locale: locale, pack: pack || {} };
+  }
+
+  function usableBackground(color) {
+    if (typeof color !== 'string') return '';
+    const value = color.trim().toLowerCase();
+    if (!value || value === 'transparent' || value === 'rgba(0, 0, 0, 0)') return '';
+    return color;
+  }
+
+  function channelLuminance(color) {
+    const match = /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/.exec(String(color));
+    if (!match) return null;
+    return (0.2126 * Number(match[1]) + 0.7152 * Number(match[2]) + 0.0722 * Number(match[3])) / 255;
+  }
+
+  function readPageBackground() {
+    try {
+      const view = root.getComputedStyle || (typeof getComputedStyle === 'function' ? getComputedStyle : null);
+      if (typeof view !== 'function') return '';
+      const nodes = [];
+      if (document.body) nodes.push(document.body);
+      try {
+        const app = document.querySelector('ytd-app');
+        if (app) nodes.push(app);
+      } catch (err) {
+        // swallow
+      }
+      if (document.documentElement) nodes.push(document.documentElement);
+      for (let i = 0; i < nodes.length; i++) {
+        const color = usableBackground(view(nodes[i]).backgroundColor);
+        if (color) return color;
+      }
+    } catch (err) {
+      return '';
+    }
+    return '';
+  }
+
+  function paintScanSurface(el) {
+    const color = readPageBackground();
+    const lum = color ? channelLuminance(color) : null;
+    if (!color || lum == null) return;
+    const dark = lum < 0.5;
+    try {
+      if (el.style) {
+        el.style.backgroundColor = color;
+        el.style.color = dark ? '#f1f1f1' : '#0f0f0f';
+        el.style.colorScheme = dark ? 'dark' : 'light';
+      }
+      if (dark) el.setAttribute('data-dark', '');
+      else el.removeAttribute('data-dark');
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function applyScanLocale(el, locale) {
+    const loc = locale === 'ar' ? 'ar' : 'en';
+    try {
+      el.setAttribute('dir', loc === 'ar' ? 'rtl' : 'ltr');
+      el.setAttribute('lang', loc);
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function setScanHidden(node, hidden) {
+    if (!node) return;
+    try {
+      if (hidden) node.setAttribute('hidden', '');
+      else node.removeAttribute('hidden');
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function onScanDone(ev) {
+    stopFaceEvent(ev);
+    try {
+      if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    } catch (err) {
+      // swallow
+    }
+    try {
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
+      Promise.resolve(ch.runtime.sendMessage({ type: 'subscriptions.close' })).then(
+        function () {},
+        function () {},
+      );
+    } catch (err) {
+      // swallow
+    }
+  }
+
+  function scanNode(className) {
+    const node = document.createElement('p');
+    node.className = className;
+    return node;
+  }
+
+  function ensureScanOverlay(got) {
+    let el = null;
+    try { el = document.getElementById(SCAN_OVERLAY_ID); } catch (err) { el = null; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = SCAN_OVERLAY_ID;
+      const spinner = document.createElement('div');
+      spinner.className = 'ytc-scan-spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      const title = document.createElement('h1');
+      title.className = 'ytc-scan-title';
+      title.setAttribute('role', 'status');
+      const sub = scanNode('ytc-scan-sub');
+      const count = scanNode('ytc-scan-count');
+      const label = document.createElement('span');
+      label.className = 'ytc-scan-count-label';
+      const num = document.createElement('span');
+      num.className = 'ytc-scan-num';
+      count.appendChild(label);
+      count.appendChild(num);
+      const loaded = scanNode('ytc-scan-loaded');
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ytc-scan-done';
+      btn.addEventListener('click', onScanDone);
+      el.appendChild(spinner);
+      el.appendChild(title);
+      el.appendChild(sub);
+      el.appendChild(count);
+      el.appendChild(loaded);
+      el.appendChild(btn);
+      const parent = document.documentElement || document.body;
+      if (parent && typeof parent.appendChild === 'function') parent.appendChild(el);
+    }
+    applyScanLocale(el, got && got.locale);
+    paintScanSurface(el);
+    return el;
+  }
+
+  function paintScanProgress(got, n, paging) {
+    let el = null;
+    try { el = document.getElementById(SCAN_OVERLAY_ID); } catch (err) { el = null; }
+    if (!el || typeof el.querySelector !== 'function') return;
+    const count = Math.max(0, Number(n) || 0);
+    const num = el.querySelector('.ytc-scan-num');
+    const label = el.querySelector('.ytc-scan-count-label');
+    const loaded = el.querySelector('.ytc-scan-loaded');
+    const pack = got && got.pack;
+    if (num) num.textContent = String(count);
+    if (label) label.textContent = messageOf(pack, 'scanFound');
+    if (loaded) loaded.textContent = messageOf(pack, 'scanLoaded', [String(count)]);
+    setScanHidden(loaded, !paging);
+  }
+
+  function paintScanMode(got, mode, info) {
+    const el = ensureScanOverlay(got);
+    if (!el || typeof el.querySelector !== 'function') return;
+    const pack = got && got.pack;
+    const title = el.querySelector('.ytc-scan-title');
+    const sub = el.querySelector('.ytc-scan-sub');
+    const count = el.querySelector('.ytc-scan-count');
+    const loaded = el.querySelector('.ytc-scan-loaded');
+    const spinner = el.querySelector('.ytc-scan-spinner');
+    const btn = el.querySelector('.ytc-scan-done');
+    const scanning = mode === 'scanning';
+    setScanHidden(spinner, !scanning);
+    setScanHidden(count, !scanning);
+    setScanHidden(loaded, true);
+    setScanHidden(btn, scanning);
+    if (btn) btn.textContent = messageOf(pack, 'scanDone');
+    if (mode === 'scanning') {
+      if (title) title.textContent = messageOf(pack, 'scanTitle');
+      if (sub) sub.textContent = messageOf(pack, 'scanStay');
+      setScanHidden(sub, false);
+      paintScanProgress(got, channelRowCount(), false);
+      return;
+    }
+    if (mode === 'added') {
+      const added = Number(info && info.added) || 0;
+      const skipped = Number(info && info.skipped) || 0;
+      if (title) title.textContent = countMessage(pack, 'scanAdded', added);
+      if (sub) sub.textContent = skipped ? countMessage(pack, 'scanSkipped', skipped) : '';
+      setScanHidden(sub, !skipped);
+      return;
+    }
+    if (mode === 'nothing') {
+      if (title) title.textContent = messageOf(pack, 'scanNothing');
+      if (sub) sub.textContent = '';
+      setScanHidden(sub, true);
+      return;
+    }
+    if (mode === 'signedOut') {
+      if (title) title.textContent = messageOf(pack, 'scanSignedOut');
+      if (sub) sub.textContent = messageOf(pack, 'scanSignedOutFile');
+      setScanHidden(sub, false);
+      return;
+    }
+    if (title) title.textContent = messageOf(pack, 'scanFailed');
+    if (sub) sub.textContent = '';
+    setScanHidden(sub, true);
+  }
+
+  function safePaint(fn) {
+    try { fn(); } catch (err) { /* A DOM change must not drop the list. */ }
+  }
+
+  async function loadRemainingRows(got) {
+    try {
+      for (let round = 0; round < SCAN_SCROLL_ROUNDS; round++) {
+        const before = channelRowCount();
+        safePaint(function () { paintScanProgress(got, before, true); });
+        scrollToBottom();
+        await wait(SCAN_SCROLL_WAIT_MS);
+        const after = channelRowCount();
+        safePaint(function () { paintScanProgress(got, after, true); });
+        if (after <= before) break;
+      }
+    } finally {
+      scrollToTop();
+      safePaint(function () { paintScanProgress(got, channelRowCount(), false); });
+    }
+  }
+
+  function scrollToTop() {
+    scrollToY(0);
+  }
+
+  async function runSubscriptionScan() {
+    if (pagePath() !== '/feed/channels') return { ok: false, error: 'wrongPage' };
+    const got = await scanCopy();
+    safePaint(function () { paintScanMode(got, 'scanning', {}); });
+    const ready = await waitForChannelRow();
+    if (!ready) {
+      safePaint(function () { paintScanMode(got, 'signedOut', {}); });
+      return { ok: false, error: 'signedOut' };
+    }
+    await loadRemainingRows(got);
+    await ensureBridge();
+    const channels = await callPlayer('subscribedChannels', []);
+    if (!Array.isArray(channels)) {
+      safePaint(function () { paintScanMode(got, 'failed', {}); });
+      return { ok: false, error: 'failed' };
+    }
+    safePaint(function () { paintScanProgress(got, channels.length, false); });
+    return { ok: true, channels: channels };
+  }
+
+  function scanSubscriptions() {
+    if (scanTask) return scanTask;
+    scanTask = runSubscriptionScan().then(
+      function (res) {
+        scanTask = null;
+        return res || { ok: false, error: 'failed' };
+      },
+      function () {
+        scanTask = null;
+        return { ok: false, error: 'failed' };
+      },
+    );
+    return scanTask;
+  }
+
+  async function showScanResult(msg) {
+    try {
+      const got = await scanCopy();
+      const error = msg && typeof msg.error === 'string' ? msg.error : '';
+      const added = Number(msg && msg.added) || 0;
+      const skipped = Number(msg && msg.skipped) || 0;
+      if (error === 'signedOut') paintScanMode(got, 'signedOut', {});
+      else if (error) paintScanMode(got, 'failed', {});
+      else if (added > 0) paintScanMode(got, 'added', { added: added, skipped: skipped });
+      else paintScanMode(got, 'nothing', {});
+    } catch (err) {
+      // Done can still close the tab if a later paint works.
+    }
+  }
+
   function boot() {
     try {
       const win = root.window || root;
@@ -1375,6 +1738,20 @@
           controlPlayer(msg).then(
             function (res) { sendResponse(res || { ok: false }); },
             function () { sendResponse({ ok: false }); },
+          );
+          return true;
+        }
+        if (msg.type === 'subscriptions.scan') {
+          scanSubscriptions().then(
+            function (res) { sendResponse(res || { ok: false, error: 'failed' }); },
+            function () { sendResponse({ ok: false, error: 'failed' }); },
+          );
+          return true;
+        }
+        if (msg.type === 'subscriptions.result') {
+          showScanResult(msg).then(
+            function () { sendResponse({ ok: true }); },
+            function () { sendResponse({ ok: true }); },
           );
           return true;
         }
@@ -1432,6 +1809,8 @@
     controlPlayer,
     enable,
     disable,
+    scanSubscriptions,
+    showScanResult,
   };
 
   // Named API is for the Node suite only. A youtube.com script that can

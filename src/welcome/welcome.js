@@ -1,8 +1,8 @@
 /**
- * Welcome page, opened once on a fresh install and again from the popup's
- * Import from YouTube buttons: bring channels across from a Takeout file, try
- * audio mode, pin the icon. Like the popup it never fetches; the worker reads
- * the file and checks the channels.
+ * Welcome page, opened once on a fresh install: bring channels across from
+ * the signed-in YouTube tab, or from a Takeout file when signed out, try
+ * audio mode, pin the icon. Like the popup it never fetches; the worker
+ * reads the list and checks the channels.
  */
 
 import {
@@ -57,6 +57,7 @@ function render() {
   statusEl.className = status.kind ? `status status--${status.kind}` : 'status';
 
   el('welcome-import').disabled = busy;
+  el('welcome-import-youtube').disabled = busy;
   el('welcome-import-spinner').hidden = !busy;
 
   for (const [id, key, keys] of [
@@ -82,6 +83,29 @@ async function applyLanguage(setting) {
 function setStatus(key, subs = [], kind = '') {
   status = { key, subs, kind };
   render();
+}
+
+async function importFromYouTubeTab() {
+  if (busy) return;
+  busy = true;
+  // The result is drawn on the YouTube tab. This line only says that it opened.
+  setStatus('welcomeImportOpened');
+  try {
+    const res = await send({ type: 'importFromYouTube' });
+    if (!res || res.ok === false) {
+      const error = res && res.error;
+      if (error === 'no tab' || error === 'no script') {
+        setStatus('welcomeImportFailed', [String(error)], 'error');
+        return;
+      }
+    }
+    setStatus('welcomeImportOpened', [], 'ok');
+  } catch (err) {
+    setStatus('welcomeImportFailed', [String(err?.message || err)], 'error');
+  } finally {
+    busy = false;
+    render();
+  }
 }
 
 async function importFile(file) {
@@ -153,6 +177,9 @@ function watchPinned() {
 
 function bind() {
   const fileInput = el('welcome-import-file');
+  el('welcome-import-youtube').addEventListener('click', () => {
+    void importFromYouTubeTab();
+  });
   el('welcome-import').addEventListener('click', () => fileInput.click());
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
@@ -183,6 +210,6 @@ void (async () => {
   }
   await applyLanguage(setting);
   applyTheme(theme);
-  if (location.hash === '#import') el('welcome-import').focus();
+  if (location.hash === '#import') el('welcome-import-youtube').focus();
   if (typeof chrome.action?.getUserSettings === 'function' && !(await checkPinned())) watchPinned();
 })();

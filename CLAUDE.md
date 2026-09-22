@@ -86,11 +86,12 @@ asks.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
   watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
   tab. **No name search, no bulk paste.** Typing in either box only filters.
-- **Import from YouTube**: the one file import is Google Takeout's
-  `subscriptions.csv`, picked on the welcome page (the popup's Import from
-  YouTube buttons open it there). Only channel ids and titles are read, on the
-  device, and nothing signs in. Imported channels start unseeded, so their
-  first check is silent; pictures and handles fill in a few per check.
+- **Import from YouTube**: the popup and the welcome page open the signed-in
+  YouTube tab on `/feed/channels` and read the subscription list there, on
+  the device, with no sign-in of ours. Google Takeout's `subscriptions.csv`
+  stays on the welcome page for people who are signed out. Only channel ids,
+  titles and handles are kept. Imported channels start unseeded, so their
+  first check is silent; pictures fill in a few per check.
 - **Welcome page** opens once on a fresh install, never on an update: import
   or follow channels, try audio mode, pin the icon.
 - **What's new page** (`src/whatsnew/`) is the update half of that. **No tab
@@ -231,6 +232,12 @@ Most live as comments at the line they protect. These span files or tools:
   `videoId` is there 210 times on nested endpoint objects, so harvesting it
   returns each video several times. `parseChannelVideos` reads the rows when a
   channel's feed fails.
+- **Subscription shelves on `/feed/channels` are translated and have no
+  stable id.** Take every `ytd-channel-renderer` whose
+  `.data.subscriptionButton.subscribed` is true. Matching the heading
+  "Subscribed" drops the list in Arabic, and it drops a purchased channel
+  the account is still subscribed to. `.data` is only readable from the
+  MAIN world, the same as a collab video's channel list.
 - **A collab video's channels are not in the DOM.** Its owner line is one
   link with no address, "A and B", or "A and 2 more" with three or more
   channels, so only the first name can be checked against it; the ids exist only in the owner renderer's

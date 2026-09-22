@@ -16,6 +16,7 @@ import {
   isPushback,
   isInnertubeForbidden,
   isAvatarUrl,
+  isChannelId,
 } from '../lib/yt.js';
 import { readSettings, writeSettings, onSettingsChanged, migrateAudioCover } from '../lib/settings.js';
 import { parseBackup, mergeBackup } from '../lib/backup.js';
@@ -67,7 +68,24 @@ import {
   WHATS_NEW_VERSION,
 } from '../lib/view.js';
 
-const OVERLAY_MESSAGE_KEYS = ['overlayTitle', 'overlayExit', 'overlayExitShortcut'];
+const OVERLAY_MESSAGE_KEYS = [
+  'overlayTitle',
+  'overlayExit',
+  'overlayExitShortcut',
+  'scanTitle',
+  'scanStay',
+  'scanFound',
+  'scanLoaded',
+  'scanAdded',
+  'scanAddedOne',
+  'scanSkipped',
+  'scanSkippedOne',
+  'scanNothing',
+  'scanSignedOut',
+  'scanSignedOutFile',
+  'scanFailed',
+  'scanDone',
+];
 
 const ALARM_ALL = 'poll-all';
 const ALARM_FAV = 'poll-fav';
@@ -97,19 +115,27 @@ const HEADER_RETRY_MS = 24 * 60 * 60_000;
 // API call, and a fetch in flight is neither. A check of hundreds of channels
 // runs for minutes, so it makes a trivial API call more often than that.
 const KEEPALIVE_MS = 25_000;
+// A subscription scan waits on a tab for longer than that too.
+const SCAN_KEEPALIVE_MS = 20_000;
+const SCAN_READY_MS = 30_000;
+const SCAN_READY_GAP_MS = 300;
+const CHANNELS_PAGE = 'https://www.youtube.com/feed/channels';
 
 const WELCOME_PAGE = 'src/welcome/welcome.html';
 const UNINSTALL_PAGE = 'https://ashahinl.github.io/Youtube-Companion/uninstall.html';
 
 // The content script shares a renderer with youtube.com, so it is the sender
-// a compromised page would speak as. It may ask the two audio-mode questions
-// and report that the main video ended. queue.ended is only honoured when
-// sender.tab.id and msg.v both match the session record this worker wrote;
-// anything that reads or changes stored data must come from an extension page.
+// a compromised page would speak as. It may ask the two audio-mode questions,
+// report that the main video ended, and close its own tab after a
+// subscription scan. queue.ended is only honoured when sender.tab.id and
+// msg.v both match the session record this worker wrote. subscriptions.close
+// only removes sender.tab, and only on youtube.com. A page must not be able
+// to hand this worker a list of channels to add.
 export const CONTENT_SCRIPT_MESSAGES = new Set([
   'audioMode.boot',
   'audioMode.shortcut',
   'queue.ended',
+  'subscriptions.close',
 ]);
 
 const QUEUE_PLAY_KEY = 'queuePlay';
@@ -979,27 +1005,48 @@ export async function addChannelByInput(input) {
   return { ok: true, channel, state };
 }
 
+function cleanImportedHandle(value) {
+  if (typeof value !== 'string') return '';
+  const handle = value.trim();
+  // A handle we already know saves a lookup later. A bad one is left blank
+  // and the header read fills it in.
+  if (!/^@[^\s/?#@]{1,100}$/.test(handle)) return '';
+  return handle;
+}
+
+function cleanImportedTitle(value) {
+  return String(value || '')
+    .replace(/[\x00-\x1f\x7f]/g, ' ')
+    .trim()
+    .slice(0, 200);
+}
+
 /**
- * Adds the channels of a Takeout subscriptions.csv that are not on the list
- * yet, in one write, as long as the list stays within MAX_TAKEOUT_CHANNELS.
- * They start unseeded, so their first check fills the feed without alerts.
- * New ids go on pendingSeeds so a check already in flight follows up;
- * the page that sent the file also asks for a check, which covers them
- * when nothing is running.
+ * Adds channels that are not on the list yet, in one write, as long as the
+ * list stays within MAX_TAKEOUT_CHANNELS. They start unseeded, so their
+ * first check fills the feed without alerts. New ids go on pendingSeeds so
+ * a check already in flight follows up; the caller also asks for a check
+ * when nothing is running. A handle is kept when the caller has one.
  */
-export async function importTakeout(text) {
-  const parsed = parseTakeoutCsv(text);
-  if (!parsed.ok) return { ok: false, error: parsed.error };
+export async function addImportedChannels(list) {
+  const incoming = Array.isArray(list) ? list : [];
   const channels = await readChannels();
   const have = new Set(channels.map((ch) => ch.id));
   const now = Date.now();
   const fresh = [];
-  for (const { id, title } of parsed.channels) {
-    if (have.has(id)) continue;
+  const seen = new Set();
+  let considered = 0;
+  for (const row of incoming) {
+    if (!row || typeof row !== 'object') continue;
+    const id = row.id;
+    if (!isChannelId(id)) continue;
+    considered += 1;
+    if (have.has(id) || seen.has(id)) continue;
+    seen.add(id);
     fresh.push({
       id,
-      handle: '',
-      title,
+      handle: cleanImportedHandle(row.handle),
+      title: cleanImportedTitle(row.title),
       avatar: '',
       favorite: false,
       muted: false,
@@ -1010,17 +1057,135 @@ export async function importTakeout(text) {
       seeded: false,
     });
   }
-  // The limit is on the list, not the file: every channel is a request on
-  // every check.
+  // The limit is on the list, not the input: every channel is a request
+  // on every check.
   if (channels.length + fresh.length > MAX_TAKEOUT_CHANNELS) return { ok: false, error: 'count' };
   if (fresh.length) {
     await writeChannels([...channels, ...fresh]);
     await syncAlarms();
-    // Do not flushSeeds here: that would race the welcome page's own
-    // all-check. A live sweep's finally picks the ids up.
+    // Do not flushSeeds here: that would race the caller's own all-check.
+    // A live sweep's finally picks the ids up.
     for (const ch of fresh) pendingSeeds.add(ch.id);
   }
-  return { ok: true, added: fresh.length, skipped: parsed.channels.length - fresh.length };
+  return { ok: true, added: fresh.length, skipped: considered - fresh.length };
+}
+
+/** The Takeout file's rows, through the same add as a YouTube-tab import. */
+export async function importTakeout(text) {
+  const parsed = parseTakeoutCsv(text);
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  return addImportedChannels(parsed.channels);
+}
+
+async function focusChannelsTab(tab) {
+  const api = chromeApi();
+  if (!tab || typeof tab.id !== 'number') return tab;
+  try {
+    await api.tabs.update(tab.id, { active: true });
+  } catch {
+    // The scan can still run if the tab could not be activated.
+  }
+  if (typeof tab.windowId === 'number') {
+    try {
+      await api.windows.update(tab.windowId, { focused: true });
+    } catch {
+      // The tab is active even if its window could not be focused.
+    }
+  }
+  return tab;
+}
+
+async function openChannelsTab() {
+  const api = chromeApi();
+  let existing = [];
+  try {
+    existing = await api.tabs.query({ url: `${CHANNELS_PAGE}*` });
+  } catch {
+    existing = [];
+  }
+  const found = (existing || []).find((tab) => tab && typeof tab.id === 'number');
+  if (found) return focusChannelsTab(found);
+  const created = await api.tabs.create({ url: CHANNELS_PAGE, active: true });
+  return focusChannelsTab(created);
+}
+
+async function sendToTab(tabId, message) {
+  try {
+    const reply = await chromeApi().tabs.sendMessage(tabId, message);
+    return { rejected: false, reply };
+  } catch {
+    return { rejected: true, reply: null };
+  }
+}
+
+async function tellTab(tabId, fields) {
+  try {
+    await chromeApi().tabs.sendMessage(tabId, {
+      type: 'subscriptions.result',
+      added: Number(fields && fields.added) || 0,
+      skipped: Number(fields && fields.skipped) || 0,
+      error: (fields && fields.error) || '',
+    });
+  } catch {
+    // The tab can close while the scan runs.
+  }
+}
+
+/*
+ * A tab that was already open kept the previous content script until its
+ * next load. An answer of nothing is that script; reloading once picks up
+ * the current one. A tab that is still loading has no listener and rejects,
+ * which is not a reason to reload it.
+ */
+async function requestScan(tabId) {
+  const deadline = Date.now() + SCAN_READY_MS;
+  let reloaded = false;
+  while (Date.now() <= deadline) {
+    const sent = await sendToTab(tabId, { type: 'subscriptions.scan' });
+    if (!sent.rejected && sent.reply && typeof sent.reply === 'object') return sent.reply;
+    if (!sent.rejected && !reloaded) {
+      reloaded = true;
+      try { await chromeApi().tabs.reload(tabId); } catch { /* the next try reports no script */ }
+    }
+    if (Date.now() >= deadline) break;
+    await sleep(SCAN_READY_GAP_MS);
+  }
+  return { ok: false, error: 'no script' };
+}
+
+/**
+ * Opens All subscriptions in front of the user, reads the rows there, and
+ * adds the ones not already on the list. The tab shows the result.
+ */
+export async function importFromYouTube() {
+  const api = chromeApi();
+  const keepAlive = setInterval(() => {
+    api.runtime.getPlatformInfo?.().catch?.(() => {});
+  }, SCAN_KEEPALIVE_MS);
+  try {
+    const tab = await openChannelsTab();
+    const tabId = tab && tab.id;
+    if (typeof tabId !== 'number') return { ok: false, error: 'no tab' };
+    const scanned = await requestScan(tabId);
+    if (!scanned || scanned.ok !== true) {
+      const error = (scanned && scanned.error) || 'failed';
+      await tellTab(tabId, { error });
+      return { ok: false, error };
+    }
+    const imported = await addImportedChannels(scanned.channels);
+    if (!imported.ok) {
+      await tellTab(tabId, { error: imported.error || 'failed' });
+      return { ok: false, error: imported.error || 'failed' };
+    }
+    await tellTab(tabId, { added: imported.added, skipped: imported.skipped });
+    // Not awaited: a first check of hundreds of channels takes minutes.
+    void runSweep({ scope: 'all' }).catch(() => {});
+    return { ok: true, added: imported.added, skipped: imported.skipped };
+  } catch (err) {
+    return { ok: false, error: errMessage(err) };
+  } finally {
+    clearInterval(keepAlive);
+  }
 }
 
 /*
@@ -1122,6 +1287,17 @@ export async function handleMessage(msg, sender) {
         return await addChannelByInput(msg.input);
       case 'importTakeout':
         return await importTakeout(msg.data);
+      case 'importFromYouTube':
+        return await importFromYouTube();
+      case 'subscriptions.close': {
+        const tab = sender && sender.tab;
+        const tabId = tab && tab.id;
+        const url = (tab && tab.url) || (sender && sender.url) || '';
+        if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return { ok: false, error: 'no tab' };
+        if (!url.startsWith('https://www.youtube.com/')) return { ok: false, error: 'not allowed' };
+        await chromeApi().tabs.remove(tabId);
+        return { ok: true };
+      }
       case 'removeChannel': {
         await rememberRemoved(msg.id);
         await removeChannel(msg.id);

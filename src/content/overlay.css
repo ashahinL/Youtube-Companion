@@ -184,3 +184,159 @@
     display: none;
   }
 }
+
+/*
+ * Subscription scan on youtube.com/feed/channels. This page cannot see
+ * the popup's tokens. html[dark] is YouTube's own flag; the script also
+ * copies the computed background so a custom page colour still matches.
+ * Lengths are px because YouTube sets html { font-size: 10px }.
+ * The button is the extension's purple.
+ */
+#ytc-scan-overlay {
+  --ytc-scan-bg: #ffffff;
+  --ytc-scan-text: #0f0f0f;
+  --ytc-scan-bg-dark: #0f0f0f;
+  --ytc-scan-text-dark: #f1f1f1;
+  --ytc-scan-accent: #7c5cf0;
+  --ytc-scan-on-accent: #ffffff;
+
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 32px 24px;
+  overflow: auto;
+  background: var(--ytc-scan-bg);
+  color: var(--ytc-scan-text);
+  text-align: center;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+html[dark] #ytc-scan-overlay {
+  background: var(--ytc-scan-bg-dark);
+  color: var(--ytc-scan-text-dark);
+}
+
+#ytc-scan-overlay[data-dark] {
+  color: var(--ytc-scan-text-dark);
+}
+
+#ytc-scan-overlay [hidden] {
+  display: none !important;
+}
+
+#ytc-scan-overlay .ytc-scan-spinner {
+  display: block;
+  box-sizing: border-box;
+  width: 36px;
+  height: 36px;
+  margin: 0;
+  border: 3px solid rgba(127, 127, 127, 0.35);
+  border-block-start-color: var(--ytc-scan-accent);
+  border-radius: 50%;
+  animation: ytc-scan-spin 700ms linear infinite;
+}
+
+@keyframes ytc-scan-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #ytc-scan-overlay .ytc-scan-spinner {
+    animation: none;
+    border-color: var(--ytc-scan-accent);
+  }
+}
+
+#ytc-scan-overlay .ytc-scan-title {
+  all: unset;
+  display: block;
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 8px 0 0;
+  color: inherit;
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-sub,
+#ytc-scan-overlay .ytc-scan-loaded,
+#ytc-scan-overlay .ytc-scan-count-label {
+  all: unset;
+  display: block;
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 0;
+  color: inherit;
+  opacity: 0.72;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-count {
+  all: unset;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  margin: 12px 0 0;
+  color: inherit;
+  font-family: inherit;
+  text-align: center;
+}
+
+/* English reads as a big number with the label under it. Arabic keeps
+   source order, label then number, so the count is not inflected. */
+#ytc-scan-overlay[dir='ltr'] .ytc-scan-num {
+  order: -1;
+}
+
+#ytc-scan-overlay .ytc-scan-num {
+  display: block;
+  font-size: 72px;
+  font-weight: 650;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  opacity: 1;
+}
+
+#ytc-scan-overlay .ytc-scan-done {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  margin-block-start: 16px;
+  padding-block: 10px;
+  padding-inline: 28px;
+  border-radius: 999px;
+  background: var(--ytc-scan-accent);
+  color: var(--ytc-scan-on-accent);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-done:focus-visible {
+  outline: 2px solid var(--ytc-scan-accent);
+  outline-offset: 3px;
+}

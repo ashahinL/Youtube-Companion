@@ -26,6 +26,7 @@ const SUITES = [
   ['store',              './store.test.js'],
   ['backup',             './backup.test.js'],
   ['takeout import',     './takeout.test.js'],
+  ['subscription scan',  './subscriptions.test.js'],
   ['service worker',     './worker.test.js'],
   ['audio-mode core',    './core.test.js'],
   ['audio-mode engine',  './audio-engine.test.js'],

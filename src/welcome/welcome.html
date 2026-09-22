@@ -30,6 +30,14 @@
         <li class="step" id="import">
           <h2 class="step__title" data-i18n="welcomeStepImportTitle">Bring your channels</h2>
           <p data-i18n="welcomeStepImportText">Subscribed to channels on YouTube? Bring the whole list across at once.</p>
+          <div class="pick">
+            <button id="welcome-import-youtube" class="btn btn--primary" type="button" data-i18n="importFromYouTube">
+              Import from YouTube
+            </button>
+            <span id="welcome-import-spinner" class="spinner" hidden></span>
+          </div>
+          <p id="welcome-import-status" class="status" role="status"></p>
+          <h3 class="step__sub" data-i18n="welcomeTakeoutHeading">Signed out of YouTube? Use a Google Takeout file.</h3>
           <ol class="howto">
             <li>
               <span data-i18n="welcomeTakeoutOpen">Open Google Takeout:</span>
@@ -41,13 +49,11 @@
             <li data-i18n="welcomeTakeoutPick">Pick subscriptions.csv from its subscriptions folder.</li>
           </ol>
           <div class="pick">
-            <button id="welcome-import" class="btn btn--primary" type="button" data-i18n="welcomeImportButton">
+            <button id="welcome-import" class="btn" type="button" data-i18n="welcomeImportButton">
               Choose subscriptions.csv
             </button>
             <input id="welcome-import-file" type="file" accept=".csv,text/csv" hidden />
-            <span id="welcome-import-spinner" class="spinner" hidden></span>
           </div>
-          <p id="welcome-import-status" class="status" role="status"></p>
           <p class="note" data-i18n="welcomeImportPrivacy">
             The file is read on this computer. Only the channel ids and names are kept, and nothing is sent to Google or anyone else.
           </p>

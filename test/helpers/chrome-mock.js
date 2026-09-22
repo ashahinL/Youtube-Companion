@@ -126,7 +126,11 @@ export function installChromeMock(initial = {}) {
     badgeColor: null,
     tabsCreated: [],
     tabsUpdated: [],
+    tabsRemoved: [],
+    tabsReloaded: [],
     windowsUpdated: [],
+    urlTabs: null,
+    onTabMessage: null,
     tabRemovedListeners: [],
     tabCreatedListeners: [],
     tabUpdatedListeners: [],
@@ -275,11 +279,19 @@ export function installChromeMock(initial = {}) {
         if (info?.active && info?.currentWindow) {
           return handle.activeTab ? [handle.activeTab] : [];
         }
+        if (info?.url && Array.isArray(handle.urlTabs)) return clone(handle.urlTabs);
         return [];
       },
       async sendMessage(tabId, message) {
         handle.messagesSent.push({ tabId, message });
+        if (typeof handle.onTabMessage === 'function') return handle.onTabMessage(tabId, message);
         return { ok: true };
+      },
+      async remove(tabId) {
+        handle.tabsRemoved.push(tabId);
+      },
+      async reload(tabId) {
+        handle.tabsReloaded.push(tabId);
       },
       onRemoved: {
         addListener(fn) {
@@ -396,8 +408,12 @@ export function installChromeMock(initial = {}) {
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
     handle.tabsUpdated.length = 0;
+    handle.tabsRemoved.length = 0;
+    handle.tabsReloaded.length = 0;
     handle.windowsUpdated.length = 0;
     handle.messagesSent.length = 0;
+    handle.urlTabs = null;
+    handle.onTabMessage = null;
     handle.activeTab = null;
     handle.sessionSetHold = null;
     for (const key of Object.keys(alarms)) delete alarms[key];

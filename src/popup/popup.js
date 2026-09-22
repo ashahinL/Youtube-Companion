@@ -3867,12 +3867,13 @@ function bindSupportSheet() {
   });
 }
 
-// The Takeout import lives on the welcome page, which has room for the steps
-// to get the file from Google and is where a new user starts.
+// The YouTube tab takes focus and shows the scan. Closing here does not
+// cancel the worker; the popup would only cover that tab.
 function bindImportFromYouTube() {
   for (const btn of document.querySelectorAll('[data-import-youtube]')) {
     btn.addEventListener('click', () => {
-      openUrl(chrome.runtime.getURL('src/welcome/welcome.html#import'));
+      send({ type: 'importFromYouTube' }).catch(() => {});
+      window.close();
     });
   }
 }

@@ -1,10 +1,10 @@
 /**
- * MAIN-world bridge to #movie_player. Isolated content scripts can see
- * the element but not its methods or the page's own data, which is the
- * only reason this file exists. It receives a request, calls the player
- * or reads a collab video's channel list, and posts the result back.
- * Never throws into the page. Loaded as a MAIN-world content script, so
- * it is not a web-accessible file.
+ * MAIN-world bridge. Isolated content scripts can see the element but
+ * not its methods or the page's own data, which is the only reason this
+ * file exists. It receives a request, calls the player, reads a collab
+ * video's channel list, or reads the All subscriptions rows, and posts
+ * the result back. Never throws into the page. Loaded as a MAIN-world
+ * content script, so it is not a web-accessible file.
  */
 
 (function (root) {
@@ -28,11 +28,19 @@
     setVolume: 1,
     mute: 0,
     unMute: 0,
-    // Not a player method: read-only page data, answered without the player.
+    // Not player methods: read-only page data, answered without the player.
     collaborators: 0,
+    subscribedChannels: 0,
   };
 
   const MAX_COLLABORATORS = 10;
+  // src/lib/backup.js MAX_BACKUP_CHANNELS. This file cannot import.
+  const MAX_SUBSCRIBED_CHANNELS = 2000;
+  // Same cap as src/lib/takeout.js.
+  const MAX_CHANNEL_TITLE = 200;
+  // The worker stores only the exact 24-character form. Anything shorter
+  // is dropped here only when it cannot be a channel id at all.
+  const CHANNEL_ID_RE = /^UC[\w-]{20,}$/;
 
   const QUALITIES = {
     tiny: true,
@@ -177,6 +185,91 @@
     return out;
   }
 
+  function cleanScanTitle(value) {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (trimmed.length <= MAX_CHANNEL_TITLE) return trimmed;
+    return trimmed.slice(0, MAX_CHANNEL_TITLE);
+  }
+
+  function visibleChannelTitle(row) {
+    if (!row || typeof row.querySelector !== 'function') return '';
+    const named = row.querySelector('#text') || row.querySelector('#channel-title');
+    if (!named || typeof named.textContent !== 'string') return '';
+    return named.textContent;
+  }
+
+  // The path only: "/@name/videos?si=1" is "@name". Absolute hrefs do not
+  // match the selector the caller uses, so they never arrive here.
+  function handleFromHref(href) {
+    if (typeof href !== 'string' || !href) return '';
+    let path = href;
+    const hash = path.indexOf('#');
+    if (hash !== -1) path = path.slice(0, hash);
+    const query = path.indexOf('?');
+    if (query !== -1) path = path.slice(0, query);
+    const scheme = path.indexOf('://');
+    if (scheme !== -1) {
+      const slash = path.indexOf('/', scheme + 3);
+      path = slash === -1 ? '' : path.slice(slash);
+    }
+    const match = /\/@([^/]+)/.exec(path);
+    if (!match || !match[1]) return '';
+    return '@' + match[1];
+  }
+
+  function channelHandle(row) {
+    if (!row || typeof row.querySelector !== 'function') return '';
+    const link = row.querySelector('a[href^="/@"]');
+    if (!link || typeof link.getAttribute !== 'function') return '';
+    return handleFromHref(link.getAttribute('href'));
+  }
+
+  function shapeChannelRow(row) {
+    const data = row && row.data;
+    if (!data || typeof data !== 'object') return null;
+    const button = data.subscriptionButton;
+    if (!button || button.subscribed !== true) return null;
+    const id = data.channelId;
+    if (typeof id !== 'string' || !CHANNEL_ID_RE.test(id)) return null;
+    const titleNode = data.title;
+    const simple = titleNode && titleNode.simpleText;
+    const title = typeof simple === 'string'
+      ? cleanScanTitle(simple)
+      : cleanScanTitle(visibleChannelTitle(row));
+    return { id: id, title: title, handle: channelHandle(row) };
+  }
+
+  /*
+   * /feed/channels groups rows under shelves whose headings are translated
+   * and carry no stable id (docs/youtube.md). subscribed === true is the
+   * test that does not depend on the language, and a purchased channel
+   * still has it. One broken row is skipped; a broken document is [].
+   */
+  function readSubscribedChannels() {
+    try {
+      const doc = root.document;
+      if (!doc || typeof doc.querySelectorAll !== 'function') return [];
+      const rows = doc.querySelectorAll('ytd-channel-renderer');
+      if (!rows || typeof rows.length !== 'number') return [];
+      const out = [];
+      const seen = Object.create(null);
+      for (let i = 0; i < rows.length && out.length < MAX_SUBSCRIBED_CHANNELS; i++) {
+        try {
+          const shaped = shapeChannelRow(rows[i]);
+          if (!shaped || seen[shaped.id]) continue;
+          seen[shaped.id] = true;
+          out.push(shaped);
+        } catch (err) {
+          // One row whose data throws is not the whole list.
+        }
+      }
+      return out;
+    } catch (err) {
+      return [];
+    }
+  }
+
   function postToPage(msg) {
     try {
       win.postMessage(msg, PAGE_ORIGIN);
@@ -258,6 +351,10 @@
         reply(req.id, { ok: true, result: readCollaborators() });
         return;
       }
+      if (req.method === 'subscribedChannels') {
+        reply(req.id, { ok: true, result: readSubscribedChannels() });
+        return;
+      }
       const player = getPlayer();
       if (!player || typeof player[req.method] !== 'function') {
         reply(req.id, { ok: false, error: 'no player' });
@@ -297,6 +394,7 @@
     readAdopt,
     readRequest,
     readCollaborators,
+    readSubscribedChannels,
     onMessage,
     getToken: function () { return adopted; },
   };

@@ -335,6 +335,7 @@ export default async function run(t) {
     onNotificationClicked,
     onInstalled,
     syncUninstallUrl,
+    addImportedChannels,
   } = worker;
   await ready;
 
@@ -2042,8 +2043,30 @@ export default async function run(t) {
     );
     t.check(
       'en boot overlay has only the overlay keys',
-      JSON.stringify(Object.keys(bootEn.overlay || {}).sort()) === JSON.stringify(['overlayExit', 'overlayExitShortcut', 'overlayTitle']),
+      JSON.stringify(Object.keys(bootEn.overlay || {}).sort()) === JSON.stringify([
+        'overlayExit',
+        'overlayExitShortcut',
+        'overlayTitle',
+        'scanAdded',
+        'scanAddedOne',
+        'scanDone',
+        'scanFailed',
+        'scanFound',
+        'scanLoaded',
+        'scanNothing',
+        'scanSignedOut',
+        'scanSignedOutFile',
+        'scanSkipped',
+        'scanSkippedOne',
+        'scanStay',
+        'scanTitle',
+      ]),
       JSON.stringify(Object.keys(bootEn.overlay || {})),
+    );
+    t.check(
+      'en boot carries the scan headline',
+      bootEn.overlay?.scanTitle === 'Scanning your channels' && bootEn.overlay?.scanAdded === 'Added $1 channels',
+      JSON.stringify(bootEn.overlay),
     );
     t.check(
       'en boot also carries Arabic overlay copy',
@@ -2738,6 +2761,152 @@ export default async function run(t) {
       feedIdsOf(welcomeFetch.calls).filter((id) => id === BEAST || id === LINUS_ID).length === 2,
       JSON.stringify(feedIdsOf(welcomeFetch.calls)),
     );
+
+    t.section('adding channels read from a YouTube tab');
+
+    await waitForIdle();
+    await wipe();
+    const shaped = await addImportedChannels([
+      { id: BEAST, title: `  ${'B'.repeat(250)}  `, handle: 'not a handle' },
+      { id: BEAST, title: 'Second', handle: '@MrBeast' },
+      { id: 'nope', title: 'Ignored', handle: '@nope' },
+    ]);
+    t.check(
+      'a new id is added once and a duplicate is skipped',
+      shaped.ok === true && shaped.added === 1 && shaped.skipped === 1,
+      JSON.stringify(shaped),
+    );
+    const shapedRow = (await readChannels())[0];
+    t.check(
+      'the title is trimmed and capped, a bad handle is blank, and it waits unseeded',
+      shapedRow.title === 'B'.repeat(200)
+        && shapedRow.handle === ''
+        && shapedRow.avatar === ''
+        && shapedRow.seeded === false
+        && shapedRow.lastError === null
+        && shapedRow.favorite === false,
+      JSON.stringify(shapedRow),
+    );
+    const shapedAgain = await addImportedChannels([{ id: BEAST, title: 'New name', handle: '@MrBeast' }]);
+    t.check(
+      'an id already on the list is skipped and left as it was',
+      shapedAgain.ok === true && shapedAgain.added === 0 && shapedAgain.skipped === 1
+        && (await readChannels())[0].title === 'B'.repeat(200)
+        && (await readChannels())[0].handle === '',
+      JSON.stringify(shapedAgain),
+    );
+
+    const fullList = Array.from({ length: 2000 }, (_, i) => ({
+      id: `UC${String(i).padStart(22, '0')}`,
+      title: 'N',
+      seeded: true,
+    }));
+    await globalThis.chrome.storage.local.set({ channels: fullList });
+    const overCap = await addImportedChannels([{ id: BEAST, title: 'MrBeast', handle: '@MrBeast' }]);
+    t.check(
+      'a list that would pass 2,000 is refused',
+      overCap.ok === false && overCap.error === 'count',
+      JSON.stringify(overCap),
+    );
+    t.check('and adds none of it', (await readChannels()).length === 2000);
+    await globalThis.chrome.storage.local.set({ channels: fullList.slice(0, 1999) });
+    const atCap = await addImportedChannels([{ id: BEAST, title: 'MrBeast', handle: '@MrBeast' }]);
+    t.check(
+      '1,999 plus one is kept, handle and all',
+      atCap.ok === true && atCap.added === 1 && (await readChannels()).length === 2000
+        && (await readChannels()).find((ch) => ch.id === BEAST)?.handle === '@MrBeast'
+        && (await readChannels()).find((ch) => ch.id === BEAST)?.seeded === false,
+      JSON.stringify(atCap),
+    );
+
+    await waitForIdle();
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', handle: '@mkbhd', seeded: true, favorite: true });
+    installFetch({
+      feeds: {
+        [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'scanbeast01', t: 'Beast', at: AT.newest }]),
+      },
+    });
+    mock.urlTabs = [{ id: 8, windowId: 4, url: 'https://www.youtube.com/feed/channels' }];
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.scan') {
+        return {
+          ok: true,
+          channels: [
+            { id: MKBHD, title: 'Other', handle: '@other' },
+            { id: BEAST, title: 'MrBeast', handle: '@MrBeast' },
+            { id: 'nope', title: 'Ignored', handle: '@nope' },
+          ],
+        };
+      }
+      return { ok: true };
+    };
+    const createdBefore = mock.tabsCreated.length;
+    const fromTab = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'the scan adds the new channel and counts the one already there',
+      fromTab.ok === true && fromTab.added === 1 && fromTab.skipped === 1,
+      JSON.stringify(fromTab),
+    );
+    t.check(
+      'an open subscriptions tab is focused instead of another being opened',
+      mock.tabsCreated.length === createdBefore
+        && mock.tabsUpdated.some((row) => row.tabId === 8 && row.active === true)
+        && mock.windowsUpdated.some((row) => row.windowId === 4 && row.focused === true),
+      JSON.stringify({ created: mock.tabsCreated.length - createdBefore, updated: mock.tabsUpdated, windows: mock.windowsUpdated }),
+    );
+    const scannedBeast = (await readChannels()).find((ch) => ch.id === BEAST);
+    const scannedMkbhd = (await readChannels()).find((ch) => ch.id === MKBHD);
+    t.check(
+      'the new channel keeps the handle from the page',
+      scannedBeast?.handle === '@MrBeast' && scannedBeast?.title === 'MrBeast' && scannedBeast?.avatar === '',
+      JSON.stringify(scannedBeast),
+    );
+    t.check(
+      'the channel already on the list keeps its star and handle',
+      scannedMkbhd?.favorite === true && scannedMkbhd?.handle === '@mkbhd',
+      JSON.stringify(scannedMkbhd),
+    );
+    t.check(
+      'the tab is told how many were added',
+      mock.messagesSent.some((row) => row.tabId === 8
+        && row.message?.type === 'subscriptions.result'
+        && row.message.added === 1
+        && row.message.skipped === 1
+        && !row.message.error),
+      JSON.stringify(mock.messagesSent.map((row) => row.message)),
+    );
+    t.check(
+      'a check follows the import',
+      await waitUntil(async () => (await readChannels()).find((ch) => ch.id === BEAST)?.seeded === true),
+    );
+    await waitForIdle();
+
+    mock.onTabMessage = async () => ({ ok: false, error: 'signedOut' });
+    const beforeFailedScan = (await readChannels()).length;
+    const failedScan = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'a failed scan adds nothing and the overlay hears why',
+      failedScan.ok === false && failedScan.error === 'signedOut'
+        && (await readChannels()).length === beforeFailedScan
+        && mock.messagesSent.some((row) => row.message?.type === 'subscriptions.result' && row.message.error === 'signedOut'),
+      JSON.stringify(failedScan),
+    );
+
+    mock.urlTabs = [];
+    mock.onTabMessage = async () => ({ ok: true, channels: [] });
+    const openedScan = await handleMessage({ type: 'importFromYouTube' });
+    const openedTab = mock.tabsCreated[mock.tabsCreated.length - 1];
+    t.check(
+      'with no subscriptions tab open, one is created in front',
+      openedScan.ok === true && openedScan.added === 0
+        && openedTab?.url === 'https://www.youtube.com/feed/channels'
+        && openedTab?.active === true,
+      JSON.stringify({ openedScan, openedTab }),
+    );
+    await waitForIdle();
+    mock.urlTabs = null;
+    mock.onTabMessage = null;
 
     t.section('backup restore alerts for uploads newer than lastVideoAt');
 
@@ -3630,9 +3799,9 @@ export default async function run(t) {
 
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
-      'importBackup', 'importTakeout', 'undoRemove', 'renameGroup', 'deleteGroup',
+      'importBackup', 'importTakeout', 'importFromYouTube', 'undoRemove', 'renameGroup', 'deleteGroup',
       'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen',
-      'whatsNew.seen']) {
+      'whatsNew.seen', 'subscriptions.scan']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
     }
@@ -3647,6 +3816,26 @@ export default async function run(t) {
     t.check('queue.playAll is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.playAll'));
     t.check('queue.setOpen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.setOpen'));
     t.check('whatsNew.seen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('whatsNew.seen'));
+    t.check('subscriptions.close is a content-script message', CONTENT_SCRIPT_MESSAGES.has('subscriptions.close'));
+    t.check('importFromYouTube is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('importFromYouTube'));
+    t.check('subscriptions.scan is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('subscriptions.scan'));
+
+    const pageClose = await viaListenerAs({ type: 'subscriptions.close' }, PAGE_SENDER);
+    t.check(
+      'a YouTube page may close its own tab',
+      pageClose.res.ok === true && mock.tabsRemoved.includes(42),
+      JSON.stringify(pageClose.res),
+    );
+    const foreignClose = await viaListenerAs({ type: 'subscriptions.close' }, {
+      ...PAGE_SENDER,
+      url: 'https://example.com/',
+      tab: { id: 99, url: 'https://example.com/' },
+    });
+    t.check(
+      'subscriptions.close refuses a tab that is not YouTube',
+      foreignClose.res.ok === false && !mock.tabsRemoved.includes(99),
+      JSON.stringify(foreignClose.res),
+    );
 
     const pageEnded = await viaListenerAs({ type: 'queue.ended', v: 'abcdefghijk' }, PAGE_SENDER);
     t.check(

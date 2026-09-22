@@ -1,6 +1,6 @@
 /**
- * Reads the subscriptions.csv that Google Takeout exports from YouTube, the
- * one way to bring a subscription list across without signing in. Pure: no
+ * Reads the subscriptions.csv that Google Takeout exports from YouTube, for
+ * bringing a subscription list across while signed out of YouTube. Pure: no
  * chrome, no DOM, never throws on bad input.
  *
  * The file has three columns, channel id, channel URL and channel title, in

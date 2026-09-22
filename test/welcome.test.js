@@ -139,8 +139,20 @@ export default async function run(t) {
     const tag = popupHtml.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`));
     t.check(`${id} exists and is marked for the import`, !!tag && /data-import-youtube/.test(tag[0]) && /data-i18n="importFromYouTube"/.test(tag[0]));
   }
-  t.check('the buttons open the import step of the welcome page', /\[data-import-youtube\][\s\S]{0,200}welcome\/welcome\.html#import/.test(popupJs));
+  t.check(
+    'the buttons start a scan and close the popup',
+    /\[data-import-youtube\][\s\S]{0,400}type: 'importFromYouTube'/.test(popupJs)
+      && /importFromYouTube[\s\S]{0,200}window\.close\(\)/.test(popupJs),
+  );
   t.check('the popup still never reads a Takeout file itself', !/importTakeout/.test(popupJs));
+  t.check(
+    'the welcome page leads with the same scan',
+    /id="welcome-import-youtube"/.test(html)
+      && html.indexOf('welcome-import-youtube') < html.indexOf('id="welcome-import"')
+      && /welcomeTakeoutHeading/.test(html)
+      && /type: 'importFromYouTube'/.test(js)
+      && /type: 'importTakeout'/.test(js),
+  );
 
   t.section('the uninstall page');
 
