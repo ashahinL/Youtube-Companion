@@ -1083,6 +1083,16 @@
       }
     }
   },
+  "audioPickerGoToTab": {
+    "message": "الانتقال إلى التبويب الذي يشغّل $TITLE$",
+    "description": "Accessible name and tooltip of the button that brings one open YouTube tab to the front. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "A lecture"
+      }
+    }
+  },
   "audioSeek": {
     "message": "شريط التقدم",
     "description": "Accessible name of the player-card seek slider."

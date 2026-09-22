@@ -1083,6 +1083,16 @@
       }
     }
   },
+  "audioPickerGoToTab": {
+    "message": "Go to the tab playing $TITLE$",
+    "description": "Accessible name and tooltip of the button that brings one open YouTube tab to the front. $TITLE$ is the video title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "A lecture"
+      }
+    }
+  },
   "audioSeek": {
     "message": "Seek",
     "description": "Accessible name of the player-card seek slider."

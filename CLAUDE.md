@@ -137,7 +137,9 @@ asks.
   minutes) sits in the player card and runs in the YouTube tab, not the popup
   or the worker. After audio mode has saved 1 GB, the Player tab offers a
   one-time store rating; either button dismisses it for good, and that flag
-  is not in backups.
+  is not in backups. Each picker row has a go-to button that activates that
+  tab and focuses its window, then closes the popup; it does not change
+  which tab the player drives.
 - **Backup** exports settings and channels (merge or replace on import), not
   the feed. **Clear watchlist** sits in the same group: an inline confirm
   naming the count, then every channel and the whole feed go. Alert history

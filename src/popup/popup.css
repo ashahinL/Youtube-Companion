@@ -316,6 +316,7 @@ body.is-opening .tabs {
 .swatch:focus-visible,
 .audio-shortcut:focus-visible,
 .audio-picker__tab:focus-visible,
+.audio-picker__goto:focus-visible,
 .audio-stats__filter:focus-visible,
 .feed-groups__chip:focus-visible,
 .audio-rate__actions .btn:focus-visible,
@@ -1605,9 +1606,18 @@ body.is-opening .tabs {
   margin-block: 10px;
 }
 
+.audio-picker__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
 .audio-picker__tab {
   display: block;
-  width: 100%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 0;
   padding-block: 7px;
   padding-inline: 10px;
@@ -1639,6 +1649,24 @@ body.is-opening .tabs {
   min-width: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.audio-picker__goto {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.audio-picker__goto-icon {
+  display: inline-block;
+  line-height: 1;
+}
+
+/* ↗ points out toward the inline-end. In Arabic that end is on the left. */
+[dir="rtl"] .audio-picker__goto-icon {
+  transform: scaleX(-1);
 }
 
 .audio-player {

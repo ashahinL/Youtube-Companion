@@ -7,6 +7,8 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- With several YouTube tabs open, each one in the Player tab's list has a
+  ↗ button that takes you straight to that tab, even in another window.
 - Theme and Language in Settings are each a group of three cards (Light,
   Dark, System; English, العربية, System). Theme also applies to the
   welcome page and the What's new page.

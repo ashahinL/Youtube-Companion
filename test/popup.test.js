@@ -3,6 +3,7 @@
  * here, so popup.js is never imported.
  */
 
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1685,4 +1686,52 @@ export default async function run(t) {
   }
   t.check('overlay.css angle is 165deg', /--ytc-audio-angle:\s*165deg/.test(overlayCss));
   t.check('popup.css angle is 165deg', /--ytc-audio-angle:\s*165deg/.test(css));
+
+  t.section('picker go to tab');
+
+  t.check(
+    'the go-to button shares the focus-visible outline',
+    /\.audio-picker__goto:focus-visible/.test(css),
+  );
+  t.check(
+    'the go-to glyph mirrors in Arabic',
+    /\[dir="rtl"\] \.audio-picker__goto-icon\s*\{[^}]*transform:\s*scaleX\(\s*-1\s*\)/.test(css),
+  );
+  t.check(
+    'audioPickerGoToTab is in both locales with $TITLE$',
+    typeof en.audioPickerGoToTab?.message === 'string'
+      && /\$TITLE\$/.test(en.audioPickerGoToTab.message)
+      && typeof en.audioPickerGoToTab.description === 'string'
+      && en.audioPickerGoToTab.description.length > 0
+      && en.audioPickerGoToTab.placeholders?.title?.content === '$1'
+      && typeof ar.audioPickerGoToTab?.message === 'string'
+      && /\$TITLE\$/.test(ar.audioPickerGoToTab.message)
+      && typeof ar.audioPickerGoToTab.description === 'string'
+      && ar.audioPickerGoToTab.description.length > 0
+      && ar.audioPickerGoToTab.placeholders?.title?.content === '$1'
+      && en.audioPickerGoToTab.message !== ar.audioPickerGoToTab.message,
+  );
+
+  const child = spawnSync(process.execPath, [path.join(ROOT, 'test/popup-picker-run.js')], {
+    encoding: 'utf8',
+    cwd: ROOT,
+    timeout: 30000,
+  });
+  const line = String(child.stdout || '').split(/\r?\n/).find((row) => row.startsWith('PICKER_RESULT '));
+  let payload = null;
+  if (line) {
+    try {
+      payload = JSON.parse(line.slice('PICKER_RESULT '.length));
+    } catch {
+      payload = null;
+    }
+  }
+  t.check(
+    'picker behaviour suite ran',
+    !!payload && Array.isArray(payload.checks),
+    payload ? '' : `${child.status}\n${child.stderr || ''}\n${child.stdout || ''}`,
+  );
+  for (const item of payload?.checks || []) {
+    t.check(item.label, item.ok === true, item.detail || '');
+  }
 }

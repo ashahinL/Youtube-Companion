@@ -1788,6 +1788,25 @@ function updateTitleScroll(el, text) {
   }
 }
 
+async function goToAudioTab(tab) {
+  if (!tab || tab.id == null) return;
+  try {
+    await chrome.tabs.update(tab.id, { active: true });
+    // Activating a tab does not need its window id. windows.update does,
+    // and calling it without one throws even though the tab came forward.
+    if (tab.windowId != null) {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+  } catch {
+    // A tab that closed between the draw and the click throws. Leave the
+    // popup open and redraw so that row drops out.
+    await refreshAudioState();
+    renderAudio();
+    return;
+  }
+  window.close();
+}
+
 function renderAudioPicker(reachable) {
   const el = document.getElementById('audio-picker');
   if (!el) return;
@@ -1799,24 +1818,31 @@ function renderAudioPicker(reachable) {
     audioPickerKey = '';
     return;
   }
-  const key = `${tabs.map((tab) => `${tab.id}\t${tab.title || ''}`).join('\n')}#${view.audioTargetId}#${reachable}`;
+  const key = `${tabs.map((tab) => `${tab.id}\t${tab.windowId ?? ''}\t${tab.title || ''}`).join('\n')}#${view.audioTargetId}#${reachable}`;
+  // One row per tab, so the child count is still the list length. A match
+  // keeps the buttons (and keyboard focus) instead of rebuilding them.
   if (key === audioPickerKey && el.childElementCount === tabs.length) {
     for (const btn of el.querySelectorAll('.audio-picker__tab')) {
       btn.disabled = !reachable;
     }
     return;
   }
-  const focusedId = document.activeElement instanceof HTMLElement
-    ? document.activeElement.dataset.tabId
-    : '';
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  // The go-to control is a sibling of the select button. Sharing
+  // data-tab-id would hand focus back to the select button.
+  const focusedGo = active?.dataset.goTabId || '';
+  const focusedId = focusedGo ? '' : (active?.dataset.tabId || '');
   audioPickerKey = key;
   el.replaceChildren();
   for (const tab of tabs) {
+    const title = Core.tabTitleToVideoTitle(tab.title) || t('audioPlayerNoTitle');
+    const row = document.createElement('div');
+    row.className = 'audio-picker__row';
+
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'audio-picker__tab';
     btn.dataset.tabId = String(tab.id);
-    const title = Core.tabTitleToVideoTitle(tab.title) || t('audioPlayerNoTitle');
     btn.appendChild(textEl('span', 'audio-picker__title', title));
     btn.setAttribute('aria-label', t('audioPickerTab', [title]));
     if (tab.id === view.audioTargetId) btn.setAttribute('aria-current', 'true');
@@ -1824,10 +1850,31 @@ function renderAudioPicker(reachable) {
     btn.addEventListener('click', () => {
       void selectAudioTab(tab.id);
     });
-    el.appendChild(btn);
+
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.className = 'icon-btn audio-picker__goto';
+    go.dataset.goTabId = String(tab.id);
+    const goLabel = t('audioPickerGoToTab', [title]);
+    go.setAttribute('aria-label', goLabel);
+    go.title = goLabel;
+    const icon = document.createElement('span');
+    icon.className = 'audio-picker__goto-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '\u2197';
+    go.appendChild(icon);
+    go.addEventListener('click', () => {
+      void goToAudioTab(tab);
+    });
+
+    row.appendChild(btn);
+    row.appendChild(go);
+    el.appendChild(row);
   }
-  if (focusedId) {
-    el.querySelector(`[data-tab-id="${focusedId}"]`)?.focus?.();
+  if (focusedGo) {
+    el.querySelector(`[data-go-tab-id="${focusedGo}"]`)?.focus?.();
+  } else if (focusedId) {
+    el.querySelector(`.audio-picker__tab[data-tab-id="${focusedId}"]`)?.focus?.();
   }
 }
 

@@ -9,8 +9,8 @@ words. The name and the short description come from `_locales/*/messages.json`
 
 | Store | State | Record |
 |---|---|---|
-| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **not uploaded yet** | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
-| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **not uploaded yet** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
+| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **in review**, submitted 2026-09-22 (Microsoft quotes 7 business days) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
+| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **uploaded** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
 | مرتكز (Mortakaz) | **Listed 2026-09-17** · 2.0.0 text and images **not pasted yet** | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
 
 When a listing goes live, put its link in the README's install section.
@@ -65,11 +65,12 @@ somewhere unusual.
 | `icons/icon128.png` | 128×128 | Store icon | — (taken from the zip) | — |
 | `logo-300.png` | 300×300 | — | Extension logo | — |
 | `promo-440x280.png` | 440×280 | Small promo tile | Small promotional tile | — |
-| `screenshot-1-feeds.png` … `screenshot-8-alerts.png` | 1280×800 | Five of the eight | All eight | All eight |
+| `screenshot-1-feeds.png` … `screenshot-8-alerts.png` | 1280×800 | Five of the eight | Six of the eight | All eight |
 | — | 1400×560 | Marquee (optional, none made) | Large promotional tile (optional, none made) | — |
 
-**Chrome takes five screenshots; Edge takes up to ten.** Eight are made, so
-Edge and مرتكز get all of them:
+**Chrome takes five screenshots and Edge six** (Partner Center read "Upto 6
+images" by 2.0.0; 1.0.0 was allowed ten). Eight are made, so مرتكز gets all of
+them:
 
 1. `screenshot-1-feeds` — Every channel, one feed
 2. `screenshot-2-player` — Listen with less data
@@ -84,6 +85,9 @@ Chrome's five, in the order they are uploaded: **1, 2, 7, 4 and 6.** The Arabic
 frame earns its place on a listing that is also published in Arabic. Groups (3)
 is the one that drops, because the feed frame already shows the group chips
 above the list, and the queue frame shows something no other frame does.
+
+Edge's six, as listed for 2.0.0: **1, 2, 3, 7, 4 and 6** — Chrome's five plus
+Groups. The sheet (5) and alerts (8) frames are left out.
 
 A frame's picture comes from `docs/screenshots/`, so it can only show a scene
 `scripts/shots/stub.js` knows how to set up. The queue frame is the popup
@@ -343,7 +347,9 @@ page but Store listings ends with **Save & Continue** at the top right.
      languages* copied the logo, tile and screenshots to Arabic.
    - **Arabic**: the Arabic description and the same seven search terms,
      then **Save draft**.
-   - Both rows must read **Complete** before **Publish** lights up.
+   - Both rows must read **Complete** before **Publish** lights up. A
+     screenshot slot reading *File upload has failed* keeps its row
+     Incomplete; delete it with its ✕ and upload again.
 6. **Publish** opens *Submit your extension*, which does **not** submit yet.
    - *Does a tester need credentials, accounts, or any other info?* —
      answered **Yes, I need to provide … other info for testers**. Choosing

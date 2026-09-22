@@ -54,7 +54,8 @@
   *(coming in 2.0)*
 - A **What's new** page after an update, offered as one dismissible line in
   the popup and reopenable from Settings. *(coming in 2.0)*
-- With more than one YouTube tab open, pick which one to control.
+- With more than one YouTube tab open, pick which one to control. A ↗ on
+  each one takes you to that tab, even in another window.
 - See how much data you used and saved, and how long you listened, this
   month or all time.
 - Keyboard shortcut: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> turns audio

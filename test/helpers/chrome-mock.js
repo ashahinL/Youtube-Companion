@@ -126,7 +126,10 @@ export function installChromeMock(initial = {}) {
     badgeColor: null,
     tabsCreated: [],
     tabsUpdated: [],
+    windowsUpdated: [],
     tabRemovedListeners: [],
+    tabCreatedListeners: [],
+    tabUpdatedListeners: [],
     messagesSent: [],
     commandListeners: [],
     commandList: [{ name: 'toggle-audio-mode', shortcut: '' }],
@@ -287,6 +290,31 @@ export function installChromeMock(initial = {}) {
           if (i >= 0) handle.tabRemovedListeners.splice(i, 1);
         },
       },
+      onCreated: {
+        addListener(fn) {
+          if (typeof fn === 'function') handle.tabCreatedListeners.push(fn);
+        },
+        removeListener(fn) {
+          const i = handle.tabCreatedListeners.indexOf(fn);
+          if (i >= 0) handle.tabCreatedListeners.splice(i, 1);
+        },
+      },
+      onUpdated: {
+        addListener(fn) {
+          if (typeof fn === 'function') handle.tabUpdatedListeners.push(fn);
+        },
+        removeListener(fn) {
+          const i = handle.tabUpdatedListeners.indexOf(fn);
+          if (i >= 0) handle.tabUpdatedListeners.splice(i, 1);
+        },
+      },
+    },
+
+    windows: {
+      async update(windowId, opts) {
+        handle.windowsUpdated.push({ windowId, ...(opts || {}) });
+        return { id: windowId, ...(opts || {}) };
+      },
     },
 
     commands: {
@@ -368,6 +396,7 @@ export function installChromeMock(initial = {}) {
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
     handle.tabsUpdated.length = 0;
+    handle.windowsUpdated.length = 0;
     handle.messagesSent.length = 0;
     handle.activeTab = null;
     handle.sessionSetHold = null;
