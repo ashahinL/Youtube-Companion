@@ -199,6 +199,8 @@
   --ytc-scan-text-dark: #f1f1f1;
   --ytc-scan-accent: #7c5cf0;
   --ytc-scan-on-accent: #ffffff;
+  --ytc-scan-danger: #b71c1c;
+  --ytc-scan-danger-soft: #ff8a80;
 
   position: fixed;
   inset: 0;
@@ -452,6 +454,107 @@ html[dark] #ytc-scan-overlay {
   line-height: 1.4;
   opacity: 0.72;
   text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-decide,
+#ytc-scan-overlay .ytc-scan-warn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: min(420px, 100%);
+}
+
+#ytc-scan-overlay .ytc-scan-warn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  margin: 4px 0 0;
+}
+
+#ytc-scan-overlay .ytc-scan-warn-text,
+#ytc-scan-overlay .ytc-scan-saved,
+#ytc-scan-overlay .ytc-scan-export-failed {
+  all: unset;
+  display: block;
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 0;
+  color: inherit;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-warn-text,
+#ytc-scan-overlay .ytc-scan-export-failed {
+  color: var(--ytc-scan-danger);
+  font-weight: 600;
+}
+
+#ytc-scan-overlay[data-dark] .ytc-scan-warn-text,
+#ytc-scan-overlay[data-dark] .ytc-scan-export-failed,
+html[dark] #ytc-scan-overlay .ytc-scan-warn-text,
+html[dark] #ytc-scan-overlay .ytc-scan-export-failed {
+  color: var(--ytc-scan-danger-soft);
+}
+
+#ytc-scan-overlay .ytc-scan-saved {
+  font-size: 14px;
+  opacity: 0.72;
+}
+
+#ytc-scan-overlay .ytc-scan-merge,
+#ytc-scan-overlay .ytc-scan-replace,
+#ytc-scan-overlay .ytc-scan-export,
+#ytc-scan-overlay .ytc-scan-delete,
+#ytc-scan-overlay .ytc-scan-cancel {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding-block: 8px;
+  padding-inline: 16px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+#ytc-scan-overlay .ytc-scan-merge {
+  background: var(--ytc-scan-accent);
+  color: var(--ytc-scan-on-accent);
+}
+
+#ytc-scan-overlay .ytc-scan-replace,
+#ytc-scan-overlay .ytc-scan-export,
+#ytc-scan-overlay .ytc-scan-cancel {
+  border: 1px solid currentColor;
+  color: inherit;
+}
+
+#ytc-scan-overlay .ytc-scan-delete {
+  background: var(--ytc-scan-danger);
+  color: var(--ytc-scan-on-accent);
+}
+
+#ytc-scan-overlay .ytc-scan-merge:focus-visible,
+#ytc-scan-overlay .ytc-scan-replace:focus-visible,
+#ytc-scan-overlay .ytc-scan-export:focus-visible,
+#ytc-scan-overlay .ytc-scan-cancel:focus-visible {
+  outline: 2px solid var(--ytc-scan-accent);
+  outline-offset: 3px;
+}
+
+#ytc-scan-overlay .ytc-scan-delete:focus-visible {
+  outline: 2px solid var(--ytc-scan-danger);
+  outline-offset: 3px;
 }
 
 /* Group chips on /feed/subscriptions. Lengths are px because YouTube sets

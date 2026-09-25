@@ -1413,9 +1413,30 @@
     return -1;
   }
 
+  function scanEscapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  // Some responses carry the JSON in its own <script type="application/json">
+  // and assign it with JSON.parse(<var>.textContent) (docs/youtube.md).
+  function scanJsonScriptAt(html) {
+    const use = /window\[\s*["']ytInitialData["']\s*\]\s*=\s*JSON\.parse\(\s*([A-Za-z_$][\w$]*)\.textContent/.exec(html);
+    if (!use) return -1;
+    const decl = new RegExp(
+      '\\b' + scanEscapeRegExp(use[1]) + '\\s*=\\s*document\\.getElementById\\(\\s*["\']([^"\']+)["\']',
+    ).exec(html);
+    if (!decl) return -1;
+    const tag = new RegExp('<script\\b[^>]*\\bid=["\']' + scanEscapeRegExp(decl[1]) + '["\'][^>]*>').exec(html);
+    if (!tag) return -1;
+    const start = html.indexOf('{', tag.index + tag[0].length);
+    if (start < 0 || html.slice(tag.index + tag[0].length, start).trim()) return -1;
+    return start;
+  }
+
   function scanInitialData(html) {
-    const start = scanAssignmentAt(html);
-    if (start < 0 || html[start] !== '{') return null;
+    let start = scanAssignmentAt(html);
+    if (start < 0 || html[start] !== '{') start = scanJsonScriptAt(html);
+    if (start < 0) return null;
     const end = scanJsonEnd(html, start);
     if (end < 0) return null;
     try {
@@ -1502,7 +1523,8 @@
       if (data) scanCountRows(data, acc);
       return {
         sessionIndex: scanSessionIndexIn(html),
-        subscribed: acc.subscribed,
+        // Unreadable is not empty: the scan reads the live rows either way.
+        subscribed: data ? acc.subscribed : null,
         continuation: acc.continuation,
         avatar: data ? scanAccountAvatar(data) : '',
       };
@@ -1531,6 +1553,108 @@
     return true;
   }
 
+  // The account switcher's reply is the one place the names are. Same
+  // function as parseAccountSwitcher in src/lib/subscriptions-page.js.
+  const SCAN_NAME_MAX = 80;
+
+  function scanSwitcherIndex(node) {
+    if (typeof node === 'string') {
+      const match = /[?&]authuser=(\d)(?!\d)/.exec(node);
+      return match ? Number(match[1]) : null;
+    }
+    if (!node || typeof node !== 'object') return null;
+    const values = Array.isArray(node) ? node : Object.values(node);
+    for (let i = 0; i < values.length; i++) {
+      const found = scanSwitcherIndex(values[i]);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  function scanSwitcherName(value) {
+    if (!value || typeof value !== 'object') return '';
+    let text = '';
+    if (typeof value.simpleText === 'string') text = value.simpleText;
+    else if (Array.isArray(value.runs)) {
+      text = value.runs.map(function (run) {
+        return run && typeof run.text === 'string' ? run.text : '';
+      }).join('');
+    }
+    return text.trim().slice(0, SCAN_NAME_MAX);
+  }
+
+  function scanSwitcherItems(node, out) {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) scanSwitcherItems(node[i], out);
+      return;
+    }
+    if (node.accountItem && typeof node.accountItem === 'object') {
+      out.push(node.accountItem);
+      return;
+    }
+    const keys = Object.keys(node);
+    for (let i = 0; i < keys.length; i++) scanSwitcherItems(node[keys[i]], out);
+  }
+
+  // The selected account comes first, not account 0: the index is the
+  // authuser number in each row's sign-in link.
+  function parseAccountSwitcher(text) {
+    if (typeof text !== 'string' || !text) return [];
+    let data;
+    try {
+      data = JSON.parse(text.replace(/^\)\]\}'\s*/, ''));
+    } catch (err) {
+      return [];
+    }
+    const items = [];
+    scanSwitcherItems(data, items);
+    const seen = {};
+    const out = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const index = scanSwitcherIndex(item.serviceEndpoint);
+      if (index == null || seen[index]) continue;
+      const name = scanSwitcherName(item.accountName);
+      const avatar = scanBestThumbnail(item.accountPhoto && item.accountPhoto.thumbnails);
+      if (!name && !avatar) continue;
+      seen[index] = true;
+      out.push({ index: index, name: name, avatar: avatar });
+    }
+    return out;
+  }
+
+  // One read per page load. The names stay in this tab: they are painted
+  // and never sent to the worker or stored.
+  let switcherLoad = null;
+
+  function loadAccountNames() {
+    if (!switcherLoad) {
+      switcherLoad = (async function () {
+        const byIndex = {};
+        try {
+          const fetchFn = root.fetch || fetch;
+          const res = await fetchFn('https://www.youtube.com/getAccountSwitcherEndpoint', {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (!res || res.ok !== true) return byIndex;
+          const rows = parseAccountSwitcher(await res.text());
+          for (let i = 0; i < rows.length; i++) byIndex[rows[i].index] = rows[i];
+        } catch (err) {
+          // Names are a nicety: without them the rows read "Account N".
+        }
+        return byIndex;
+      })();
+    }
+    return switcherLoad;
+  }
+
+  function accountTitle(pack, account) {
+    if (account && typeof account.name === 'string' && account.name) return account.name;
+    return messageOf(pack, 'scanAccount', [String(account.index + 1)]);
+  }
+
   const SCAN_OVERLAY_ID = 'ytc-scan-overlay';
   const SCAN_ROW_WAIT_MS = 15000;
   const SCAN_ROW_POLL_MS = 250;
@@ -1547,6 +1671,8 @@
   let accountPickTeardown = false;
   let heldChoice = null;
   let pickerSend = null;
+  let chooseSend = null;
+  let lastExportName = '';
   let pickerWanted = false;
 
   function pagePath() {
@@ -1714,7 +1840,15 @@
       if (!node) return;
       const cls = typeof node.className === 'string' ? node.className : '';
       const names = cls.split(/\s+/);
-      if (names.indexOf('ytc-scan-scan') !== -1 || names.indexOf('ytc-scan-another') !== -1) {
+      if (
+        names.indexOf('ytc-scan-scan') !== -1
+        || names.indexOf('ytc-scan-another') !== -1
+        || names.indexOf('ytc-scan-merge') !== -1
+        || names.indexOf('ytc-scan-replace') !== -1
+        || names.indexOf('ytc-scan-export') !== -1
+        || names.indexOf('ytc-scan-delete') !== -1
+        || names.indexOf('ytc-scan-cancel') !== -1
+      ) {
         setScanHidden(node, true);
       }
       const kids = node.children || [];
@@ -1725,6 +1859,8 @@
 
   function onAccountPickExpired() {
     accountPickTimer = null;
+    // The worker has stopped waiting. A late click must not answer it.
+    chooseSend = null;
     let el = null;
     try { el = document.getElementById(SCAN_OVERLAY_ID); } catch (err) { el = null; }
     if (!el) return;
@@ -1755,10 +1891,93 @@
   function finishAccountChoice(payload) {
     const held = heldChoice;
     const picking = pickerSend;
+    const choosing = chooseSend;
     heldChoice = null;
     pickerSend = null;
+    chooseSend = null;
     try { if (held && held.send) held.send(payload); } catch (err) { /* swallow */ }
     try { if (picking) picking(payload); } catch (err) { /* swallow */ }
+    try { if (choosing) choosing(payload); } catch (err) { /* swallow */ }
+  }
+
+  // A youtube.com page can dispatch clicks at this overlay. Only a real
+  // click may change the watchlist or ask for the backup.
+  function isTrustedClick(ev) {
+    return !!(ev && ev.isTrusted === true);
+  }
+
+  function replyChoose(payload) {
+    const send = chooseSend;
+    chooseSend = null;
+    clearAccountPickTimer();
+    try { if (send) send(payload); } catch (err) { /* swallow */ }
+  }
+
+  function showImportWarning(open) {
+    let el = null;
+    try { el = document.getElementById(SCAN_OVERLAY_ID); } catch (err) { el = null; }
+    if (!el || typeof el.querySelector !== 'function') return;
+    setScanHidden(el.querySelector('.ytc-scan-decide'), open);
+    setScanHidden(el.querySelector('.ytc-scan-warn'), !open);
+  }
+
+  function onScanMerge(ev) {
+    stopFaceEvent(ev);
+    if (!isTrustedClick(ev)) return;
+    replyChoose({ ok: true, mode: 'merge' });
+  }
+
+  function onScanReplace(ev) {
+    stopFaceEvent(ev);
+    if (!isTrustedClick(ev)) return;
+    showImportWarning(true);
+  }
+
+  function onScanExport(ev) {
+    stopFaceEvent(ev);
+    if (!isTrustedClick(ev)) return;
+    replyChoose({ ok: true, mode: 'export' });
+  }
+
+  function onScanDelete(ev) {
+    stopFaceEvent(ev);
+    if (!isTrustedClick(ev)) return;
+    replyChoose({ ok: true, mode: 'replace' });
+  }
+
+  function onScanCancel(ev) {
+    stopFaceEvent(ev);
+    if (!isTrustedClick(ev)) return;
+    showImportWarning(false);
+  }
+
+  function saveScanDownload(msg) {
+    const name = msg && typeof msg.name === 'string' ? msg.name : '';
+    const text = msg && typeof msg.text === 'string' ? msg.text : '';
+    if (!name || !text) return false;
+    let url = '';
+    try {
+      const blob = new Blob([text], { type: 'application/json' });
+      url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      // Never put the link in YouTube's DOM: page scripts watch mutations
+      // and could fetch the blob, which is the whole watchlist. Chrome
+      // downloads from a detached anchor.
+      a.click();
+      // Revoking in the same turn can cancel the download in some browsers.
+      setTimeout(function () {
+        try { URL.revokeObjectURL(url); } catch (err) { /* swallow */ }
+      }, 1000);
+    } catch (err) {
+      if (url) {
+        try { URL.revokeObjectURL(url); } catch (ignore) { /* swallow */ }
+      }
+      return false;
+    }
+    lastExportName = name;
+    return true;
   }
 
   function onScanDone(ev) {
@@ -1802,6 +2021,41 @@
     const node = document.createElement('p');
     node.className = className;
     return node;
+  }
+
+  function scanButton(className, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.addEventListener('click', onClick);
+    return button;
+  }
+
+  function appendChooseControls(el) {
+    const decide = document.createElement('div');
+    decide.className = 'ytc-scan-decide';
+    decide.appendChild(scanButton('ytc-scan-merge', onScanMerge));
+    decide.appendChild(scanButton('ytc-scan-replace', onScanReplace));
+    setScanHidden(decide, true);
+    const warn = document.createElement('div');
+    warn.className = 'ytc-scan-warn';
+    const warnText = scanNode('ytc-scan-warn-text');
+    const saved = scanNode('ytc-scan-saved');
+    const failed = scanNode('ytc-scan-export-failed');
+    setScanHidden(saved, true);
+    setScanHidden(failed, true);
+    const row = document.createElement('div');
+    row.className = 'ytc-scan-warn-actions';
+    row.appendChild(scanButton('ytc-scan-export', onScanExport));
+    row.appendChild(scanButton('ytc-scan-delete', onScanDelete));
+    row.appendChild(scanButton('ytc-scan-cancel', onScanCancel));
+    warn.appendChild(warnText);
+    warn.appendChild(saved);
+    warn.appendChild(failed);
+    warn.appendChild(row);
+    setScanHidden(warn, true);
+    el.appendChild(decide);
+    el.appendChild(warn);
   }
 
   function ensureScanOverlay(got) {
@@ -1858,6 +2112,7 @@
       el.appendChild(count);
       el.appendChild(loaded);
       el.appendChild(picker);
+      appendChooseControls(el);
       el.appendChild(expired);
       el.appendChild(actions);
       const parent = document.documentElement || document.body;
@@ -1896,8 +2151,23 @@
     if (!show) return;
     const label = who.querySelector('.ytc-scan-who-label');
     const img = who.querySelector('.ytc-scan-avatar');
-    if (label) label.textContent = messageOf(pack, 'scanAccount', [String(info.account + 1)]);
-    const avatar = scanAvatarUrl(info && info.avatar);
+    const fallback = messageOf(pack, 'scanAccount', [String(info.account + 1)]);
+    if (label) label.textContent = fallback;
+    paintWhoPicture(img, scanAvatarUrl(info && info.avatar));
+    const account = info.account;
+    const pictured = !!scanAvatarUrl(info && info.avatar);
+    loadAccountNames().then(function (names) {
+      const found = names[account];
+      if (!found) return;
+      // A later paint may have moved on to another account or state.
+      if (label && found.name && label.textContent === fallback) label.textContent = found.name;
+      if (img && !pictured && found.avatar && label && label.textContent === found.name) {
+        paintWhoPicture(img, found.avatar);
+      }
+    }, function () {});
+  }
+
+  function paintWhoPicture(img, avatar) {
     if (!img) return;
     if (avatar) {
       try { img.setAttribute('src', avatar); } catch (err) { img.src = avatar; }
@@ -1905,6 +2175,52 @@
     } else {
       try { img.removeAttribute('src'); } catch (err) { /* swallow */ }
       setScanHidden(img, true);
+    }
+  }
+
+  function scanCount(value) {
+    const n = Number(value);
+    if (!isFinite(n) || n < 0) return 0;
+    return Math.floor(n);
+  }
+
+  function paintChooseCopy(el, pack, info) {
+    const fresh = scanCount(info && info.fresh);
+    const extra = scanCount(info && info.extra);
+    const title = el.querySelector('.ytc-scan-title');
+    const sub = el.querySelector('.ytc-scan-sub');
+    if (title) title.textContent = messageOf(pack, 'scanDifferTitle');
+    if (sub) sub.textContent = messageOf(pack, 'scanDifferLine', [String(fresh), String(extra)]);
+    setScanHidden(sub, false);
+    const merge = el.querySelector('.ytc-scan-merge');
+    const replace = el.querySelector('.ytc-scan-replace');
+    const warnText = el.querySelector('.ytc-scan-warn-text');
+    const exportBtn = el.querySelector('.ytc-scan-export');
+    const deleteBtn = el.querySelector('.ytc-scan-delete');
+    const cancelBtn = el.querySelector('.ytc-scan-cancel');
+    if (merge) merge.textContent = messageOf(pack, 'scanAddNew');
+    if (replace) replace.textContent = messageOf(pack, 'scanReplaceList');
+    if (warnText) warnText.textContent = countMessage(pack, 'scanReplaceWarn', extra);
+    if (exportBtn) exportBtn.textContent = messageOf(pack, 'scanReplaceExport');
+    if (deleteBtn) deleteBtn.textContent = messageOf(pack, 'scanReplaceDelete');
+    if (cancelBtn) cancelBtn.textContent = messageOf(pack, 'scanReplaceCancel');
+    // The account wait hides these. A later choice has to show them again.
+    setScanHidden(merge, false);
+    setScanHidden(replace, false);
+    setScanHidden(exportBtn, false);
+    setScanHidden(deleteBtn, false);
+    setScanHidden(cancelBtn, false);
+    const saved = el.querySelector('.ytc-scan-saved');
+    const failed = el.querySelector('.ytc-scan-export-failed');
+    const showSaved = !!(info && info.exported === true && lastExportName);
+    if (saved) {
+      saved.textContent = showSaved ? messageOf(pack, 'scanExportSaved', [lastExportName]) : '';
+      setScanHidden(saved, !showSaved);
+    }
+    if (failed) {
+      const showFailed = !!(info && info.exportError === true);
+      failed.textContent = showFailed ? messageOf(pack, 'scanExportFailed') : '';
+      setScanHidden(failed, !showFailed);
     }
   }
 
@@ -1922,21 +2238,31 @@
     const btn = el.querySelector('.ytc-scan-done');
     const another = el.querySelector('.ytc-scan-another');
     const picker = el.querySelector('.ytc-scan-picker');
-    const result = mode === 'added' || mode === 'nothing';
+    const decide = el.querySelector('.ytc-scan-decide');
+    const warn = el.querySelector('.ytc-scan-warn');
+    const result = mode === 'added' || mode === 'nothing' || mode === 'removed';
     const spinning = mode === 'scanning' || mode === 'accounts';
+    const choice = mode === 'choose';
+    const warning = choice && !!(info && (info.exported === true || info.exportError === true));
     setScanHidden(spinner, !spinning);
     setScanHidden(count, mode !== 'scanning');
     setScanHidden(loaded, true);
     setScanHidden(picker, mode !== 'picker');
+    setScanHidden(decide, !choice || warning);
+    setScanHidden(warn, !warning);
     setScanHidden(btn, mode === 'scanning');
     if (btn) btn.textContent = messageOf(pack, 'scanDone');
     if (another) another.textContent = messageOf(pack, 'scanAnother');
     const showAnother = result && knownAccount(info);
     setScanHidden(another, !showAnother);
-    if (result) paintWho(el, pack, info);
+    if (result || choice || mode === 'empty') paintWho(el, pack, info);
     else {
       const who = el.querySelector('.ytc-scan-who');
       setScanHidden(who, true);
+    }
+    if (choice) {
+      paintChooseCopy(el, pack, info);
+      return;
     }
     if (mode === 'scanning') {
       if (title) title.textContent = messageOf(pack, 'scanTitle');
@@ -1960,9 +2286,31 @@
     if (mode === 'added') {
       const added = Number(info && info.added) || 0;
       const skipped = Number(info && info.skipped) || 0;
+      const removed = Number(info && info.removed) || 0;
       if (title) title.textContent = countMessage(pack, 'scanAdded', added);
-      if (sub) sub.textContent = skipped ? countMessage(pack, 'scanSkipped', skipped) : '';
-      setScanHidden(sub, !skipped);
+      if (removed > 0) {
+        if (sub) sub.textContent = countMessage(pack, 'scanRemoved', removed);
+        setScanHidden(sub, false);
+      } else if (skipped) {
+        if (sub) sub.textContent = countMessage(pack, 'scanSkipped', skipped);
+        setScanHidden(sub, false);
+      } else {
+        if (sub) sub.textContent = '';
+        setScanHidden(sub, true);
+      }
+      return;
+    }
+    if (mode === 'removed') {
+      const removed = Number(info && info.removed) || 0;
+      if (title) title.textContent = countMessage(pack, 'scanRemoved', removed);
+      if (sub) sub.textContent = '';
+      setScanHidden(sub, true);
+      return;
+    }
+    if (mode === 'empty') {
+      if (title) title.textContent = messageOf(pack, 'scanReplaceEmpty');
+      if (sub) sub.textContent = '';
+      setScanHidden(sub, true);
       return;
     }
     if (mode === 'nothing') {
@@ -2077,10 +2425,12 @@
   function resultInfo(msg) {
     const added = Number(msg && msg.added) || 0;
     const skipped = Number(msg && msg.skipped) || 0;
+    const removed = Number(msg && msg.removed) || 0;
     const account = msg && msg.account;
     return {
       added: added,
       skipped: skipped,
+      removed: removed > 0 ? removed : 0,
       account: typeof account === 'number' ? account : null,
       avatar: msg && typeof msg.avatar === 'string' ? msg.avatar : '',
     };
@@ -2092,8 +2442,10 @@
       const error = msg && typeof msg.error === 'string' ? msg.error : '';
       const info = resultInfo(msg);
       if (error === 'signedOut') paintScanMode(got, 'signedOut', info);
+      else if (error === 'empty') paintScanMode(got, 'empty', info);
       else if (error) paintScanMode(got, 'failed', info);
       else if (info.added > 0) paintScanMode(got, 'added', info);
+      else if (info.removed > 0) paintScanMode(got, 'removed', info);
       else paintScanMode(got, 'nothing', info);
       if (!error) startAccountPickTimer(got.pack);
     } catch (err) {
@@ -2101,7 +2453,24 @@
     }
   }
 
+  function showImportChoice(msg, sendResponse) {
+    chooseSend = sendResponse;
+    const info = {
+      account: msg && msg.account,
+      avatar: msg && typeof msg.avatar === 'string' ? msg.avatar : '',
+      fresh: msg && msg.fresh,
+      extra: msg && msg.extra,
+      exported: !!(msg && msg.exported === true),
+      exportError: !!(msg && msg.exportError === true),
+    };
+    scanCopy().then(function (got) {
+      safePaint(function () { paintScanMode(got, 'choose', info); });
+      startAccountPickTimer(got && got.pack);
+    }, function () {});
+  }
+
   function accountCountText(pack, account) {
+    if (account && account.subscribed === null) return messageOf(pack, 'scanAccountUncounted');
     if (!account || !account.subscribed) return messageOf(pack, 'scanAccountNone');
     if (account.continuation) return messageOf(pack, 'scanAccountMore', [String(account.subscribed)]);
     return countMessage(pack, 'scanAccountChannels', account.subscribed);
@@ -2144,7 +2513,8 @@
       for (let i = 0; accounts && i < accounts.length; i++) {
         const account = accounts[i];
         const row = document.createElement('div');
-        row.className = account.subscribed
+        const scannable = account.subscribed !== 0;
+        row.className = scannable
           ? 'ytc-scan-row'
           : 'ytc-scan-row ytc-scan-row--empty';
         const avatar = scanAvatarUrl(account.avatar);
@@ -2160,7 +2530,7 @@
         text.className = 'ytc-scan-row-text';
         const name = document.createElement('span');
         name.className = 'ytc-scan-row-name';
-        name.textContent = messageOf(pack, 'scanAccount', [String(account.index + 1)]);
+        name.textContent = accountTitle(pack, account);
         if (info && info.current === account.index) {
           name.textContent += ' · ' + messageOf(pack, 'scanAccountHere');
         }
@@ -2170,7 +2540,7 @@
         text.appendChild(name);
         text.appendChild(detail);
         row.appendChild(text);
-        if (account.subscribed) {
+        if (scannable) {
           const button = document.createElement('button');
           button.type = 'button';
           button.className = 'ytc-scan-scan';
@@ -2219,6 +2589,7 @@
       const got = await scanCopy();
       safePaint(function () { paintScanMode(got, 'accounts', {}); });
     }
+    const names = loadAccountNames();
     const accounts = [];
     for (let n = 0; n < 10; n++) {
       let html = null;
@@ -2231,6 +2602,13 @@
       if (!takeAccountPage(accounts, html)) break;
     }
     if (!accounts.length) return null;
+    const byIndex = await names;
+    for (let i = 0; i < accounts.length; i++) {
+      const found = byIndex[accounts[i].index];
+      if (!found) continue;
+      if (found.name) accounts[i].name = found.name;
+      if (!accounts[i].avatar && found.avatar) accounts[i].avatar = found.avatar;
+    }
     const current = await readCurrentSession();
     return { accounts: accounts, current: current };
   }
@@ -2239,7 +2617,7 @@
     const accounts = info.accounts;
     const rich = [];
     for (let i = 0; i < accounts.length; i++) {
-      if (accounts[i].subscribed > 0) rich.push(accounts[i]);
+      if (accounts[i].subscribed !== 0) rich.push(accounts[i]);
     }
     // again is the worker asking after a result. A navigation loads a new
     // script, so this flag, not memory, is what keeps the result on screen.
@@ -3168,6 +3546,16 @@
           );
           return true;
         }
+        if (msg.type === 'subscriptions.choose') {
+          showImportChoice(msg, sendResponse);
+          return true;
+        }
+        if (msg.type === 'subscriptions.download') {
+          let ok = false;
+          try { ok = saveScanDownload(msg) === true; } catch (err) { ok = false; }
+          try { sendResponse({ ok: ok }); } catch (err) { /* swallow */ }
+          return;
+        }
         if (msg.type !== 'audioMode.toggle') return;
         toggle().then(
           function () { sendResponse({ ok: true, on: !!session }); },
@@ -3227,7 +3615,9 @@
     showScanResult,
     parseSubscriptionsHtml,
     takeAccountPage,
+    parseAccountSwitcher,
     openAccountPicker,
+    chooseAccounts,
     fold,
     normalizeGroupName,
     groupNamesInList,

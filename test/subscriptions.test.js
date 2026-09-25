@@ -8,7 +8,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
-import { parseSubscriptionsHtml, takeAccountPage } from '../src/lib/subscriptions-page.js';
+import {
+  parseAccountSwitcher,
+  parseSubscriptionsHtml,
+  takeAccountPage,
+} from '../src/lib/subscriptions-page.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -103,7 +107,20 @@ function makeNode(tag) {
       return Object.prototype.hasOwnProperty.call(this.attrs, name) ? this.attrs[name] : null;
     },
     hasAttribute(name) { return Object.prototype.hasOwnProperty.call(this.attrs, name); },
-    appendChild(child) { this.children.push(child); return child; },
+    appendChild(child) {
+      child.parent = this;
+      this.children.push(child);
+      return child;
+    },
+    remove() {
+      const parent = this.parent;
+      if (parent && Array.isArray(parent.children)) {
+        const index = parent.children.indexOf(this);
+        if (index >= 0) parent.children.splice(index, 1);
+      }
+      this.parent = null;
+    },
+    click() { this.clicked = true; },
     addEventListener(type, fn) { this.listeners.push({ type, fn }); },
     querySelector(sel) {
       const want = sel.startsWith('.') ? sel.slice(1) : '';
@@ -162,10 +179,25 @@ function loadContent() {
       scanAccountScan: 'Scan',
       scanAnother: 'Import another account',
       scanExpired: 'Start the import again from the extension',
+      scanDifferTitle: 'Your watchlist and this account differ',
+      scanDifferLine: '$1 new on YouTube · $2 on your watchlist only',
+      scanAddNew: 'Add new',
+      scanReplaceList: 'Replace watchlist',
+      scanReplaceWarn: 'Your current watchlist will be replaced. $1 channels will be deleted from it, with their videos. There is no undo.',
+      scanReplaceWarnOne: 'Your current watchlist will be replaced. $1 channel will be deleted from it, with their videos. There is no undo.',
+      scanReplaceExport: 'Export my list first',
+      scanReplaceDelete: 'Delete and replace',
+      scanReplaceCancel: 'Cancel',
+      scanExportSaved: 'Saved $1',
+      scanExportFailed: 'Could not save the backup',
+      scanRemoved: 'Removed $1 channels',
+      scanRemovedOne: 'Removed $1 channel',
+      scanReplaceEmpty: 'Nothing was changed. An empty list cannot replace your watchlist.',
       scanChoose: 'Choose an account',
       scanStay: 'Do not close this tab',
       scanAccountChannels: '$1 channels',
       scanAccountNone: 'No subscriptions',
+      scanAccountUncounted: 'Channels not counted',
     },
     ar: {
       scanTitle: 'جارٍ فحص قنواتك',
@@ -183,12 +215,22 @@ function loadContent() {
       scanDone: 'تم',
       scanAccount: 'الحساب: $1',
       scanAnother: 'استيراد حساب آخر',
+      scanDifferTitle: 'قائمتك وهذا الحساب مختلفان',
+      scanDifferLine: 'جديد على يوتيوب: $1 · في قائمتك فقط: $2',
+      scanAddNew: 'أضف الجديد',
+      scanReplaceList: 'استبدال القائمة',
+      scanReplaceWarn: 'ستُستبدل قائمتك الحالية. القنوات التي ستُحذف منها: $1، مع فيديوهاتها. لا يمكن التراجع.',
+      scanReplaceWarnOne: 'ستُستبدل قائمتك الحالية. القنوات التي ستُحذف منها: $1، مع فيديوهاتها. لا يمكن التراجع.',
+      scanRemoved: 'القنوات المحذوفة: $1',
+      scanRemovedOne: 'القنوات المحذوفة: $1',
+      scanExportSaved: 'تم الحفظ: $1',
     },
   };
   let locale = 'en';
   const sandbox = {
     __ytcHarness: true,
     URL,
+    Blob,
     setTimeout,
     clearTimeout,
     location: { pathname: '/watch' },
@@ -436,6 +478,7 @@ export default async function run(t) {
   const varHtml = read('test/fixtures/channels.account-var.html');
   const windowHtml = read('test/fixtures/channels.account-window.html');
   const emptyHtml = read('test/fixtures/channels.account-empty.html');
+  const jsonHtml = read('test/fixtures/channels.account-json.html');
   const fromVar = parseSubscriptionsHtml(varHtml);
   t.check(
     'var ytInitialData keeps subscribed rows, the continuation, and the largest avatar',
@@ -460,6 +503,21 @@ export default async function run(t) {
     fromEmpty.sessionIndex === 2 && fromEmpty.subscribed === 0 && fromEmpty.continuation === false,
     JSON.stringify(fromEmpty),
   );
+  const fromJson = parseSubscriptionsHtml(jsonHtml);
+  t.check(
+    'JSON.parse of a <script type="application/json"> is read too',
+    fromJson.sessionIndex === 3
+      && fromJson.subscribed === 2
+      && fromJson.continuation === false
+      && fromJson.avatar === 'https://yt3.ggpht.com/json=s88',
+    JSON.stringify(fromJson),
+  );
+  const unreadable = parseSubscriptionsHtml('<script>ytcfg.set({"SESSION_INDEX":"4"});</script>');
+  t.check(
+    'a page whose data cannot be read is not counted as empty',
+    unreadable.sessionIndex === 4 && unreadable.subscribed === null,
+    JSON.stringify(unreadable),
+  );
   const pages = [];
   t.check('account 0 is kept', takeAccountPage(pages, varHtml) === true);
   t.check('account 1 is kept', takeAccountPage(pages, windowHtml) === true);
@@ -473,7 +531,10 @@ export default async function run(t) {
     'the content script parses the same pages',
     JSON.stringify(page.api.parseSubscriptionsHtml(varHtml)) === JSON.stringify(fromVar)
       && JSON.stringify(page.api.parseSubscriptionsHtml(windowHtml)) === JSON.stringify(fromWindow)
-      && JSON.stringify(page.api.parseSubscriptionsHtml(emptyHtml)) === JSON.stringify(fromEmpty),
+      && JSON.stringify(page.api.parseSubscriptionsHtml(emptyHtml)) === JSON.stringify(fromEmpty)
+      && JSON.stringify(page.api.parseSubscriptionsHtml(jsonHtml)) === JSON.stringify(fromJson)
+      && JSON.stringify(page.api.parseSubscriptionsHtml('<script>ytcfg.set({"SESSION_INDEX":"4"});</script>'))
+        === JSON.stringify(unreadable),
   );
   const fromScript = [];
   page.api.takeAccountPage(fromScript, varHtml);
@@ -483,6 +544,69 @@ export default async function run(t) {
     'the content script stops when the index falls back',
     fromScript.length === 2 && fromScript[0].subscribed === 2 && fromScript[1].subscribed === 1,
     JSON.stringify(fromScript),
+  );
+
+  t.section('account names');
+
+  const switcherText = read('test/fixtures/account-switcher.txt');
+  const named = parseAccountSwitcher(switcherText);
+  t.check(
+    'each row takes its number from the sign-in link, not its place in the list',
+    JSON.stringify(named.map((row) => [row.index, row.name])) === JSON.stringify([
+      [1, 'Second Account'],
+      [0, 'First Account'],
+      [2, 'Third Account'],
+      [3, 'Fourth Account'],
+    ]),
+    JSON.stringify(named),
+  );
+  t.check(
+    'a picture off the YouTube avatar hosts is dropped, the name kept',
+    named[0].avatar === 'https://yt3.ggpht.com/two=s48' && named[2].avatar === '',
+    JSON.stringify(named.map((row) => row.avatar)),
+  );
+  t.check(
+    'a reply that is not the switcher gives no names',
+    parseAccountSwitcher('<html>sorry</html>').length === 0
+      && parseAccountSwitcher(")]}'\n{}").length === 0
+      && parseAccountSwitcher('').length === 0,
+  );
+  t.check(
+    'the content script reads the switcher the same way',
+    JSON.stringify(page.api.parseAccountSwitcher(switcherText)) === JSON.stringify(named)
+      && page.api.parseAccountSwitcher('<html>').length === 0,
+  );
+
+  const namedPage = loadContent();
+  const switcherCalls = [];
+  namedPage.win.fetch = (url, init) => {
+    switcherCalls.push({ url, init });
+    return Promise.resolve({ ok: true, text: () => Promise.resolve(switcherText) });
+  };
+  await namedPage.api.showScanResult({ added: 2, skipped: 0, account: 2, avatar: '' });
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+  const namedOverlay = namedPage.doc.getElementById('ytc-scan-overlay');
+  t.check(
+    'the result names the account, read once from the switcher in this tab',
+    textOf(namedOverlay, 'ytc-scan-who-label') === 'Third Account'
+      && switcherCalls.length === 1
+      && switcherCalls[0].url === 'https://www.youtube.com/getAccountSwitcherEndpoint'
+      && switcherCalls[0].init.credentials === 'include',
+    `${textOf(namedOverlay, 'ytc-scan-who-label')} ${JSON.stringify(switcherCalls)}`,
+  );
+  await namedPage.api.showScanResult({ added: 1, skipped: 0, account: 1, avatar: '' });
+  await new Promise((resolve) => { setTimeout(resolve, 0); });
+  t.check(
+    'a second paint reuses the names and fills a missing picture',
+    textOf(namedOverlay, 'ytc-scan-who-label') === 'Second Account'
+      && namedOverlay.querySelector('.ytc-scan-avatar').getAttribute('src') === 'https://yt3.ggpht.com/two=s48'
+      && switcherCalls.length === 1,
+    textOf(namedOverlay, 'ytc-scan-who-label'),
+  );
+  t.check(
+    'names never travel to the worker',
+    !namedPage.sent.some((msg) => JSON.stringify(msg || {}).includes('Account')),
+    JSON.stringify(namedPage.sent),
   );
 
   page.setLocale('en');
@@ -532,7 +656,9 @@ export default async function run(t) {
     current: 0,
     accounts: [
       { index: 0, subscribed: 2, continuation: false, avatar: '' },
-      { index: 1, subscribed: 5, continuation: true, avatar: '' },
+      { index: 1, subscribed: 5, continuation: true, avatar: '', name: 'Second Account' },
+      { index: 2, subscribed: null, continuation: false, avatar: '' },
+      { index: 3, subscribed: 0, continuation: false, avatar: '' },
     ],
   }, () => {});
   await new Promise((resolve) => { setTimeout(resolve, 0); });
@@ -543,7 +669,35 @@ export default async function run(t) {
     for (const child of node.children || []) walkScans(child);
   };
   walkScans(overlay);
-  t.check('each account with channels has Scan', scans.length === 2 && long.length === 1, `${scans.length} ${long.length}`);
+  const details = [];
+  const walkDetails = (node) => {
+    if (!node) return;
+    if (node.className === 'ytc-scan-row-detail') details.push(node.textContent);
+    for (const child of node.children || []) walkDetails(child);
+  };
+  walkDetails(overlay);
+  t.check(
+    'each account with channels, or not counted, has Scan; an empty one does not',
+    scans.length === 3 && long.length === 1,
+    `${scans.length} ${long.length}`,
+  );
+  const rowNames = [];
+  const walkNames = (node) => {
+    if (!node) return;
+    if (node.className === 'ytc-scan-row-name') rowNames.push(node.textContent);
+    for (const child of node.children || []) walkNames(child);
+  };
+  walkNames(overlay);
+  t.check(
+    'a row shows the account name when the switcher gave one, else Account N',
+    rowNames[1] === 'Second Account' && rowNames[2] === 'Account 3',
+    JSON.stringify(rowNames),
+  );
+  t.check(
+    'an uncounted account says so instead of No subscriptions',
+    details[2] === 'Channels not counted' && details[3] === 'No subscriptions',
+    JSON.stringify(details),
+  );
   long[0].fn();
   t.check(
     'the cap replaces Scan with the restart line and leaves Done',
@@ -560,5 +714,228 @@ export default async function run(t) {
   t.check(
     'Done still asks the worker to close the tab',
     page.sent.slice(sentBefore).some((msg) => msg && msg.type === 'subscriptions.close'),
+  );
+
+  const picked = [];
+  page.api.chooseAccounts({
+    current: 1,
+    accounts: [
+      { index: 0, subscribed: 0, continuation: false, avatar: '' },
+      { index: 1, subscribed: 12, continuation: false, avatar: '' },
+    ],
+  }, (reply) => picked.push(reply));
+  t.check(
+    'one account with channels is read without a click',
+    picked.length === 1 && picked[0].index === 1,
+    JSON.stringify(picked),
+  );
+  picked.length = 0;
+  page.api.chooseAccounts({
+    current: 1,
+    accounts: [
+      { index: 0, subscribed: null, continuation: false, avatar: '' },
+      { index: 1, subscribed: 12, continuation: false, avatar: '' },
+    ],
+  }, (reply) => picked.push(reply));
+  t.check('an uncounted account still asks which one', picked.length === 0, JSON.stringify(picked));
+
+  t.section('the lists differ');
+
+  function flush() {
+    return new Promise((resolve) => { setTimeout(resolve, 0); });
+  }
+  function clickClass(root, cls, trusted) {
+    const node = root.querySelector(`.${cls}`);
+    const entry = node && node.listeners.find((item) => item.type === 'click');
+    if (!entry) return null;
+    entry.fn({
+      isTrusted: trusted === true,
+      preventDefault() {},
+      stopPropagation() {},
+    });
+    return node;
+  }
+  async function askChoose(fields) {
+    let reply = null;
+    const returned = page.listeners[0]({
+      type: 'subscriptions.choose',
+      fresh: 2,
+      extra: 3,
+      account: 1,
+      avatar: 'https://yt3.ggpht.com/acct=s176',
+      ...fields,
+    }, {}, (res) => { reply = res; });
+    await flush();
+    await flush();
+    return { returned, reply: () => reply };
+  }
+
+  page.setLocale('en');
+  const choice = await askChoose();
+  t.check('choose answers asynchronously', choice.returned === true);
+  t.check(
+    'the differ overlay names the account and the two counts',
+    textOf(overlay, 'ytc-scan-who-label') === 'Account 2'
+      && overlay.querySelector('.ytc-scan-avatar').getAttribute('src') === 'https://yt3.ggpht.com/acct=s176'
+      && textOf(overlay, 'ytc-scan-title') === 'Your watchlist and this account differ'
+      && textOf(overlay, 'ytc-scan-sub') === '2 new on YouTube · 3 on your watchlist only'
+      && textOf(overlay, 'ytc-scan-merge') === 'Add new'
+      && textOf(overlay, 'ytc-scan-replace') === 'Replace watchlist'
+      && overlay.querySelector('.ytc-scan-warn').hasAttribute('hidden')
+      && overlay.querySelector('.ytc-scan-another').hasAttribute('hidden')
+      && !overlay.querySelector('.ytc-scan-done').hasAttribute('hidden'),
+    `${textOf(overlay, 'ytc-scan-title')} | ${textOf(overlay, 'ytc-scan-sub')}`,
+  );
+  clickClass(overlay, 'ytc-scan-merge', false);
+  clickClass(overlay, 'ytc-scan-replace', false);
+  t.check(
+    'an untrusted click does not add or open the warning',
+    choice.reply() == null && overlay.querySelector('.ytc-scan-warn').hasAttribute('hidden'),
+  );
+  clickClass(overlay, 'ytc-scan-replace', true);
+  t.check(
+    'Replace turns the row into the warning',
+    !overlay.querySelector('.ytc-scan-warn').hasAttribute('hidden')
+      && overlay.querySelector('.ytc-scan-decide').hasAttribute('hidden')
+      && textOf(overlay, 'ytc-scan-warn-text') === 'Your current watchlist will be replaced. 3 channels will be deleted from it, with their videos. There is no undo.'
+      && choice.reply() == null,
+    textOf(overlay, 'ytc-scan-warn-text'),
+  );
+  clickClass(overlay, 'ytc-scan-export', false);
+  clickClass(overlay, 'ytc-scan-delete', false);
+  t.check('an untrusted export or delete does not answer', choice.reply() == null);
+  clickClass(overlay, 'ytc-scan-cancel', true);
+  t.check(
+    'Cancel returns to the two choices',
+    !overlay.querySelector('.ytc-scan-decide').hasAttribute('hidden')
+      && overlay.querySelector('.ytc-scan-warn').hasAttribute('hidden')
+      && choice.reply() == null,
+  );
+  clickClass(overlay, 'ytc-scan-replace', true);
+  clickClass(overlay, 'ytc-scan-export', true);
+  t.check(
+    'Export asks the worker for the backup',
+    choice.reply() && choice.reply().ok === true && choice.reply().mode === 'export',
+    JSON.stringify(choice.reply()),
+  );
+
+  const blobUrls = [];
+  page.win.URL.createObjectURL = (blob) => {
+    const url = `blob:test/${blobUrls.length}`;
+    blobUrls.push({ url, blob, revoked: false });
+    return url;
+  };
+  page.win.URL.revokeObjectURL = (url) => {
+    const row = blobUrls.find((item) => item.url === url);
+    if (row) row.revoked = true;
+  };
+  const anchors = [];
+  const prevCreate = page.doc.createElement;
+  page.doc.createElement = (tag) => {
+    const node = prevCreate(tag);
+    if (tag === 'a') anchors.push(node);
+    return node;
+  };
+  const scheduled = [];
+  const prevTimeout = page.win.setTimeout;
+  page.win.setTimeout = (fn, ms) => {
+    if (ms === 1000) {
+      scheduled.push(fn);
+      return { revoke: scheduled.length };
+    }
+    return prevTimeout(fn, ms);
+  };
+  let downloaded = null;
+  page.listeners[0]({
+    type: 'subscriptions.download',
+    name: 'youtube-companion-2026-09-25.json',
+    text: '{"app":"youtube-companion"}',
+  }, {}, (res) => { downloaded = res; });
+  const anchor = anchors[anchors.length - 1];
+  t.check(
+    'the backup is downloaded and not left on the page',
+    downloaded && downloaded.ok === true
+      && anchor && anchor.download === 'youtube-companion-2026-09-25.json'
+      && anchor.clicked === true
+      && anchor.parent == null
+      && blobUrls.length === 1
+      && scheduled.length === 1,
+    JSON.stringify({ downloaded, download: anchor && anchor.download, clicked: anchor && anchor.clicked }),
+  );
+  scheduled[0]();
+  t.check('the blob url is revoked after the click', blobUrls[0].revoked === true);
+  page.win.setTimeout = prevTimeout;
+
+  const saved = await askChoose({ exported: true });
+  t.check(
+    'after the export the warning comes back with the file name',
+    !overlay.querySelector('.ytc-scan-warn').hasAttribute('hidden')
+      && textOf(overlay, 'ytc-scan-saved') === 'Saved youtube-companion-2026-09-25.json'
+      && overlay.querySelector('.ytc-scan-export-failed').hasAttribute('hidden'),
+    textOf(overlay, 'ytc-scan-saved'),
+  );
+  clickClass(overlay, 'ytc-scan-delete', false);
+  t.check('an untrusted delete still does not answer', saved.reply() == null);
+  clickClass(overlay, 'ytc-scan-delete', true);
+  t.check(
+    'Delete and replace answers replace',
+    saved.reply() && saved.reply().ok === true && saved.reply().mode === 'replace',
+    JSON.stringify(saved.reply()),
+  );
+
+  page.setLocale('ar');
+  await askChoose();
+  t.check(
+    'Arabic is right to left and uses the label form',
+    overlay.getAttribute('dir') === 'rtl'
+      && textOf(overlay, 'ytc-scan-title') === 'قائمتك وهذا الحساب مختلفان'
+      && textOf(overlay, 'ytc-scan-sub') === 'جديد على يوتيوب: 2 · في قائمتك فقط: 3',
+    `${overlay.getAttribute('dir')} | ${textOf(overlay, 'ytc-scan-title')} | ${textOf(overlay, 'ytc-scan-sub')}`,
+  );
+
+  page.setLocale('en');
+  await page.api.showScanResult({
+    added: 2,
+    removed: 3,
+    skipped: 9,
+    account: 1,
+    avatar: 'https://yt3.ggpht.com/acct=s176',
+  });
+  t.check(
+    'a replace that added and removed names both',
+    textOf(overlay, 'ytc-scan-title') === 'Added 2 channels'
+      && textOf(overlay, 'ytc-scan-sub') === 'Removed 3 channels'
+      && !overlay.querySelector('.ytc-scan-another').hasAttribute('hidden'),
+    `${textOf(overlay, 'ytc-scan-title')} | ${textOf(overlay, 'ytc-scan-sub')}`,
+  );
+  await page.api.showScanResult({ added: 0, removed: 1, account: 0 });
+  t.check(
+    'only removals use Removed as the headline',
+    textOf(overlay, 'ytc-scan-title') === 'Removed 1 channel'
+      && overlay.querySelector('.ytc-scan-sub').hasAttribute('hidden'),
+    textOf(overlay, 'ytc-scan-title'),
+  );
+  await page.api.showScanResult({ added: 0, removed: 0, skipped: 4 });
+  t.check(
+    'nothing removed still says the list already has them',
+    textOf(overlay, 'ytc-scan-title') === 'Every channel is already on your list',
+  );
+
+  const failedExport = await askChoose({ exportError: true });
+  t.check(
+    'a failed export shows the failure line and does not download',
+    failedExport.returned === true
+      && !overlay.querySelector('.ytc-scan-warn').hasAttribute('hidden')
+      && textOf(overlay, 'ytc-scan-export-failed') === 'Could not save the backup'
+      && overlay.querySelector('.ytc-scan-saved').hasAttribute('hidden'),
+    textOf(overlay, 'ytc-scan-export-failed'),
+  );
+  const sentBeforeDone = page.sent.length;
+  clickClass(overlay, 'ytc-scan-done', true);
+  t.check(
+    'Done answers done and closes the tab',
+    failedExport.reply() && failedExport.reply().ok === false && failedExport.reply().error === 'done'
+      && page.sent.slice(sentBeforeDone).some((msg) => msg && msg.type === 'subscriptions.close'),
+    JSON.stringify(failedExport.reply()),
   );
 }

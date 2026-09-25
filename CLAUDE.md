@@ -22,7 +22,8 @@ Chrome loads.
 Nothing is authenticated by us. No API key, no OAuth, and the feed only reads
 public `youtube.com` endpoints, without cookies. The one use of the person's
 own YouTube session is Import from YouTube, which reads `/feed/channels`
-inside their signed-in tab, only when they press it. Audio mode injects an isolated
+(and the account switcher, for the accounts' names) inside their signed-in
+tab, only when they press it. Audio mode injects an isolated
 content script on youtube.com to pin the player to 144p; `#movie_player`
 methods are reached through a MAIN-world bridge.
 
@@ -94,11 +95,16 @@ asks.
 - **Import from YouTube**: the popup and the welcome page open the signed-in
   YouTube tab on `/feed/channels` and read the subscription list there, on
   the device, with no sign-in of ours. When more than one Google account is
-  signed in, the person picks which account to read; an account with no
+  signed in, the person picks which account to read, by name when the
+  account switcher gives one (names stay in the tab); an account with no
   subscriptions is shown but not scanned. One account with subscriptions is
   read without an extra click. Google Takeout's `subscriptions.csv` stays
   on the welcome page for people who are signed out. Only channel ids,
-  titles and handles are kept. Imported channels start unseeded, so their
+  titles and handles are kept. When the watchlist has channels the account
+  is not subscribed to, the person chooses Add new (merge) or Replace (an
+  inline warning that the current list will be deleted, with Export my list
+  first; channels in both lists keep favourite, mute and groups; there is
+  no undo). Takeout stays add-only. Imported channels start unseeded, so their
   first check is silent; pictures fill in a few per check.
 - **Welcome page** opens once on a fresh install, never on an update: import
   or follow channels, try audio mode, pin the icon.

@@ -1114,6 +1114,10 @@
       }
     }
   },
+  "scanAccountUncounted": {
+    "message": "Channels not counted",
+    "description": "An account whose page could not be counted. It keeps its Scan button, because the scan reads the list itself."
+  },
   "scanAccountNone": {
     "message": "No subscriptions",
     "description": "An account that has no subscribed channels. It stays in the picker without a Scan button."
@@ -1133,6 +1137,102 @@
   "scanExpired": {
     "message": "Start the import again from the extension",
     "description": "Shown on the YouTube tab when the account picker has waited too long for a click. The worker has stopped."
+  },
+  "scanDifferTitle": {
+    "message": "Your watchlist and this account differ",
+    "description": "Headline when the scanned account is missing channels that are on the watchlist. The person chooses whether to add only the new ones or replace the list."
+  },
+  "scanDifferLine": {
+    "message": "$FRESH$ new on YouTube · $EXTRA$ on your watchlist only",
+    "description": "Counts under the differ headline. $FRESH$ is how many scanned channels are not on the watchlist. $EXTRA$ is how many watchlist channels this account is not subscribed to.",
+    "placeholders": {
+      "fresh": {
+        "content": "$1",
+        "example": "3"
+      },
+      "extra": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "scanAddNew": {
+    "message": "Add new",
+    "description": "Primary button. Adds the scanned channels that are not on the watchlist and removes nothing."
+  },
+  "scanReplaceList": {
+    "message": "Replace watchlist",
+    "description": "Quiet button. Opens an inline warning before the watchlist is replaced with this account's subscriptions."
+  },
+  "scanReplaceWarn": {
+    "message": "Your current watchlist will be replaced. $COUNT$ channels will be deleted from it, with their videos. There is no undo.",
+    "description": "Inline warning before a replace, when more than one channel would be deleted. $COUNT$ is how many. Export is the way back.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "scanReplaceWarnOne": {
+    "message": "Your current watchlist will be replaced. $COUNT$ channel will be deleted from it, with their videos. There is no undo.",
+    "description": "Inline warning before a replace, when one channel would be deleted. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "scanReplaceExport": {
+    "message": "Export my list first",
+    "description": "Button on the replace warning. Downloads the current backup and stays on the warning."
+  },
+  "scanReplaceDelete": {
+    "message": "Delete and replace",
+    "description": "Danger button on the replace warning. Deletes watchlist channels this account is not subscribed to and adds the new ones."
+  },
+  "scanReplaceCancel": {
+    "message": "Cancel",
+    "description": "Button on the replace warning. Returns to Add new and Replace watchlist. Nothing is deleted."
+  },
+  "scanExportSaved": {
+    "message": "Saved $NAME$",
+    "description": "Quiet line under the replace warning after the backup file has been downloaded. $NAME$ is the file name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "youtube-companion-2026-09-25.json"
+      }
+    }
+  },
+  "scanExportFailed": {
+    "message": "Could not save the backup",
+    "description": "Line under the replace warning when the backup is too large to download. Nothing is deleted."
+  },
+  "scanRemoved": {
+    "message": "Removed $COUNT$ channels",
+    "description": "Second line after a replace that removed more than one channel, or the headline when nothing was added. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "scanRemovedOne": {
+    "message": "Removed $COUNT$ channel",
+    "description": "Same line when one channel was removed. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "scanReplaceEmpty": {
+    "message": "Nothing was changed. An empty list cannot replace your watchlist.",
+    "description": "Shown when Replace is refused because the scan found no channels. The watchlist is left as it was."
   },
   "audioModeLabel": {
     "message": "Audio mode",

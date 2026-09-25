@@ -1,7 +1,9 @@
 /**
  * Reads one All-subscriptions HTML page: which signed-in account it is,
  * how many subscribed rows the first page carries, whether more pages
- * follow, and that account's picture. Pure: no chrome, no DOM, no fetch.
+ * follow, and that account's picture. Also reads the account switcher's
+ * reply, the one place the accounts' names are. Pure: no chrome, no DOM,
+ * no fetch.
  * The content script cannot import this file, so it keeps the same
  * functions; the suite checks the two copies against the same fixtures.
  */
@@ -69,9 +71,32 @@ function jsonEnd(text, start) {
   return -1;
 }
 
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Some responses carry the JSON in its own <script type="application/json">
+// and assign it with JSON.parse(<var>.textContent), where <var> is
+// document.getElementById('<id>') (docs/youtube.md). Returns where the
+// JSON starts, or -1.
+function jsonScriptAt(html) {
+  const use = /window\[\s*["']ytInitialData["']\s*\]\s*=\s*JSON\.parse\(\s*([A-Za-z_$][\w$]*)\.textContent/.exec(html);
+  if (!use) return -1;
+  const decl = new RegExp(
+    `\\b${escapeRegExp(use[1])}\\s*=\\s*document\\.getElementById\\(\\s*["']([^"']+)["']`,
+  ).exec(html);
+  if (!decl) return -1;
+  const tag = new RegExp(`<script\\b[^>]*\\bid=["']${escapeRegExp(decl[1])}["'][^>]*>`).exec(html);
+  if (!tag) return -1;
+  const start = html.indexOf('{', tag.index + tag[0].length);
+  if (start < 0 || html.slice(tag.index + tag[0].length, start).trim()) return -1;
+  return start;
+}
+
 function ytInitialDataIn(html) {
-  const start = assignmentAt(html);
-  if (start < 0 || html[start] !== '{') return null;
+  let start = assignmentAt(html);
+  if (start < 0 || html[start] !== '{') start = jsonScriptAt(html);
+  if (start < 0) return null;
   const end = jsonEnd(html, start);
   if (end < 0) return null;
   try {
@@ -148,7 +173,8 @@ function countRows(node, acc) {
  * { sessionIndex, subscribed, continuation, avatar }.
  * sessionIndex is null when the page does not say. avatar is '' unless
  * the topbar picture is on a YouTube avatar host. subscribed counts the
- * first page only; continuation means that count is a lower bound.
+ * first page only; continuation means that count is a lower bound; null
+ * means the page data could not be read, so nothing is known.
  */
 export function parseSubscriptionsHtml(html) {
   if (typeof html !== 'string' || !html) return { ...EMPTY_PAGE };
@@ -158,7 +184,9 @@ export function parseSubscriptionsHtml(html) {
     if (data) countRows(data, acc);
     return {
       sessionIndex: sessionIndexIn(html),
-      subscribed: acc.subscribed,
+      // An unreadable page is not an empty account: it once hid the one
+      // account the person used. The scan reads the live rows either way.
+      subscribed: data ? acc.subscribed : null,
       continuation: acc.continuation,
       avatar: data ? accountAvatar(data) : '',
     };
@@ -184,4 +212,75 @@ export function takeAccountPage(accounts, html) {
     avatar: parsed.avatar || '',
   });
   return true;
+}
+
+const NAME_MAX = 80;
+
+function switcherIndex(node) {
+  if (typeof node === 'string') {
+    const match = /[?&]authuser=(\d)(?!\d)/.exec(node);
+    return match ? Number(match[1]) : null;
+  }
+  if (!node || typeof node !== 'object') return null;
+  const values = Array.isArray(node) ? node : Object.values(node);
+  for (let i = 0; i < values.length; i++) {
+    const found = switcherIndex(values[i]);
+    if (found != null) return found;
+  }
+  return null;
+}
+
+function switcherName(value) {
+  if (!value || typeof value !== 'object') return '';
+  let text = '';
+  if (typeof value.simpleText === 'string') text = value.simpleText;
+  else if (Array.isArray(value.runs)) {
+    text = value.runs.map((run) => (run && typeof run.text === 'string' ? run.text : '')).join('');
+  }
+  return text.trim().slice(0, NAME_MAX);
+}
+
+function collectSwitcherItems(node, out) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (let i = 0; i < node.length; i++) collectSwitcherItems(node[i], out);
+    return;
+  }
+  if (node.accountItem && typeof node.accountItem === 'object') {
+    out.push(node.accountItem);
+    return;
+  }
+  const keys = Object.keys(node);
+  for (let i = 0; i < keys.length; i++) collectSwitcherItems(node[keys[i]], out);
+}
+
+/**
+ * The reply of /getAccountSwitcherEndpoint → [{ index, name, avatar }].
+ * The selected account comes first, not account 0, so each row's index
+ * is the authuser number in its sign-in link (docs/youtube.md). A row
+ * without one is dropped. [] when the reply cannot be read.
+ */
+export function parseAccountSwitcher(text) {
+  if (typeof text !== 'string' || !text) return [];
+  let data;
+  try {
+    data = JSON.parse(text.replace(/^\)\]\}'\s*/, ''));
+  } catch {
+    return [];
+  }
+  const items = [];
+  collectSwitcherItems(data, items);
+  const seen = {};
+  const out = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const index = switcherIndex(item.serviceEndpoint);
+    if (index == null || seen[index]) continue;
+    const name = switcherName(item.accountName);
+    const avatar = bestThumbnail(item.accountPhoto && item.accountPhoto.thumbnails);
+    if (!name && !avatar) continue;
+    seen[index] = true;
+    out.push({ index, name, avatar });
+  }
+  return out;
 }

@@ -21,6 +21,7 @@ import {
   readWhatsNewSeen,
 } from '../src/lib/store.js';
 import { WHATS_NEW_VERSION } from '../src/lib/view.js';
+import { parseBackup, MAX_BACKUP_BYTES } from '../src/lib/backup.js';
 
 const MKBHD = 'UCBJycsmduvYEL83R_U4JriQ';
 const BEAST = 'UCX6OQ3DkcsbYNE6H8uQQuVA';
@@ -336,6 +337,7 @@ export default async function run(t) {
     onInstalled,
     syncUninstallUrl,
     addImportedChannels,
+    planImportedReplace,
   } = worker;
   await ready;
 
@@ -2084,17 +2086,32 @@ export default async function run(t) {
         'scanAccountMore',
         'scanAccountNone',
         'scanAccountScan',
+        'scanAccountUncounted',
         'scanAccounts',
+        'scanAddNew',
         'scanAdded',
         'scanAddedOne',
         'scanAnother',
         'scanChoose',
+        'scanDifferLine',
+        'scanDifferTitle',
         'scanDone',
         'scanExpired',
+        'scanExportFailed',
+        'scanExportSaved',
         'scanFailed',
         'scanFound',
         'scanLoaded',
         'scanNothing',
+        'scanRemoved',
+        'scanRemovedOne',
+        'scanReplaceCancel',
+        'scanReplaceDelete',
+        'scanReplaceEmpty',
+        'scanReplaceExport',
+        'scanReplaceList',
+        'scanReplaceWarn',
+        'scanReplaceWarnOne',
         'scanSignedOut',
         'scanSignedOutFile',
         'scanSkipped',
@@ -2112,6 +2129,20 @@ export default async function run(t) {
       'en boot carries the scan headline',
       bootEn.overlay?.scanTitle === 'Scanning your channels' && bootEn.overlay?.scanAdded === 'Added $1 channels',
       JSON.stringify(bootEn.overlay),
+    );
+    t.check(
+      'en boot carries the differ choice',
+      bootEn.overlay?.scanDifferTitle === 'Your watchlist and this account differ'
+        && bootEn.overlay?.scanDifferLine === '$1 new on YouTube · $2 on your watchlist only'
+        && bootEn.overlay?.scanAddNew === 'Add new'
+        && bootEn.overlay?.scanReplaceList === 'Replace watchlist'
+        && bootEn.overlay?.scanReplaceDelete === 'Delete and replace'
+        && bootEn.overlay?.scanRemoved === 'Removed $1 channels'
+        && bootEn.overlay?.scanRemovedOne === 'Removed $1 channel',
+      JSON.stringify({
+        title: bootEn.overlay?.scanDifferTitle,
+        line: bootEn.overlay?.scanDifferLine,
+      }),
     );
     t.check(
       'en boot also carries Arabic overlay copy',
@@ -2140,6 +2171,14 @@ export default async function run(t) {
       'ar boot overlay shortcut template',
       bootAr.overlay?.overlayExitShortcut === 'اضغط $1 للخروج',
       JSON.stringify(bootAr.overlay),
+    );
+    t.check(
+      'ar boot names the differ choice without inflecting',
+      bootAr.overlay?.scanDifferLine === 'جديد على يوتيوب: $1 · في قائمتك فقط: $2'
+        && bootAr.overlay?.scanRemoved === 'القنوات المحذوفة: $1'
+        && bootAr.overlay?.scanRemoved === bootAr.overlay?.scanRemovedOne
+        && bootAr.overlay?.scanDifferTitle !== bootEn.overlay?.scanDifferTitle,
+      JSON.stringify(bootAr.overlay?.scanDifferLine),
     );
     t.check(
       'ar boot also carries English overlay copy',
@@ -2942,6 +2981,7 @@ export default async function run(t) {
         return { ok: true, index: 1, current: 0, avatar: 'https://yt3.ggpht.com/pic' };
       }
       if (message.type === 'subscriptions.scan') return { ok: true, channels: [] };
+      if (message.type === 'subscriptions.choose') return { ok: true, mode: 'merge' };
       return { ok: true };
     };
     const otherAccount = await handleMessage({ type: 'importFromYouTube' });
@@ -2970,6 +3010,7 @@ export default async function run(t) {
         return { ok: true, index: 0, current: 0 };
       }
       if (message.type === 'subscriptions.scan') return { ok: true, channels: [] };
+      if (message.type === 'subscriptions.choose') return { ok: true, mode: 'merge' };
       return { ok: true };
     };
     const sameAccount = await handleMessage({ type: 'importFromYouTube' });
@@ -3044,6 +3085,7 @@ export default async function run(t) {
         if (openAsks > 1) return { ok: false, error: 'done' };
         return { ok: true, index: 0, current: 0 };
       }
+      if (message.type === 'subscriptions.choose') return { ok: true, mode: 'merge' };
       return { ok: true, channels: [] };
     };
     const openedScan = await handleMessage({ type: 'importFromYouTube' });
@@ -3055,6 +3097,337 @@ export default async function run(t) {
         && openedTab?.active === true,
       JSON.stringify({ openedScan, openedTab }),
     );
+    await waitForIdle();
+    mock.urlTabs = null;
+    mock.onTabMessage = null;
+
+    t.section('import asks when the lists differ');
+
+    const keptRecord = {
+      id: MKBHD,
+      title: 'Marques Brownlee',
+      handle: '@mkbhd',
+      avatar: 'https://yt3.ggpht.com/a',
+      favorite: true,
+      muted: true,
+      groups: ['Tech'],
+      addedAt: 50,
+      lastFetchAt: 60,
+      lastVideoAt: 70,
+      lastError: null,
+      seeded: true,
+    };
+    const extraRecord = {
+      id: BEAST,
+      title: 'MrBeast',
+      handle: '@MrBeast',
+      avatar: '',
+      favorite: false,
+      muted: false,
+      addedAt: 11,
+      lastFetchAt: 12,
+      lastVideoAt: 13,
+      lastError: null,
+      seeded: true,
+    };
+    const keptRow = { v: 'keepvid0001', c: MKBHD, t: 'Keep', at: 10 };
+    const extraRow = { v: 'dropvid0001', c: BEAST, t: 'Drop', at: 11 };
+    const plan = planImportedReplace(
+      [extraRecord, keptRecord],
+      [extraRow, keptRow],
+      [
+        { id: LINUS, title: '  Linus  ', handle: '@Linus' },
+        { id: MKBHD, title: 'Other name', handle: '@other' },
+        { id: MKBHD, title: 'Again', handle: '@again' },
+        { id: 'nope', title: 'Ignored' },
+      ],
+      1234,
+    );
+    const plannedKept = plan.channels.find((ch) => ch.id === MKBHD);
+    const plannedFresh = plan.channels.find((ch) => ch.id === LINUS);
+    t.check(
+      'replace keeps a shared channel untouched, in its old place',
+      plan.ok === true
+        && plan.channels[0] === keptRecord
+        && plannedKept.favorite === true
+        && plannedKept.muted === true
+        && plannedKept.groups === keptRecord.groups
+        && plannedKept.seeded === true
+        && plannedKept.title === 'Marques Brownlee'
+        && plannedKept.handle === '@mkbhd'
+        && plannedKept.addedAt === 50
+        && plannedKept.lastVideoAt === 70,
+      JSON.stringify(plannedKept),
+    );
+    t.check(
+      'replace drops extras and their feed rows, and appends fresh unseeded',
+      plan.removed === 1
+        && plan.added === 1
+        && !plan.channels.some((ch) => ch.id === BEAST)
+        && plan.feed.length === 1
+        && plan.feed[0] === keptRow
+        && plannedFresh.seeded === false
+        && plannedFresh.favorite === false
+        && plannedFresh.muted === false
+        && plannedFresh.handle === '@Linus'
+        && plannedFresh.title === 'Linus'
+        && plannedFresh.avatar === ''
+        && plannedFresh.addedAt === 1234
+        && plan.channels[plan.channels.length - 1] === plannedFresh,
+      JSON.stringify({ added: plan.added, removed: plan.removed, fresh: plannedFresh, feed: plan.feed }),
+    );
+    const sameChannels = [keptRecord];
+    const sameFeed = [keptRow];
+    const emptyPlan = planImportedReplace(sameChannels, sameFeed, []);
+    const junkPlan = planImportedReplace(sameChannels, sameFeed, [{ id: 'nope' }]);
+    t.check(
+      'an empty scan is refused and the lists are not rebuilt',
+      emptyPlan.ok === false && emptyPlan.error === 'empty'
+        && emptyPlan.channels === sameChannels && emptyPlan.feed === sameFeed
+        && junkPlan.ok === false && junkPlan.error === 'empty',
+      JSON.stringify({ empty: emptyPlan.error, junk: junkPlan.error }),
+    );
+    const tooMany = Array.from({ length: 2001 }, (_, i) => ({ id: `UC${String(i).padStart(22, '0')}` }));
+    const overPlan = planImportedReplace([keptRecord], [keptRow], tooMany, 1);
+    const capPlan = planImportedReplace([], [], tooMany.slice(0, 2000), 1);
+    t.check(
+      'replace refuses a result past 2,000 and keeps 2,000',
+      overPlan.ok === false && overPlan.error === 'count'
+        && overPlan.channels.length === 1
+        && capPlan.ok === true && capPlan.channels.length === 2000 && capPlan.added === 2000,
+      JSON.stringify({ over: overPlan.error, cap: capPlan.channels.length }),
+    );
+
+    function scriptedScan(onMessage) {
+      let accounts = 0;
+      const seen = [];
+      mock.urlTabs = [{ id: 8, windowId: 4, url: 'https://www.youtube.com/feed/channels' }];
+      mock.onTabMessage = async (_tabId, message) => {
+        seen.push(message);
+        if (message.type === 'subscriptions.accounts') {
+          accounts += 1;
+          if (accounts > 1) return { ok: false, error: 'done' };
+          return { ok: true, index: 0, current: 0, avatar: 'https://yt3.ggpht.com/pic' };
+        }
+        if (message.type === 'subscriptions.download') return { ok: true };
+        return onMessage(message, seen);
+      };
+      return seen;
+    }
+
+    await waitForIdle();
+    await wipe();
+    installFetch();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, seeded: true, groups: ['Tech'] });
+    const noExtraSeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') {
+        return {
+          ok: true,
+          channels: [
+            { id: MKBHD, title: 'Other', handle: '@other' },
+            { id: LINUS, title: 'Linus', handle: '@Linus' },
+          ],
+        };
+      }
+      return { ok: true };
+    });
+    const noExtra = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'no extras adds the new channel and does not ask',
+      noExtra.ok === true && noExtra.added === 1 && noExtra.removed === 0
+        && !noExtraSeen.some((message) => message.type === 'subscriptions.choose'),
+      JSON.stringify({ noExtra, types: noExtraSeen.map((message) => message.type) }),
+    );
+    await waitForIdle();
+
+    await wipe();
+    installFetch();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, seeded: true, groups: ['Tech'] });
+    await putChannel({ id: BEAST, title: 'MrBeast', handle: '@MrBeast', seeded: true });
+    await handleMessage({ type: 'setMuted', id: MKBHD, on: true });
+    await saveFeed([
+      { v: 'keepvid0001', c: MKBHD, t: 'Keep', at: 10 },
+      { v: 'dropvid0001', c: BEAST, t: 'Drop', at: 11 },
+    ]);
+    await writePollState({ notified: ['keepvid0001'] });
+    const mergeSeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') {
+        return { ok: true, channels: [{ id: LINUS, title: 'Linus', handle: '@Linus' }] };
+      }
+      if (message.type === 'subscriptions.choose') return { ok: true, mode: 'merge' };
+      return { ok: true };
+    });
+    const mergedImport = await handleMessage({ type: 'importFromYouTube' });
+    const mergedIds = (await readChannels()).map((ch) => ch.id);
+    t.check(
+      'merge adds the new channel and removes nothing',
+      mergedImport.ok === true && mergedImport.added === 1 && mergedImport.removed === 0
+        && mergedIds.includes(MKBHD) && mergedIds.includes(BEAST) && mergedIds.includes(LINUS)
+        && mergeSeen.some((message) => message.type === 'subscriptions.choose' && message.extra === 2 && message.fresh === 1)
+        && (await readFeed()).some((row) => row.c === BEAST),
+      JSON.stringify({ mergedImport, mergedIds }),
+    );
+    await waitForIdle();
+
+    await wipe();
+    installFetch();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, seeded: true, groups: ['Tech'] });
+    await putChannel({ id: BEAST, title: 'MrBeast', handle: '@MrBeast', seeded: true });
+    await handleMessage({ type: 'setMuted', id: MKBHD, on: true });
+    await saveFeed([
+      { v: 'keepvid0001', c: MKBHD, t: 'Keep', at: 10 },
+      { v: 'dropvid0001', c: BEAST, t: 'Drop', at: 11 },
+    ]);
+    await writePollState({ notified: ['keepvid0001'] });
+    let stillThere = null;
+    const replaceSeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') {
+        return {
+          ok: true,
+          channels: [
+            { id: MKBHD, title: 'Other', handle: '@other' },
+            { id: LINUS, title: 'Linus', handle: '@Linus' },
+          ],
+        };
+      }
+      if (message.type === 'subscriptions.choose') {
+        if (!message.exported) return { ok: true, mode: 'export' };
+        stillThere = (await readChannels()).map((ch) => ch.id);
+        return { ok: true, mode: 'replace' };
+      }
+      return { ok: true };
+    });
+    const replaced = await handleMessage({ type: 'importFromYouTube' });
+    const replacedList = await readChannels();
+    const replacedKept = replacedList.find((ch) => ch.id === MKBHD);
+    const replacedFresh = replacedList.find((ch) => ch.id === LINUS);
+    const download = replaceSeen.find((message) => message.type === 'subscriptions.download');
+    const parsedBackup = download ? parseBackup(download.text) : { ok: false };
+    const secondChoose = replaceSeen.filter((message) => message.type === 'subscriptions.choose')[1];
+    t.check(
+      'export downloads a backup of the current list, then asks again',
+      !!download
+        && /^youtube-companion-\d{4}-\d{2}-\d{2}\.json$/.test(download.name)
+        && download.text === JSON.stringify(JSON.parse(download.text), null, 2)
+        && parsedBackup.ok === true
+        && parsedBackup.data.channels.map((ch) => ch.id).join() === [MKBHD, BEAST].join()
+        && secondChoose?.exported === true
+        && stillThere.includes(BEAST)
+        && !replaceSeen.some((message) => message.type === 'subscriptions.choose' && message.text),
+      JSON.stringify({
+        name: download && download.name,
+        ids: parsedBackup.ok ? parsedBackup.data.channels.map((ch) => ch.id) : parsedBackup.error,
+        exported: secondChoose?.exported,
+        stillThere,
+      }),
+    );
+    t.check(
+      'replace then removes the extra channel and its videos',
+      replaced.ok === true && replaced.removed === 1 && replaced.added === 1
+        && !replacedList.some((ch) => ch.id === BEAST)
+        && replacedKept?.favorite === true
+        && replacedKept?.muted === true
+        && replacedKept?.groups?.join() === 'Tech'
+        && replacedFresh?.handle === '@Linus'
+        && !(await readFeed()).some((row) => row.c === BEAST)
+        && (await readFeed()).some((row) => row.v === 'keepvid0001')
+        && (await readPollState()).notified.includes('keepvid0001')
+        && replaceSeen.some((message) => message.type === 'subscriptions.result' && message.removed === 1 && message.added === 1),
+      JSON.stringify({
+        replaced,
+        ids: replacedList.map((ch) => ch.id),
+        kept: replacedKept,
+        fresh: replacedFresh,
+      }),
+    );
+    await waitForIdle();
+
+    await wipe();
+    installFetch();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    const beforeDone = (await readChannels()).map((ch) => ch.id).join();
+    const doneSeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') return { ok: true, channels: [{ id: LINUS, title: 'Linus' }] };
+      if (message.type === 'subscriptions.choose') return { ok: false, error: 'done' };
+      return { ok: true };
+    });
+    const doneImport = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'done changes nothing',
+      doneImport.ok === false && doneImport.error === 'done'
+        && (await readChannels()).map((ch) => ch.id).join() === beforeDone
+        && !doneSeen.some((message) => message.type === 'subscriptions.result'),
+      JSON.stringify(doneImport),
+    );
+
+    const emptySeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') return { ok: true, channels: [] };
+      if (message.type === 'subscriptions.choose') return { ok: true, mode: 'replace' };
+      return { ok: true };
+    });
+    const emptyImport = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'replace of an empty scan changes nothing',
+      emptyImport.ok === false && emptyImport.error === 'empty'
+        && (await readChannels()).map((ch) => ch.id).join() === beforeDone
+        && emptySeen.some((message) => message.type === 'subscriptions.result' && message.error === 'empty'),
+      JSON.stringify(emptyImport),
+    );
+
+    await wipe();
+    installFetch();
+    await putChannel({ id: MKBHD, title: 'x'.repeat(MAX_BACKUP_BYTES), seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let sawExportError = false;
+    const hugeSeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') return { ok: true, channels: [{ id: LINUS, title: 'Linus' }] };
+      if (message.type === 'subscriptions.choose') {
+        if (message.exportError === true) {
+          sawExportError = true;
+          return { ok: false, error: 'done' };
+        }
+        return { ok: true, mode: 'export' };
+      }
+      return { ok: true };
+    });
+    const hugeImport = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'a backup past the size cap is not sent',
+      hugeImport.ok === false && hugeImport.error === 'done'
+        && sawExportError === true
+        && !hugeSeen.some((message) => message.type === 'subscriptions.download')
+        && (await readChannels()).length === 2,
+      JSON.stringify({ hugeImport, sawExportError }),
+    );
+
+    await wipe();
+    installFetch();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let exportRounds = 0;
+    const capSeen = scriptedScan(async (message) => {
+      if (message.type === 'subscriptions.scan') return { ok: true, channels: [{ id: LINUS, title: 'Linus' }] };
+      if (message.type === 'subscriptions.choose') {
+        exportRounds += 1;
+        return { ok: true, mode: 'export' };
+      }
+      return { ok: true };
+    });
+    const capImport = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'export stops after five backups and deletes nothing',
+      capImport.ok === false
+        && capSeen.filter((message) => message.type === 'subscriptions.download').length === 5
+        && exportRounds === 6
+        && (await readChannels()).map((ch) => ch.id).join() === [MKBHD, BEAST].join(),
+      JSON.stringify({
+        capImport,
+        downloads: capSeen.filter((message) => message.type === 'subscriptions.download').length,
+        exportRounds,
+      }),
+    );
+
     await waitForIdle();
     mock.urlTabs = null;
     mock.onTabMessage = null;

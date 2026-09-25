@@ -1114,6 +1114,10 @@
       }
     }
   },
+  "scanAccountUncounted": {
+    "message": "لم تُحصَ القنوات",
+    "description": "An account whose page could not be counted. It keeps its Scan button, because the scan reads the list itself."
+  },
   "scanAccountNone": {
     "message": "لا اشتراكات",
     "description": "An account that has no subscribed channels. It stays in the picker without a Scan button."
@@ -1133,6 +1137,102 @@
   "scanExpired": {
     "message": "ابدأ الاستيراد من جديد من الإضافة",
     "description": "Shown on the YouTube tab when the account picker has waited too long for a click. The worker has stopped."
+  },
+  "scanDifferTitle": {
+    "message": "قائمتك وهذا الحساب مختلفان",
+    "description": "Headline when the scanned account is missing channels that are on the watchlist. The person chooses whether to add only the new ones or replace the list."
+  },
+  "scanDifferLine": {
+    "message": "جديد على يوتيوب: $FRESH$ · في قائمتك فقط: $EXTRA$",
+    "description": "Counts under the differ headline. Arabic keeps the label, then the number, and does not inflect. $FRESH$ is how many scanned channels are not on the watchlist. $EXTRA$ is how many watchlist channels this account is not subscribed to.",
+    "placeholders": {
+      "fresh": {
+        "content": "$1",
+        "example": "3"
+      },
+      "extra": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
+  },
+  "scanAddNew": {
+    "message": "أضف الجديد",
+    "description": "Primary button. Adds the scanned channels that are not on the watchlist and removes nothing."
+  },
+  "scanReplaceList": {
+    "message": "استبدال القائمة",
+    "description": "Quiet button. Opens an inline warning before the watchlist is replaced with this account's subscriptions."
+  },
+  "scanReplaceWarn": {
+    "message": "ستُستبدل قائمتك الحالية. القنوات التي ستُحذف منها: $COUNT$، مع فيديوهاتها. لا يمكن التراجع.",
+    "description": "Inline warning before a replace. Arabic keeps the label, then the number, and does not inflect. $COUNT$ is how many channels would be deleted.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "4"
+      }
+    }
+  },
+  "scanReplaceWarnOne": {
+    "message": "ستُستبدل قائمتك الحالية. القنوات التي ستُحذف منها: $COUNT$، مع فيديوهاتها. لا يمكن التراجع.",
+    "description": "Same words as the plural form: Arabic is not inflected. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "scanReplaceExport": {
+    "message": "صدّر قائمتي أولًا",
+    "description": "Button on the replace warning. Downloads the current backup and stays on the warning."
+  },
+  "scanReplaceDelete": {
+    "message": "احذف واستبدل",
+    "description": "Danger button on the replace warning. Deletes watchlist channels this account is not subscribed to and adds the new ones."
+  },
+  "scanReplaceCancel": {
+    "message": "إلغاء",
+    "description": "Button on the replace warning. Returns to Add new and Replace watchlist. Nothing is deleted."
+  },
+  "scanExportSaved": {
+    "message": "تم الحفظ: $NAME$",
+    "description": "Quiet line under the replace warning after the backup file has been downloaded. Arabic keeps the label, then the file name. $NAME$ is the file name.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "youtube-companion-2026-09-25.json"
+      }
+    }
+  },
+  "scanExportFailed": {
+    "message": "تعذّر حفظ النسخة",
+    "description": "Line under the replace warning when the backup is too large to download. Nothing is deleted."
+  },
+  "scanRemoved": {
+    "message": "القنوات المحذوفة: $COUNT$",
+    "description": "Second line after a replace that removed channels, or the headline when nothing was added. Arabic does not inflect the count. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "scanRemovedOne": {
+    "message": "القنوات المحذوفة: $COUNT$",
+    "description": "Same words as the plural form: Arabic is not inflected. $COUNT$ is 1.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "scanReplaceEmpty": {
+    "message": "لم يتغيّر شيء. قائمة فارغة لا تستبدل قائمتك.",
+    "description": "Shown when Replace is refused because the scan found no channels. The watchlist is left as it was."
   },
   "audioModeLabel": {
     "message": "وضع الصوت",

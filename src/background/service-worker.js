@@ -19,7 +19,7 @@ import {
   isChannelId,
 } from '../lib/yt.js';
 import { readSettings, writeSettings, onSettingsChanged, migrateAudioCover } from '../lib/settings.js';
-import { parseBackup, mergeBackup } from '../lib/backup.js';
+import { parseBackup, mergeBackup, buildBackup, backupSizeError } from '../lib/backup.js';
 import { parseTakeoutCsv, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
 import { resolveLocale, loadMessages, translateCount } from '../lib/i18n.js';
 import {
@@ -92,10 +92,25 @@ const OVERLAY_MESSAGE_KEYS = [
   'scanAccountChannelsOne',
   'scanAccountMore',
   'scanAccountNone',
+  'scanAccountUncounted',
   'scanAccountHere',
   'scanAccountScan',
   'scanAnother',
   'scanExpired',
+  'scanDifferTitle',
+  'scanDifferLine',
+  'scanAddNew',
+  'scanReplaceList',
+  'scanReplaceWarn',
+  'scanReplaceWarnOne',
+  'scanReplaceExport',
+  'scanReplaceDelete',
+  'scanReplaceCancel',
+  'scanExportSaved',
+  'scanExportFailed',
+  'scanRemoved',
+  'scanRemovedOne',
+  'scanReplaceEmpty',
   'subsGroupsAll',
   'subsGroupsLabel',
   'subsGroupsMatch',
@@ -136,6 +151,9 @@ const SCAN_KEEPALIVE_MS = 20_000;
 // The keepalive ping does not reset that clock, so the account picker
 // gives up with a minute to spare. The content script uses the same wait.
 const ACCOUNT_PICK_MS = 4 * 60 * 1000;
+// A tab that keeps answering "export" would hold this event open until
+// Chrome kills the worker. A handful of backups is enough to end the loop.
+const MAX_IMPORT_EXPORTS = 5;
 const SCAN_READY_MS = 30_000;
 const SCAN_READY_GAP_MS = 300;
 const CHANNELS_PAGE = 'https://www.youtube.com/feed/channels';
@@ -1040,6 +1058,121 @@ function cleanImportedTitle(value) {
     .slice(0, 200);
 }
 
+function newImportedChannel(row, now) {
+  return {
+    id: row.id,
+    handle: cleanImportedHandle(row.handle),
+    title: cleanImportedTitle(row.title),
+    avatar: '',
+    favorite: false,
+    muted: false,
+    addedAt: now,
+    lastFetchAt: 0,
+    lastVideoAt: 0,
+    lastError: null,
+    seeded: false,
+  };
+}
+
+function scannedChannelRows(list) {
+  const rows = [];
+  const seen = new Set();
+  let considered = 0;
+  const incoming = Array.isArray(list) ? list : [];
+  for (const row of incoming) {
+    if (!row || typeof row !== 'object') continue;
+    if (!isChannelId(row.id)) continue;
+    considered += 1;
+    if (seen.has(row.id)) continue;
+    seen.add(row.id);
+    rows.push(row);
+  }
+  return { rows, seen, considered };
+}
+
+/** How many scanned ids are new, and how many watchlist ids the scan lacks. */
+function importedIdDiff(channels, scanned) {
+  const { seen } = scannedChannelRows(scanned);
+  const have = new Set();
+  const list = Array.isArray(channels) ? channels : [];
+  for (const ch of list) {
+    if (ch && isChannelId(ch.id)) have.add(ch.id);
+  }
+  let fresh = 0;
+  for (const id of seen) {
+    if (!have.has(id)) fresh += 1;
+  }
+  let extra = 0;
+  for (const id of have) {
+    if (!seen.has(id)) extra += 1;
+  }
+  return { fresh, extra };
+}
+
+/**
+ * The next channel list and feed when an import replaces the watchlist.
+ * A channel in both lists keeps the stored record: the scan only has an
+ * id, a title and a handle, and favourite, mute, groups and stamps are
+ * newer than that. An empty scan is refused so it cannot wipe the list.
+ * The result is capped at MAX_TAKEOUT_CHANNELS. Pure: no storage, no chrome.
+ */
+export function planImportedReplace(channels, feed, scanned, now = Date.now()) {
+  const current = Array.isArray(channels) ? channels : [];
+  const rows = Array.isArray(feed) ? feed : [];
+  const { rows: incoming, seen, considered } = scannedChannelRows(scanned);
+  const empty = {
+    ok: false,
+    channels: current,
+    feed: rows,
+    added: 0,
+    removed: 0,
+    skipped: 0,
+    removedIds: [],
+    freshIds: [],
+  };
+  if (seen.size === 0) return { ...empty, error: 'empty' };
+
+  const have = new Set();
+  for (const ch of current) {
+    if (ch && isChannelId(ch.id)) have.add(ch.id);
+  }
+  const kept = [];
+  const removedIds = [];
+  const removedSeen = new Set();
+  const keptSeen = new Set();
+  for (const ch of current) {
+    if (!ch || !isChannelId(ch.id)) continue;
+    if (!seen.has(ch.id)) {
+      if (!removedSeen.has(ch.id)) {
+        removedSeen.add(ch.id);
+        removedIds.push(ch.id);
+      }
+      continue;
+    }
+    if (keptSeen.has(ch.id)) continue;
+    keptSeen.add(ch.id);
+    kept.push(ch);
+  }
+  const fresh = [];
+  for (const row of incoming) {
+    if (have.has(row.id)) continue;
+    fresh.push(newImportedChannel(row, now));
+  }
+  const next = [...kept, ...fresh];
+  if (next.length > MAX_TAKEOUT_CHANNELS) return { ...empty, error: 'count' };
+  const keep = new Set(next.map((ch) => ch.id));
+  return {
+    ok: true,
+    channels: next,
+    feed: rows.filter((item) => keep.has(item.c)),
+    added: fresh.length,
+    removed: removedIds.length,
+    skipped: considered - fresh.length,
+    removedIds,
+    freshIds: fresh.map((ch) => ch.id),
+  };
+}
+
 /**
  * Adds channels that are not on the list yet, in one write, as long as the
  * list stays within MAX_TAKEOUT_CHANNELS. They start unseeded, so their
@@ -1062,19 +1195,7 @@ export async function addImportedChannels(list) {
     considered += 1;
     if (have.has(id) || seen.has(id)) continue;
     seen.add(id);
-    fresh.push({
-      id,
-      handle: cleanImportedHandle(row.handle),
-      title: cleanImportedTitle(row.title),
-      avatar: '',
-      favorite: false,
-      muted: false,
-      addedAt: now,
-      lastFetchAt: 0,
-      lastVideoAt: 0,
-      lastError: null,
-      seeded: false,
-    });
+    fresh.push(newImportedChannel(row, now));
   }
   // The limit is on the list, not the input: every channel is a request
   // on every check.
@@ -1086,7 +1207,31 @@ export async function addImportedChannels(list) {
     // A live sweep's finally picks the ids up.
     for (const ch of fresh) pendingSeeds.add(ch.id);
   }
-  return { ok: true, added: fresh.length, skipped: considered - fresh.length };
+  return { ok: true, added: fresh.length, skipped: considered - fresh.length, removed: 0 };
+}
+
+/**
+ * One write of the channel list. Channels in both lists keep their records.
+ * Extras leave the list and the feed together. Fresh rows are unseeded, the
+ * same shape as an add. Alert history is not touched: a channel added back
+ * must not alert twice. An empty scan is refused.
+ */
+async function replaceWithScanned(scanned) {
+  const [channels, feed] = await Promise.all([readChannels(), readFeed()]);
+  const plan = planImportedReplace(channels, feed, scanned);
+  if (!plan.ok) return { ok: false, error: plan.error };
+  await writeChannels(plan.channels);
+  await saveFeed(plan.feed);
+  for (const id of plan.removedIds) pendingSeeds.delete(id);
+  for (const id of plan.freshIds) pendingSeeds.add(id);
+  await syncAlarms();
+  await refreshBadge();
+  return {
+    ok: true,
+    added: plan.added,
+    removed: plan.removed,
+    skipped: plan.skipped,
+  };
 }
 
 /** The Takeout file's rows, through the same add as a YouTube-tab import. */
@@ -1145,6 +1290,7 @@ async function tellTab(tabId, fields) {
       type: 'subscriptions.result',
       added: Number(fields && fields.added) || 0,
       skipped: Number(fields && fields.skipped) || 0,
+      removed: Number(fields && fields.removed) || 0,
       error: (fields && fields.error) || '',
       account,
       avatar,
@@ -1193,6 +1339,55 @@ async function requestAccounts(tabId, message) {
   }
 }
 
+async function sendImportBackup(tabId) {
+  const [settings, channels] = await Promise.all([readSettings(), readChannels()]);
+  const data = buildBackup({ settings, channels });
+  let text = '';
+  try {
+    text = JSON.stringify(data, null, 2);
+  } catch {
+    return 'failed';
+  }
+  // The file stays here until the tab asks. A backup past the size cap is
+  // a failure line on the tab, not a download.
+  if (backupSizeError(text.length)) return 'size';
+  const name = `youtube-companion-${new Date().toISOString().slice(0, 10)}.json`;
+  const sent = await sendToTab(tabId, { type: 'subscriptions.download', name, text });
+  if (sent.rejected || !sent.reply || sent.reply.ok !== true) return 'failed';
+  return 'ok';
+}
+
+async function askImportChoice(tabId, fields) {
+  let exportsDone = 0;
+  let exported = false;
+  let exportError = false;
+  while (true) {
+    const message = {
+      type: 'subscriptions.choose',
+      fresh: fields.fresh,
+      extra: fields.extra,
+      account: fields.account,
+      avatar: fields.avatar,
+    };
+    if (exported) message.exported = true;
+    if (exportError) message.exportError = true;
+    exported = false;
+    exportError = false;
+    const reply = await requestAccounts(tabId, message);
+    if (!reply || reply.ok !== true) {
+      return { ok: false, error: (reply && reply.error) || 'failed' };
+    }
+    if (reply.mode === 'merge' || reply.mode === 'replace') return reply;
+    if (reply.mode !== 'export') return { ok: false, error: 'failed' };
+    if (exportsDone >= MAX_IMPORT_EXPORTS) return { ok: false, error: 'failed' };
+    exportsDone += 1;
+    const outcome = await sendImportBackup(tabId);
+    if (outcome === 'ok') exported = true;
+    else if (outcome === 'size') exportError = true;
+    else return { ok: false, error: 'failed' };
+  }
+}
+
 async function openAccount(tabId, index) {
   await chromeApi().tabs.update(tabId, {
     url: `https://www.youtube.com/feed/channels?authuser=${index}`,
@@ -1201,8 +1396,10 @@ async function openAccount(tabId, index) {
 }
 
 /**
- * Opens All subscriptions in front of the user, reads the rows there, and
- * adds the ones not already on the list. The tab shows the result.
+ * Opens All subscriptions in front of the user and reads the rows there.
+ * New channels are added. When the watchlist has channels this account is
+ * not subscribed to, the tab asks whether to add only the new ones or
+ * replace the list. The tab shows the result.
  */
 export async function importFromYouTube() {
   const api = chromeApi();
@@ -1247,20 +1444,48 @@ export async function importFromYouTube() {
         await tellTab(tabId, { error, account: index, avatar: choice.avatar });
         return { ok: false, error };
       }
-      const imported = await addImportedChannels(scanned.channels);
+      const avatar = isAvatarUrl(choice.avatar) ? choice.avatar : '';
+      const listed = await readChannels();
+      const diff = importedIdDiff(listed, scanned.channels);
+      let imported;
+      if (diff.extra === 0) {
+        imported = await addImportedChannels(scanned.channels);
+      } else {
+        const answer = await askImportChoice(tabId, {
+          fresh: diff.fresh,
+          extra: diff.extra,
+          account: index,
+          avatar,
+        });
+        if (!answer || answer.ok !== true) {
+          const error = (answer && answer.error) || 'failed';
+          if (error === 'done') return last || { ok: false, error: 'done' };
+          if (error === 'timeout') return last || { ok: false, error: 'timeout' };
+          await tellTab(tabId, { error, account: index, avatar });
+          return last || { ok: false, error };
+        }
+        if (answer.mode === 'merge') imported = await addImportedChannels(scanned.channels);
+        else if (answer.mode === 'replace') imported = await replaceWithScanned(scanned.channels);
+        else {
+          await tellTab(tabId, { error: 'failed', account: index, avatar });
+          return { ok: false, error: 'failed' };
+        }
+      }
       if (!imported.ok) {
-        await tellTab(tabId, { error: imported.error || 'failed', account: index, avatar: choice.avatar });
+        await tellTab(tabId, { error: imported.error || 'failed', account: index, avatar });
         return { ok: false, error: imported.error || 'failed' };
       }
+      const removed = Number(imported.removed) || 0;
       await tellTab(tabId, {
         added: imported.added,
         skipped: imported.skipped,
+        removed,
         account: index,
-        avatar: choice.avatar,
+        avatar,
       });
       // Not awaited: a first check of hundreds of channels takes minutes.
       void runSweep({ scope: 'all' }).catch(() => {});
-      last = { ok: true, added: imported.added, skipped: imported.skipped };
+      last = { ok: true, added: imported.added, skipped: imported.skipped, removed };
     }
     return last || { ok: false, error: 'failed' };
   } catch (err) {

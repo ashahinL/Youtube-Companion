@@ -12,10 +12,13 @@ shipped yet waits under Unreleased. How a version ships:
   Turn it off under Settings → My groups on YouTube.
 - Import your subscriptions straight from a YouTube tab you're signed in to.
   **Import from YouTube** opens All subscriptions. If more than one Google
-  account is signed in, you pick which one — each is shown with its picture
-  and how many channels it has. The extension reads that account's list and
-  adds the ones you don't have yet. Nothing signs in, and nothing leaves
-  the device. A Google Takeout file is still there for when you're signed out.
+  account is signed in, you pick which one — each is shown with its name,
+  picture and how many channels it has. The extension reads that account's list and
+  adds the ones you don't have yet. If your watchlist has channels that
+  account is not subscribed to, you choose whether to add the new ones or
+  replace your list, and you can export your list first. Nothing signs in,
+  and nothing leaves the device. A Google Takeout file is still there for
+  when you're signed out.
 - With several YouTube tabs open, each one in the Player tab's list has a
   ↗ button that takes you straight to that tab, even in another window.
 - Theme and Language in Settings are each a group of three cards (Light,

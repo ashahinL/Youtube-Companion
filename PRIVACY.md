@@ -31,10 +31,12 @@ Nothing is copied off your device. Removing the extension deletes all of it.
 It opens your All subscriptions page (`www.youtube.com/feed/channels`) there,
 signed in as you already are, and reads the channels listed on it. If more
 than one Google account is signed in to your browser, it loads that same page
-once for each account so you can choose one. For each account it shows only
-the account's picture and how many channels it follows, never its name or
-email address. The extension keeps only each imported channel's id, name and
-handle. It does not sign in to Google itself, and the list is not sent
+once for each account so you can choose one, and asks YouTube's own account
+switcher for the accounts' names, the same list YouTube shows when you click
+your picture. For each account it shows its name, picture and how many
+channels it follows, never its email address. The names are shown on that page
+only: they are not stored and not sent anywhere. The extension keeps only each
+imported channel's id, name and handle. It does not sign in to Google itself, and the list is not sent
 anywhere.
 
 If you are signed out of YouTube, a Google Takeout file works too: you

@@ -345,8 +345,34 @@ Measured 2026-09-23 in a browser signed in to four Google accounts.
   the button by the key, not the index. The HTML assigns the data either as
   `var ytInitialData = …;` or as `window["ytInitialData"] = …;` — one of
   the two accounts used the second form.
+- **A third form, measured 2026-09-25.** For account 1 (about 1.2 MB of
+  HTML, 41 subscribed rows) the JSON sat in its own
+  `<script id="…" type="application/json" nonce="…">` tag, and a later
+  script ran `var ytData… = document.getElementById('…');` then
+  `window['ytInitialData'] = JSON.parse(ytData….textContent)`. Accounts 0, 2
+  and 3 in the same minute still used `var ytInitialData = {…}`. The
+  parser read nothing there and called the account empty, hiding the one
+  the person used; a page it cannot read is now "not counted" and keeps
+  its Scan button, because the scan reads the live rows.
+- The topbar holds no name, handle or email key for any account (checked
+  by key name, 2026-09-25).
 - **The account's name is not on the page.** The topbar avatar's `alt` is
   the generic "Avatar image"; the name arrives only when the account menu
   is opened.
+- **The names come from the account switcher**, measured 2026-09-26 on the
+  same four accounts. A same-origin `GET /getAccountSwitcherEndpoint`
+  (credentials included) answered 200 with about 10 KB: `)]}'` and a
+  newline, then JSON. Each account is an `accountItem` under
+  `data.actions[0].getMultiPageMenuAction.menu.multiPageMenuRenderer
+  .sections[i].accountSectionListRenderer.contents[0]
+  .accountItemSectionRenderer.contents[0]`, with `accountName.simpleText`,
+  `accountPhoto.thumbnails` (one 48 px picture on `yt3.ggpht.com`, for all
+  four, including the one with no channel), `isSelected`, `hasChannel`,
+  `accountByline` and `channelHandle` (only one account had a handle).
+- **The switcher lists the selected account first.** Its rows came as
+  authuser 1, 0, 2, 3. The number is only in
+  `serviceEndpoint.selectActiveIdentityEndpoint.supportedTokens[]
+  .accountSigninToken.signinUrl`, a `/signin?…&authuser=N&…` link, so
+  match on that, never on the row's place.
 - Two of the four accounts had an empty list: the page rendered only the
   "Most relevant" sort label and no `channelRenderer` at all.
