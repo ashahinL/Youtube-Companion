@@ -305,12 +305,43 @@ export function matchesFeedFilter(item, channel, q) {
   return false;
 }
 
-export function visibleFeedItems(feed, showShorts) {
+// A premiere or scheduled stream this long past its start is not coming.
+export const PREMIERE_STALE_MS = 60 * 60_000;
+
+/**
+ * The channels with a live row. A creator who goes live on a new video
+ * leaves the scheduled one waiting; YouTube keeps calling it upcoming until
+ * they delete it.
+ */
+export function liveChannelIds(feed) {
+  const ids = new Set();
+  for (const item of feed || []) {
+    if (item && item.k === 'live' && item.c) ids.add(item.c);
+  }
+  return ids;
+}
+
+/**
+ * A premiere whose start has passed and that is not going to start: its
+ * channel is live on another video, or it is an hour late. The row stays in
+ * storage, so it comes back as live if it does start.
+ */
+export function isStalePremiere(item, liveChannels, now) {
+  if (!item || item.k !== 'premiere') return false;
+  const st = Number(item.st) || 0;
+  if (st > now) return false;
+  if (liveChannels && liveChannels.has(item.c)) return true;
+  return st > 0 && now - st > PREMIERE_STALE_MS;
+}
+
+export function visibleFeedItems(feed, showShorts, now) {
   // Shorts stay in storage; the view drops them when the setting is off.
   const items = [];
+  const live = liveChannelIds(feed);
   for (const item of feed) {
     if (!item || !item.v) continue;
     if (!showShorts && item.k === 'short') continue;
+    if (isStalePremiere(item, live, now)) continue;
     items.push(item);
   }
   items.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
@@ -338,7 +369,7 @@ export function rowOpenModes(settings) {
   return { row: 'normal', button: 'audio' };
 }
 
-export function feedsView({ feed, channels, settings, query }) {
+export function feedsView({ feed, channels, settings, query, now }) {
   const q = String(query || '').trim();
   const onList = !!listedMatch(q, channels, feed);
   const addable = !q || (isChannelRef(q) && !onList);
@@ -347,7 +378,7 @@ export function feedsView({ feed, channels, settings, query }) {
   const group = resolvedFeedGroup(channels, settings?.feed?.group);
   const channelsById = new Map(channels.map((ch) => [ch.id, ch]));
   const channelIds = feedChannelIds(channels, settings);
-  const items = visibleFeedItems(feed, showShorts).filter((item) => {
+  const items = visibleFeedItems(feed, showShorts, now).filter((item) => {
     if (channelIds && !channelIds.has(item.c)) return false;
     return true;
   });

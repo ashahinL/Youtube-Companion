@@ -137,6 +137,9 @@ asks.
   the feed. The mute goes into backups.
 - **Shorts** hidden by default behind a setting, tagged `SHORT` when shown.
   **Live and premieres** are shown and tagged (`LIVE` red, `PREMIERE <time>`).
+  A premiere past its start leaves Feeds and the badge once its channel is
+  live on another video, or an hour after its start; it stays stored and
+  comes back as live if it does start.
 - **Toolbar badge**: videos newer than the last popup open, counted with the
   same filters the Feeds tab applies. It is always the feed count, audio mode
   or not.

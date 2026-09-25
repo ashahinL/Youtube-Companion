@@ -405,7 +405,7 @@ export default async function run(t) {
   );
   t.check(
     'the channel sheet does not use favourites-only',
-    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts\s*\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
+    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts,\s*Date\.now\(\)\s*\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
   );
 
   const emptyIds = [...f.matchAll(/id="(feed-empty-[^"]+)"/g)].map((m) => m[1]);
@@ -1117,7 +1117,7 @@ export default async function run(t) {
   );
   t.check(
     'sheet lists stored feed items for that channel',
-    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts\s*\)\s*\.filter/.test(js),
+    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts,\s*Date\.now\(\)\s*\)\s*\.filter/.test(js),
   );
   t.check(
     'does not open a detached channel window',

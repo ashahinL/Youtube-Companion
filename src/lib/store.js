@@ -11,6 +11,8 @@ import {
   sanitizeChannelGroups,
   queueEntryFromItem,
   sanitizeQueue,
+  liveChannelIds,
+  isStalePremiere,
 } from './view.js';
 import { MAX_BACKUP_CHANNELS } from './backup.js';
 
@@ -330,14 +332,16 @@ export async function applyFeedMerge(incoming, maxItems, generations) {
   });
 }
 
-export function newSinceCount(feed, lastSeenAt, showShorts, channelIds) {
+export function newSinceCount(feed, lastSeenAt, showShorts, channelIds, now = Date.now()) {
   let n = 0;
   const seen = Number(lastSeenAt) || 0;
   const restrict = channelIds != null;
+  const live = liveChannelIds(feed);
   for (const item of feed || []) {
     if (!item) continue;
     if (!(item.at > seen)) continue;
     if (!showShorts && item.k === 'short') continue;
+    if (isStalePremiere(item, live, now)) continue;
     if (restrict && !channelIds.has(item.c)) continue;
     n++;
   }
@@ -415,6 +419,12 @@ export function pendingLiveIds(map, now = Date.now(), keep = null) {
     if (rec.k !== 'premiere') continue;
     const startsIn = (Number(rec.st) || 0) - now;
     const sinceCheck = now - (Number(rec.ck) || 0);
+    // A premiere long past its start is hidden and rarely starts after all;
+    // hourly is enough to bring it back if it does.
+    if (Number(rec.st) > 0 && startsIn < -PREMIERE_NEAR_MS) {
+      if (sinceCheck >= PREMIERE_NEAR_MS) ids.push(id);
+      continue;
+    }
     if (startsIn <= PREMIERE_NEAR_MS || sinceCheck >= PREMIERE_FAR_RECHECK_MS) ids.push(id);
   }
   return ids;

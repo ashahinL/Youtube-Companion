@@ -34,6 +34,9 @@ shipped yet waits under Unreleased. How a version ships:
   cut off.
 
 **Fixes**
+- A scheduled stream the channel never started no longer sits in Feeds as a
+  **PREMIERE** next to the stream they actually went live on. It goes once
+  the channel is live on another video, or an hour after its start time.
 - Clicking a new-video alert now closes it. Clicking it again, or a copy
   left in the notification center, takes you to the tab it already opened
   instead of opening the video once more.

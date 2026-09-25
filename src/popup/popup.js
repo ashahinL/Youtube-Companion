@@ -1065,6 +1065,7 @@ function renderFeeds(locale) {
     channels: view.channels,
     settings: view.settings,
     query: filterEl.value,
+    now: Date.now(),
   });
   const favOnly = feeds.favOnly;
   if (favBox) favBox.checked = favOnly;
@@ -1325,7 +1326,7 @@ function renderChannelSheet() {
   problemText.textContent = problem ? t(problem.key, problem.subs) : '';
   retryBtn.disabled = locked || !!slowText;
 
-  const items = visibleFeedItems(view.feed, !!view.settings?.feed?.showShorts)
+  const items = visibleFeedItems(view.feed, !!view.settings?.feed?.showShorts, Date.now())
     .filter((item) => item.c === ch.id);
   listEl.replaceChildren();
   for (const item of items) {

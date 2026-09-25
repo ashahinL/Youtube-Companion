@@ -438,6 +438,19 @@ export default async function run(t) {
     t.check('a premiere days away, checked an hour ago, is not due', !due.includes('far'), JSON.stringify(due));
     t.check('a premiere days away is due again after six hours', due.includes('farstale'));
     t.check('a premiere never checked is due', due.includes('farnever'));
+    const lateDue = pendingLiveIds({
+      lateRecent: { k: 'premiere', st: NOW - 3 * HOUR, ck: NOW - 10 * 60_000 },
+      lateHour: { k: 'premiere', st: NOW - 3 * HOUR, ck: NOW - HOUR },
+    }, NOW);
+    t.check('a premiere hours late, checked minutes ago, is not due', !lateDue.includes('lateRecent'), JSON.stringify(lateDue));
+    t.check('a premiere hours late is due again after an hour', lateDue.includes('lateHour'), JSON.stringify(lateDue));
+    t.check(
+      'the badge does not count a premiere whose channel went live on another video',
+      newSinceCount([
+        { v: 'a', c: 'C', k: 'live', at: NOW - 60_000 },
+        { v: 'b', c: 'C', k: 'premiere', st: NOW - 50 * 60_000, at: NOW - HOUR },
+      ], 0, false, null, NOW) === 1,
+    );
     t.check(
       'ids not in keep are skipped',
       pendingLiveIds({ a: { k: 'live' }, b: { k: 'live' } }, NOW, new Set(['b'])).join() === 'b',

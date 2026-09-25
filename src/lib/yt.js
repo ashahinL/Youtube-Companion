@@ -484,7 +484,14 @@ export function parsePlayer(json) {
   const micro = json.microformat?.playerMicroformatRenderer || {};
   const live = micro.liveBroadcastDetails || {};
   const startRaw = live.startTimestamp;
-  const startsAt = startRaw ? Date.parse(startRaw) : NaN;
+  // A scheduled stream past its time, still waiting for the creator, has no
+  // startTimestamp; the waiting screen still carries the time, in seconds.
+  const slate = json.playabilityStatus?.liveStreamability?.liveStreamabilityRenderer
+    ?.offlineSlate?.liveStreamOfflineSlateRenderer;
+  const slateSeconds = Number(slate?.scheduledStartTime);
+  const startsAt = startRaw
+    ? Date.parse(startRaw)
+    : (slateSeconds > 0 ? slateSeconds * 1000 : NaN);
   const publishedRaw = micro.publishDate;
   const publishedAt = publishedRaw ? Date.parse(publishedRaw) : NaN;
 

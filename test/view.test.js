@@ -21,6 +21,8 @@ import {
   matchesWatchlist,
   matchesFeedFilter,
   visibleFeedItems,
+  isStalePremiere,
+  PREMIERE_STALE_MS,
   feedItemUrl,
   audioWatchUrl,
   rowOpenModes,
@@ -279,6 +281,39 @@ export default async function run(t) {
     'missing settings: row normal, button audio',
     same(rowOpenModes(undefined), { row: 'normal', button: 'audio' }),
   );
+
+  t.section('premieres that are not coming');
+
+  const T = 1790380000000;
+  const MIN = 60_000;
+  const GH = 'UCdNuKbEDUrYJVod-SUH5HrQ';
+  const OTHER = 'UC0000000000000000000009';
+  const screenshot = [
+    { v: '9AU2SmlSjhY', c: GH, k: 'live', at: T - 47 * MIN },
+    { v: 'fIQKRIyAmAA', c: GH, k: 'premiere', st: T - 50 * MIN, at: T - 60 * MIN },
+  ];
+  t.check(
+    'a premiere past its start is hidden once its channel is live on another video',
+    vids(visibleFeedItems(screenshot, false, T)) === '9AU2SmlSjhY',
+    vids(visibleFeedItems(screenshot, false, T)),
+  );
+  t.check(
+    'the same holds when YouTube gave no start time',
+    vids(visibleFeedItems([screenshot[0], { ...screenshot[1], st: 0 }], false, T)) === '9AU2SmlSjhY',
+  );
+  const noLive = new Set();
+  t.check('a premiere still to come is shown', !isStalePremiere({ k: 'premiere', c: GH, st: T + MIN }, new Set([GH]), T));
+  t.check('a premiere a few minutes late is shown', !isStalePremiere({ k: 'premiere', c: GH, st: T - 10 * MIN }, noLive, T));
+  t.check(
+    'a premiere more than an hour late is hidden',
+    isStalePremiere({ k: 'premiere', c: GH, st: T - PREMIERE_STALE_MS - MIN }, noLive, T),
+  );
+  t.check('a premiere with no start time and no live is shown', !isStalePremiere({ k: 'premiere', c: GH, st: 0 }, noLive, T));
+  t.check(
+    'another channel being live does not hide it',
+    !isStalePremiere({ k: 'premiere', c: GH, st: T - 10 * MIN }, new Set([OTHER]), T),
+  );
+  t.check('a live row is never a stale premiere', !isStalePremiere({ k: 'live', c: GH, st: T - 5 * 60 * MIN }, new Set([GH]), T));
 
   t.section('visibleFeedItems');
 

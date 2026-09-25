@@ -88,6 +88,7 @@ export default async function run(t) {
   const playerNormal = readJson('player.normal-video.json');
   const playerLive = readJson('player.live.json');
   const playerPremiere = readJson('player.premiere.synthetic.json');
+  const playerWaiting = readJson('player.waiting-past-start.json');
 
   /* ---- normalizeChannelInput ---------------------------------------- */
   t.section('normalizeChannelInput');
@@ -438,6 +439,13 @@ export default async function run(t) {
     String(premiere.startsAt),
   );
   t.check('premiere startsAt is after the live start', premiere.startsAt > live.startsAt);
+
+  const waiting = parsePlayer(playerWaiting);
+  t.check(
+    'a stream still waiting past its time takes its start from the waiting screen',
+    waiting.isUpcoming === true && waiting.startsAt === 1790377149000,
+    String(waiting.startsAt),
+  );
 
   let playerThrew = false;
   try {

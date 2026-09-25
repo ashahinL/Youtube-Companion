@@ -94,6 +94,19 @@ POST https://www.youtube.com/youtubei/v1/player
 - `microformat.playerMicroformatRenderer.liveBroadcastDetails` —
   `{"isLiveNow":true,"startTimestamp":"2026-09-11T10:38:47+00:00"}` — is where a
   premiere's start time comes from.
+- **A scheduled stream the creator never started has no `startTimestamp`.**
+  Measured 2026-09-25 on GameHopping: `fIQKRIyAmAA` was scheduled for
+  22:59 UTC, and the creator went live at 23:00 on a new video,
+  `9AU2SmlSjhY`. Fifty minutes later the old one still answered
+  `isUpcoming: true`, `playabilityStatus.status` `LIVE_STREAM_OFFLINE`, and
+  `liveBroadcastDetails` `{"isLiveNow":false}` with no start. Its time was only
+  in `playabilityStatus.liveStreamability.liveStreamabilityRenderer
+  .offlineSlate.liveStreamOfflineSlateRenderer.scheduledStartTime`, in
+  seconds (`"1790377149"`). Both videos stay in the channel feed, with the
+  same title. YouTube keeps the old one upcoming until the creator deletes
+  it, so the feed hides a premiere once its channel is live on another
+  video, or once it is an hour past its start
+  (`test/fixtures/player.waiting-past-start.json`).
 - `microformat.playerMicroformatRenderer.publishDate` is the upload time to
   the second, the same instant as the feed's `<published>`:
   `2026-09-10T00:29:55-07:00` for `Od6M0AXpcxQ` against `07:29:55+00:00` in
