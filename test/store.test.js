@@ -478,6 +478,58 @@ export default async function run(t) {
       sorted.map((c) => c.id + ':' + c.title).join(','));
     t.check('does not mutate the input', channels[0].id === '1');
 
+    t.section('changes that land at the same time');
+
+    await writeChannels([
+      { id: 'A', title: 'A', favorite: false, muted: false, groups: [] },
+      { id: 'B', title: 'B', favorite: false, muted: false, groups: [] },
+    ]);
+    await Promise.all([setFavorite('A', true), setMuted('B', true)]);
+    const both = await readChannels();
+    t.check(
+      'a star and a mute sent together both stick',
+      both.find((c) => c.id === 'A')?.favorite === true && both.find((c) => c.id === 'B')?.muted === true,
+      JSON.stringify(both),
+    );
+    await Promise.all([
+      setChannelGroup('A', 'Music', true),
+      setChannelGroup('B', 'News', true),
+      addChannel({ id: 'C', title: 'C' }),
+      updateChannels(new Map([['A', { lastFetchAt: 5 }]])),
+    ]);
+    const all = await readChannels();
+    t.check(
+      'groups, an add and a check patch sent together all stick',
+      all.length === 3
+        && all.find((c) => c.id === 'A')?.groups?.join() === 'Music'
+        && all.find((c) => c.id === 'A')?.lastFetchAt === 5
+        && all.find((c) => c.id === 'B')?.groups?.join() === 'News',
+      JSON.stringify(all),
+    );
+    await saveFeed([{ v: 'a1', c: 'A', at: 1 }, { v: 'b1', c: 'B', at: 2 }]);
+    await Promise.all([removeChannel('B'), applyFeedMerge([{ v: 'a2', c: 'A', at: 3 }], 500)]);
+    const feedAfter = (await readFeed()).map((row) => row.v).sort().join();
+    t.check(
+      'a removal and a feed merge together keep the new row and drop the removed channel',
+      feedAfter === 'a1,a2' && (await readChannels()).every((c) => c.id !== 'B'),
+      feedAfter,
+    );
+    await writePollState({ lastSeenAt: 0, lastPollAt: 0 });
+    await Promise.all([writePollState({ lastSeenAt: 7 }), writePollState({ lastPollAt: 9 })]);
+    const pollBoth = await readPollState();
+    t.check(
+      'two poll-state writes together both stick',
+      pollBoth.lastSeenAt === 7 && pollBoth.lastPollAt === 9,
+      JSON.stringify(pollBoth),
+    );
+    await clearQueue();
+    await Promise.all([
+      addToQueue({ v: 'aaaaaaaaaaa', t: 'one' }),
+      addToQueue({ v: 'bbbbbbbbbbb', t: 'two' }),
+    ]);
+    t.check('two queue adds together both stick', (await readQueue()).length === 2);
+    await clearQueue();
+
     await queueChecks(t);
   } finally {
     mock.restore();

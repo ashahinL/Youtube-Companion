@@ -294,6 +294,14 @@ Most live as comments at the line they protect. These span files or tools:
   must drop rows, stamps, and alerts for an id that was removed or added
   again before it wrote. Re-read the list in the same storage get as the
   feed write.
+- **Every read-change-write of stored lists goes through a lock.**
+  `store.js` runs changes to the channel list and feed on one chain
+  (`withListLock`), and poll state and Up next on their own. Two messages
+  at once used to read the same old list, and the second write wiped the
+  first change. The worker's multi-step writes (import, replace, undo,
+  clear, backup) take `withListLock` too. A job must never call a helper
+  that takes the same lock, or it waits on itself forever; a test that
+  injects a change inside a locked read hangs the same way.
 - **Only `at > 0` is a real upload time.** A missing RSS `<published>` is
   `at: 0`. Treating 0 as finite overwrites the player's time, and that id
   is never classified again.

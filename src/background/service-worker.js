@@ -54,6 +54,7 @@ import {
   removeFromQueue,
   clearQueue,
   takeFromQueue,
+  withListLock,
   readQueueOpen,
   writeQueueOpen,
   readWhatsNewSeen,
@@ -1194,26 +1195,31 @@ export function planImportedReplace(channels, feed, scanned, now = Date.now()) {
  */
 export async function addImportedChannels(list) {
   const incoming = Array.isArray(list) ? list : [];
-  const channels = await readChannels();
-  const have = new Set(channels.map((ch) => ch.id));
-  const now = Date.now();
-  const fresh = [];
-  const seen = new Set();
-  let considered = 0;
-  for (const row of incoming) {
-    if (!row || typeof row !== 'object') continue;
-    const id = row.id;
-    if (!isChannelId(id)) continue;
-    considered += 1;
-    if (have.has(id) || seen.has(id)) continue;
-    seen.add(id);
-    fresh.push(newImportedChannel(row, now));
-  }
-  // The limit is on the list, not the input: every channel is a request
-  // on every check.
-  if (channels.length + fresh.length > MAX_TAKEOUT_CHANNELS) return { ok: false, error: 'count' };
+  const planned = await withListLock(async () => {
+    const channels = await readChannels();
+    const have = new Set(channels.map((ch) => ch.id));
+    const now = Date.now();
+    const fresh = [];
+    const seen = new Set();
+    let considered = 0;
+    for (const row of incoming) {
+      if (!row || typeof row !== 'object') continue;
+      const id = row.id;
+      if (!isChannelId(id)) continue;
+      considered += 1;
+      if (have.has(id) || seen.has(id)) continue;
+      seen.add(id);
+      fresh.push(newImportedChannel(row, now));
+    }
+    // The limit is on the list, not the input: every channel is a request
+    // on every check.
+    if (channels.length + fresh.length > MAX_TAKEOUT_CHANNELS) return null;
+    if (fresh.length) await writeChannels([...channels, ...fresh]);
+    return { fresh, considered };
+  });
+  if (!planned) return { ok: false, error: 'count' };
+  const { fresh, considered } = planned;
   if (fresh.length) {
-    await writeChannels([...channels, ...fresh]);
     await syncAlarms();
     // Do not flushSeeds here: that would race the caller's own all-check.
     // A live sweep's finally picks the ids up.
@@ -1229,11 +1235,15 @@ export async function addImportedChannels(list) {
  * must not alert twice. An empty scan is refused.
  */
 async function replaceWithScanned(scanned) {
-  const [channels, feed] = await Promise.all([readChannels(), readFeed()]);
-  const plan = planImportedReplace(channels, feed, scanned);
+  const plan = await withListLock(async () => {
+    const [channels, feed] = await Promise.all([readChannels(), readFeed()]);
+    const next = planImportedReplace(channels, feed, scanned);
+    if (!next.ok) return next;
+    await writeChannels(next.channels);
+    await saveFeed(next.feed);
+    return next;
+  });
   if (!plan.ok) return { ok: false, error: plan.error };
-  await writeChannels(plan.channels);
-  await saveFeed(plan.feed);
   for (const id of plan.removedIds) pendingSeeds.delete(id);
   for (const id of plan.freshIds) pendingSeeds.add(id);
   await syncAlarms();
@@ -1544,15 +1554,19 @@ export async function undoRemove(id) {
   const snap = got && got[LAST_REMOVED_KEY];
   if (!snap?.channel || snap.channel.id !== id) return { ok: false, error: 'nothing to undo' };
   await session.remove(LAST_REMOVED_KEY);
-  const channels = await readChannels();
-  if (channels.some((ch) => ch.id === id)) return { ok: false, error: 'already added' };
-  const next = channels.slice();
-  next.splice(Math.min(Number(snap.index) || 0, next.length), 0, snap.channel);
-  await writeChannels(next);
-  await syncAlarms();
   const settings = await readSettings();
-  const rows = Array.isArray(snap.rows) ? snap.rows : [];
-  await saveFeed(mergeFeedItems(await readFeed(), rows, settings.feed.maxItems).feed);
+  const restored = await withListLock(async () => {
+    const channels = await readChannels();
+    if (channels.some((ch) => ch.id === id)) return false;
+    const next = channels.slice();
+    next.splice(Math.min(Number(snap.index) || 0, next.length), 0, snap.channel);
+    await writeChannels(next);
+    const rows = Array.isArray(snap.rows) ? snap.rows : [];
+    await saveFeed(mergeFeedItems(await readFeed(), rows, settings.feed.maxItems).feed);
+    return true;
+  });
+  if (!restored) return { ok: false, error: 'already added' };
+  await syncAlarms();
   await refreshBadge();
   return { ok: true };
 }
@@ -1562,9 +1576,12 @@ export async function undoRemove(id) {
  * never alerts again for a video it already alerted for.
  */
 export async function clearChannels() {
-  const removed = (await readChannels()).length;
-  await writeChannels([]);
-  await saveFeed([]);
+  const removed = await withListLock(async () => {
+    const count = (await readChannels()).length;
+    await writeChannels([]);
+    await saveFeed([]);
+    return count;
+  });
   await clearVideoMeta();
   await chromeApi().storage.session.remove(LAST_REMOVED_KEY);
   await syncAlarms();
@@ -1780,21 +1797,21 @@ export async function handleMessage(msg, sender) {
         }
         const parsed = parseBackup(text);
         if (!parsed.ok) return { ok: false, error: parsed.error };
-        const current = await collectState();
         const mode = msg.mode === 'replace' ? 'replace' : 'merge';
-        const result = mergeBackup(
-          { settings: current.settings, channels: current.channels },
-          parsed.data,
-          mode,
-        );
-        if (result.error) return { ok: false, error: result.error };
-        await writeSettings(result.settings);
-        await writeChannels(result.channels);
-        // The file has no feed. Rows whose channel is gone would otherwise
-        // keep showing until something else dropped them.
-        const keep = new Set(result.channels.map((ch) => ch.id));
-        const feed = (await readFeed()).filter((item) => keep.has(item.c));
-        await saveFeed(feed);
+        const applied = await withListLock(async () => {
+          const current = { settings: await readSettings(), channels: await readChannels() };
+          const merged = mergeBackup(current, parsed.data, mode);
+          if (merged.error) return { error: merged.error };
+          await writeSettings(merged.settings);
+          await writeChannels(merged.channels);
+          // The file has no feed. Rows whose channel is gone would otherwise
+          // keep showing until something else dropped them.
+          const keep = new Set(merged.channels.map((ch) => ch.id));
+          await saveFeed((await readFeed()).filter((item) => keep.has(item.c)));
+          return { current, result: merged };
+        });
+        if (applied.error) return { ok: false, error: applied.error };
+        const { current, result } = applied;
         await syncAlarms();
         await refreshBadge();
         // Same as Takeout: a live check already snapshotted the list.

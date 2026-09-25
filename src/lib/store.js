@@ -53,6 +53,28 @@ async function setKey(key, value) {
   await globalThis.chrome.storage.local.set({ [key]: value });
 }
 
+/*
+ * Every change here is read the whole value, change it, write it back, with
+ * awaits in between. Two messages handled at once (a star and a mute, or a
+ * group tick while a check writes its patches) both read the same old list,
+ * and the second write wiped the first change. One chain per stored value
+ * runs them in turn. A job must not wait on its own chain: a locked helper
+ * never calls another locked helper.
+ */
+function serial() {
+  let tail = Promise.resolve();
+  return (job) => {
+    const run = tail.then(job, job);
+    tail = run.then(() => {}, () => {});
+    return run;
+  };
+}
+
+/** The channel list and the feed, which change together. */
+export const withListLock = serial();
+const withPollLock = serial();
+const withQueueLock = serial();
+
 /* ---- channels ------------------------------------------------------- */
 
 export async function readChannels() {
@@ -67,37 +89,41 @@ export async function writeChannels(list) {
 }
 
 export async function addChannel(entry) {
-  const channels = await readChannels();
-  const id = entry?.id;
-  if (!id) return { added: false, channels };
-  if (channels.some((ch) => ch.id === id)) return { added: false, channels };
-  const record = {
-    id,
-    handle: entry.handle ?? '',
-    title: entry.title ?? '',
-    avatar: entry.avatar ?? '',
-    favorite: !!entry.favorite,
-    muted: !!entry.muted,
-    groups: sanitizeChannelGroups(entry.groups),
-    addedAt: Number.isFinite(entry.addedAt) ? entry.addedAt : Date.now(),
-    lastFetchAt: Number.isFinite(entry.lastFetchAt) ? entry.lastFetchAt : 0,
-    lastVideoAt: Number.isFinite(entry.lastVideoAt) ? entry.lastVideoAt : 0,
-    lastError: entry.lastError === undefined ? null : entry.lastError,
-    seeded: !!entry.seeded,
-  };
-  const next = [...channels, record];
-  await writeChannels(next);
-  return { added: true, channels: next };
+  return withListLock(async () => {
+    const channels = await readChannels();
+    const id = entry?.id;
+    if (!id) return { added: false, channels };
+    if (channels.some((ch) => ch.id === id)) return { added: false, channels };
+    const record = {
+      id,
+      handle: entry.handle ?? '',
+      title: entry.title ?? '',
+      avatar: entry.avatar ?? '',
+      favorite: !!entry.favorite,
+      muted: !!entry.muted,
+      groups: sanitizeChannelGroups(entry.groups),
+      addedAt: Number.isFinite(entry.addedAt) ? entry.addedAt : Date.now(),
+      lastFetchAt: Number.isFinite(entry.lastFetchAt) ? entry.lastFetchAt : 0,
+      lastVideoAt: Number.isFinite(entry.lastVideoAt) ? entry.lastVideoAt : 0,
+      lastError: entry.lastError === undefined ? null : entry.lastError,
+      seeded: !!entry.seeded,
+    };
+    const next = [...channels, record];
+    await writeChannels(next);
+    return { added: true, channels: next };
+  });
 }
 
 export async function updateChannel(id, patch) {
-  const channels = await readChannels();
-  const i = channels.findIndex((ch) => ch.id === id);
-  if (i < 0) return channels;
-  const next = channels.slice();
-  next[i] = { ...next[i], ...patch };
-  await writeChannels(next);
-  return next;
+  return withListLock(async () => {
+    const channels = await readChannels();
+    const i = channels.findIndex((ch) => ch.id === id);
+    if (i < 0) return channels;
+    const next = channels.slice();
+    next[i] = { ...next[i], ...patch };
+    await writeChannels(next);
+    return next;
+  });
 }
 
 function listingAt(ch) {
@@ -126,29 +152,33 @@ export function isSameListing(id, live, generations) {
  * is not the one the check fetched.
  */
 export async function updateChannels(patches, generations) {
-  const channels = await readChannels();
-  if (!(patches instanceof Map) || patches.size === 0) return channels;
-  const live = liveListings(channels);
-  let changed = false;
-  const next = channels.map((ch) => {
-    const patch = patches.get(ch.id);
-    if (!patch) return ch;
-    if (!isSameListing(ch.id, live, generations)) return ch;
-    changed = true;
-    return { ...ch, ...patch };
+  return withListLock(async () => {
+    const channels = await readChannels();
+    if (!(patches instanceof Map) || patches.size === 0) return channels;
+    const live = liveListings(channels);
+    let changed = false;
+    const next = channels.map((ch) => {
+      const patch = patches.get(ch.id);
+      if (!patch) return ch;
+      if (!isSameListing(ch.id, live, generations)) return ch;
+      changed = true;
+      return { ...ch, ...patch };
+    });
+    if (changed) await writeChannels(next);
+    return next;
   });
-  if (changed) await writeChannels(next);
-  return next;
 }
 
 export async function removeChannel(id) {
-  const channels = (await readChannels()).filter((ch) => ch.id !== id);
-  // Drop that channel's rows from the feed, or they would keep showing
-  // after the channel itself is gone.
-  const feed = (await readFeed()).filter((item) => item.c !== id);
-  await writeChannels(channels);
-  await saveFeed(feed);
-  return { channels, feed };
+  return withListLock(async () => {
+    const channels = (await readChannels()).filter((ch) => ch.id !== id);
+    // Drop that channel's rows from the feed, or they would keep showing
+    // after the channel itself is gone.
+    const feed = (await readFeed()).filter((item) => item.c !== id);
+    await writeChannels(channels);
+    await saveFeed(feed);
+    return { channels, feed };
+  });
 }
 
 export async function setFavorite(id, on) {
@@ -160,27 +190,33 @@ export async function setMuted(id, on) {
 }
 
 export async function setChannelGroup(id, name, on) {
-  const channels = await readChannels();
-  const result = applyChannelGroup(channels, id, name, on);
-  if (result.error) return { channels, error: result.error };
-  if (result.channels !== channels) await writeChannels(result.channels);
-  return { channels: result.channels, error: '' };
+  return withListLock(async () => {
+    const channels = await readChannels();
+    const result = applyChannelGroup(channels, id, name, on);
+    if (result.error) return { channels, error: result.error };
+    if (result.channels !== channels) await writeChannels(result.channels);
+    return { channels: result.channels, error: '' };
+  });
 }
 
 export async function renameGroup(from, to) {
-  const channels = await readChannels();
-  const result = renameGroupInList(channels, from, to);
-  if (result.error) return { channels, error: result.error };
-  if (result.channels !== channels) await writeChannels(result.channels);
-  return { channels: result.channels, error: '' };
+  return withListLock(async () => {
+    const channels = await readChannels();
+    const result = renameGroupInList(channels, from, to);
+    if (result.error) return { channels, error: result.error };
+    if (result.channels !== channels) await writeChannels(result.channels);
+    return { channels: result.channels, error: '' };
+  });
 }
 
 export async function deleteGroup(name) {
-  const channels = await readChannels();
-  const result = deleteGroupFromList(channels, name);
-  if (result.error) return { channels, error: result.error };
-  if (result.channels !== channels) await writeChannels(result.channels);
-  return { channels: result.channels, error: '' };
+  return withListLock(async () => {
+    const channels = await readChannels();
+    const result = deleteGroupFromList(channels, name);
+    if (result.error) return { channels, error: result.error };
+    if (result.channels !== channels) await writeChannels(result.channels);
+    return { channels: result.channels, error: '' };
+  });
 }
 
 function newestVideoAt(channel, feed) {
@@ -268,17 +304,19 @@ export function mergeFeedItems(existing, incoming, maxItems) {
  * start of that check.
  */
 export async function applyFeedMerge(incoming, maxItems, generations) {
-  const got = await globalThis.chrome.storage.local.get(['feed', 'channels']);
-  const existing = Array.isArray(got.feed) ? got.feed : [];
-  const live = liveListings(Array.isArray(got.channels) ? got.channels : []);
-  const keep = [];
-  for (const item of incoming || []) {
-    if (!item || !isSameListing(item.c, live, generations)) continue;
-    keep.push(item);
-  }
-  const { feed, added } = mergeFeedItems(existing, keep, maxItems);
-  await saveFeed(feed);
-  return { feed, added };
+  return withListLock(async () => {
+    const got = await globalThis.chrome.storage.local.get(['feed', 'channels']);
+    const existing = Array.isArray(got.feed) ? got.feed : [];
+    const live = liveListings(Array.isArray(got.channels) ? got.channels : []);
+    const keep = [];
+    for (const item of incoming || []) {
+      if (!item || !isSameListing(item.c, live, generations)) continue;
+      keep.push(item);
+    }
+    const { feed, added } = mergeFeedItems(existing, keep, maxItems);
+    await saveFeed(feed);
+    return { feed, added };
+  });
 }
 
 export function newSinceCount(feed, lastSeenAt, showShorts, channelIds) {
@@ -385,11 +423,13 @@ export async function readPollState() {
 }
 
 export async function writePollState(patch) {
-  const current = await readPollState();
-  const next = { ...current, ...(isPlainObject(patch) ? patch : {}) };
-  if (!Array.isArray(next.notified)) next.notified = [];
-  await setKey('pollState', next);
-  return next;
+  return withPollLock(async () => {
+    const current = await readPollState();
+    const next = { ...current, ...(isPlainObject(patch) ? patch : {}) };
+    if (!Array.isArray(next.notified)) next.notified = [];
+    await setKey('pollState', next);
+    return next;
+  });
 }
 
 export function markNotified(state, ids) {
@@ -426,35 +466,43 @@ export async function saveQueue(list) {
 }
 
 export async function addToQueue(entry) {
-  const queue = await readQueue();
-  const built = queueEntryFromItem(entry, Date.now());
-  if (!built) return { added: false, full: false, queue };
-  if (queue.some((row) => row.v === built.v)) return { added: false, full: false, queue };
-  if (queue.length >= QUEUE_CAP) return { added: false, full: true, queue };
-  const next = [...queue, built];
-  await saveQueue(next);
-  return { added: true, full: false, queue: next };
+  return withQueueLock(async () => {
+    const queue = await readQueue();
+    const built = queueEntryFromItem(entry, Date.now());
+    if (!built) return { added: false, full: false, queue };
+    if (queue.some((row) => row.v === built.v)) return { added: false, full: false, queue };
+    if (queue.length >= QUEUE_CAP) return { added: false, full: true, queue };
+    const next = [...queue, built];
+    await saveQueue(next);
+    return { added: true, full: false, queue: next };
+  });
 }
 
 export async function removeFromQueue(v) {
-  const queue = await readQueue();
-  const next = queue.filter((row) => row.v !== v);
-  if (next.length !== queue.length) await saveQueue(next);
-  return { queue: next };
+  return withQueueLock(async () => {
+    const queue = await readQueue();
+    const next = queue.filter((row) => row.v !== v);
+    if (next.length !== queue.length) await saveQueue(next);
+    return { queue: next };
+  });
 }
 
 export async function clearQueue() {
-  await saveQueue([]);
-  return { queue: [] };
+  return withQueueLock(async () => {
+    await saveQueue([]);
+    return { queue: [] };
+  });
 }
 
 export async function takeFromQueue(v) {
-  const queue = await readQueue();
-  const item = queue.find((row) => row.v === v) || null;
-  if (!item) return { item: null, queue };
-  const next = queue.filter((row) => row.v !== v);
-  await saveQueue(next);
-  return { item, queue: next };
+  return withQueueLock(async () => {
+    const queue = await readQueue();
+    const item = queue.find((row) => row.v === v) || null;
+    if (!item) return { item: null, queue };
+    const next = queue.filter((row) => row.v !== v);
+    await saveQueue(next);
+    return { item, queue: next };
+  });
 }
 
 export async function readQueueOpen() {

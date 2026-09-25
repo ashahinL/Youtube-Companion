@@ -1499,6 +1499,24 @@ export default async function run(t) {
       String(mock.notifications.length),
     );
 
+    t.section('list changes that land at the same time');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await Promise.all([
+      handleMessage({ type: 'setFavorite', id: MKBHD, on: true }),
+      handleMessage({ type: 'setChannelGroup', id: MKBHD, name: 'Tech', on: true }),
+      addImportedChannels([{ id: BEAST, title: 'MrBeast' }]),
+    ]);
+    const together = await readChannels();
+    const togetherMkbhd = together.find((ch) => ch.id === MKBHD);
+    t.check(
+      'a star, a group tick and an import sent together all stick',
+      together.length === 2 && togetherMkbhd?.favorite === true && togetherMkbhd?.groups?.join() === 'Tech',
+      JSON.stringify(together),
+    );
+    await waitForIdle();
+
     t.section('a notification Chrome refuses');
 
     const twoChannels = async () => {
@@ -3849,7 +3867,9 @@ export default async function run(t) {
       const names = keyNames(keys);
       if (metaWritten && names.includes('feed')) {
         feedReadsAfterMeta++;
-        if (feedReadsAfterMeta >= 2 && !clearedAfterSnapshot) {
+        // The first feed read after classification, before the merge takes
+        // the list lock: the merge itself cannot be interleaved any more.
+        if (feedReadsAfterMeta >= 1 && !clearedAfterSnapshot) {
           clearedAfterSnapshot = true;
           await handleMessage({ type: 'clearChannels' });
         }
@@ -3890,7 +3910,9 @@ export default async function run(t) {
       const names = keyNames(keys);
       if (metaWritten && names.includes('feed')) {
         feedReadsAfterMeta++;
-        if (feedReadsAfterMeta >= 2 && !relisted) {
+        // The first feed read after classification, before the merge takes
+        // the list lock: the merge itself cannot be interleaved any more.
+        if (feedReadsAfterMeta >= 1 && !relisted) {
           relisted = true;
           await handleMessage({ type: 'clearChannels' });
           await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: false });
