@@ -3022,6 +3022,43 @@ export default async function run(t) {
     );
     await waitForIdle();
 
+    // The old page answers first after a switch; it must not be read.
+    await wipe();
+    let staleAsks = 0;
+    const scanIndexes = [];
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') {
+        staleAsks += 1;
+        if (staleAsks > 1) return { ok: false, error: 'done' };
+        return { ok: true, index: 2, current: 0 };
+      }
+      if (message.type === 'subscriptions.scan') {
+        scanIndexes.push(message.index);
+        if (scanIndexes.length === 1) return { ok: false, error: 'wrongAccount' };
+        return { ok: true, channels: [{ id: BEAST, title: 'MrBeast', handle: '@MrBeast' }] };
+      }
+      return { ok: true };
+    };
+    const afterSwitch = await handleMessage({ type: 'importFromYouTube' });
+    t.check(
+      'the scan names the account it wants',
+      scanIndexes.length === 2 && scanIndexes.every((n) => n === 2),
+      JSON.stringify(scanIndexes),
+    );
+    t.check(
+      'a page on another account is asked again, not read',
+      afterSwitch.ok === true && afterSwitch.added === 1
+        && (await readChannels()).map((ch) => ch.id).join() === BEAST,
+      JSON.stringify(afterSwitch),
+    );
+    t.check(
+      'the wrong-account answer never reaches the overlay as a failure',
+      !mock.messagesSent.some((row) => row.message?.type === 'subscriptions.result'
+        && row.message.error === 'wrongAccount'),
+      JSON.stringify(mock.messagesSent.map((row) => row.message)),
+    );
+    await waitForIdle();
+
     mock.onTabMessage = async (_tabId, message) => {
       if (message.type === 'subscriptions.accounts') return { ok: true, index: 10, current: 0 };
       return { ok: true };

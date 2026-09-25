@@ -2387,8 +2387,22 @@
     scrollToY(0);
   }
 
-  async function runSubscriptionScan() {
+  function wantedAccount(msg) {
+    const n = msg && msg.index;
+    return typeof n === 'number' && isFinite(n) && n >= 0 && n <= 9 && Math.floor(n) === n ? n : null;
+  }
+
+  async function runSubscriptionScan(msg) {
     if (pagePath() !== '/feed/channels') return { ok: false, error: 'wrongPage' };
+    // Right after a switch the previous account's page can still be here,
+    // with its rows loaded. Answering would import that account's list.
+    // An unreadable session is not a mismatch: the bridge read below fails
+    // on its own if the page is broken.
+    const want = wantedAccount(msg);
+    if (want != null) {
+      const current = await readCurrentSession();
+      if (current != null && current !== want) return { ok: false, error: 'wrongAccount' };
+    }
     const got = await scanCopy();
     safePaint(function () { paintScanMode(got, 'scanning', {}); });
     const ready = await waitForChannelRow();
@@ -2407,9 +2421,9 @@
     return { ok: true, channels: channels };
   }
 
-  function scanSubscriptions() {
+  function scanSubscriptions(msg) {
     if (scanTask) return scanTask;
-    scanTask = runSubscriptionScan().then(
+    scanTask = runSubscriptionScan(msg).then(
       function (res) {
         scanTask = null;
         return res || { ok: false, error: 'failed' };
@@ -3533,7 +3547,7 @@
           return true;
         }
         if (msg.type === 'subscriptions.scan') {
-          scanSubscriptions().then(
+          scanSubscriptions(msg).then(
             function (res) { sendResponse(res || { ok: false, error: 'failed' }); },
             function () { sendResponse({ ok: false, error: 'failed' }); },
           );

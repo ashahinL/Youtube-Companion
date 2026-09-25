@@ -251,7 +251,11 @@ Most live as comments at the line they protect. These span files or tools:
   1 on a browser whose first account held the real list).
   `/feed/channels?authuser=N` selects account N. Past the last account
   YouTube answers 200 and falls back to account 0, so a `SESSION_INDEX`
-  that is not N is the end of the list, not an error.
+  that is not N is the end of the list, not an error. `tabs.update` to
+  another account returns before the old page is gone, and that page is
+  on `/feed/channels` too, with its rows loaded: the scan names the
+  account it wants, and a page on another one answers `wrongAccount`
+  so the worker asks again.
 - **Subscription shelves on `/feed/channels` are translated and have no
   stable id.** Take every `ytd-channel-renderer` whose
   `.data.subscriptionButton.subscribed` is true. Matching the heading

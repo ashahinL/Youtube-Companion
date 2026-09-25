@@ -1314,17 +1314,23 @@ function accountIndex(value) {
 async function requestTab(tabId, message) {
   const deadline = Date.now() + SCAN_READY_MS;
   let reloaded = false;
+  let wrong = null;
   while (Date.now() <= deadline) {
     const sent = await sendToTab(tabId, message);
-    if (!sent.rejected && sent.reply && typeof sent.reply === 'object') return sent.reply;
-    if (!sent.rejected && !reloaded) {
+    const reply = !sent.rejected && sent.reply && typeof sent.reply === 'object' ? sent.reply : null;
+    // tabs.update returns before the old page is gone, and that page is on
+    // /feed/channels too. It refuses a scan meant for another account; the
+    // next try reaches the page that was asked for.
+    if (reply && reply.error === 'wrongAccount') wrong = reply;
+    else if (reply) return reply;
+    else if (!sent.rejected && !reloaded) {
       reloaded = true;
       try { await chromeApi().tabs.reload(tabId); } catch { /* the next try reports no script */ }
     }
     if (Date.now() >= deadline) break;
     await sleep(SCAN_READY_GAP_MS);
   }
-  return { ok: false, error: 'no script' };
+  return wrong || { ok: false, error: 'no script' };
 }
 
 async function requestAccounts(tabId, message) {
@@ -1438,7 +1444,7 @@ export async function importFromYouTube() {
           return { ok: false, error: 'failed' };
         }
       }
-      const scanned = await requestTab(tabId, { type: 'subscriptions.scan' });
+      const scanned = await requestTab(tabId, { type: 'subscriptions.scan', index });
       if (!scanned || scanned.ok !== true) {
         const error = (scanned && scanned.error) || 'failed';
         await tellTab(tabId, { error, account: index, avatar: choice.avatar });

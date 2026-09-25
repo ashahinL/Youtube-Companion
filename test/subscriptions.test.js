@@ -137,7 +137,7 @@ function makeNode(tag) {
   };
 }
 
-function loadContent() {
+function loadContent(opts = {}) {
   const sent = [];
   const listeners = [];
   const doc = {
@@ -264,7 +264,43 @@ function loadContent() {
   };
   sandbox.window = sandbox;
   sandbox.addEventListener = () => {};
+  // Inside the context `window` is the context's own global, so bridge
+  // events must come from that object to pass the source check.
+  let inner = sandbox;
+  if (opts.bridge) {
+    // A stand-in for inject.js: adopts any token, answers sessionIndex and
+    // subscribedChannels from opts.bridge, on /feed/channels with rows.
+    const onMessage = [];
+    sandbox.setInterval = setInterval;
+    sandbox.clearInterval = clearInterval;
+    // Node's getRandomValues refuses a Uint8Array from another realm.
+    sandbox.crypto = {
+      getRandomValues(bytes) {
+        for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 37 + 11) % 256;
+        return bytes;
+      },
+    };
+    sandbox.location = { pathname: '/feed/channels' };
+    doc.querySelectorAll = (sel) => (sel === 'ytd-channel-renderer' ? [{}] : []);
+    sandbox.addEventListener = (type, fn) => { if (type === 'message') onMessage.push(fn); };
+    sandbox.removeEventListener = (type, fn) => {
+      const i = onMessage.indexOf(fn);
+      if (i >= 0) onMessage.splice(i, 1);
+    };
+    sandbox.postMessage = (data) => {
+      let reply = null;
+      if (data.dir === 'adopt') reply = { type: data.type, dir: 'ready' };
+      if (data.dir === 'request' && data.method in opts.bridge) {
+        reply = { type: data.type, dir: 'response', id: data.id, ok: true, result: opts.bridge[data.method] };
+      }
+      if (!reply) return;
+      setTimeout(() => {
+        for (const fn of onMessage.slice()) fn({ source: inner, origin: PAGE, data: reply });
+      }, 0);
+    };
+  }
   vm.createContext(sandbox);
+  if (opts.bridge) inner = vm.runInContext('globalThis', sandbox);
   vm.runInContext(coreSrc, sandbox, { filename: 'src/content/core.js' });
   vm.runInContext(contentSrc, sandbox, { filename: 'src/content/content.js' });
   const win = vm.runInContext('globalThis', sandbox);
@@ -410,6 +446,36 @@ export default async function run(t) {
     returned === true && replied && replied.error === 'wrongPage',
     JSON.stringify({ returned, replied }),
   );
+
+  const staleRows = [{ id: 'UCAAAAAAAAAAAAAAAAAAAAAA', title: 'Old account' }];
+  const stale = loadContent({ bridge: { sessionIndex: 0, subscribedChannels: staleRows } });
+  const staleAnswer = await stale.api.scanSubscriptions({ index: 2 });
+  t.check(
+    'a page on another account refuses a scan meant for account 2',
+    staleAnswer.ok === false && staleAnswer.error === 'wrongAccount',
+    JSON.stringify(staleAnswer),
+  );
+  t.check(
+    'and paints nothing over the old page',
+    !stale.doc.getElementById('ytc-scan-overlay'),
+  );
+  const fresh = loadContent({ bridge: { sessionIndex: 2, subscribedChannels: staleRows } });
+  const freshAnswer = await fresh.api.scanSubscriptions({ index: 2 });
+  t.check(
+    'the page on the wanted account is read',
+    freshAnswer.ok === true && freshAnswer.channels.length === 1,
+    JSON.stringify(freshAnswer),
+  );
+  const unknown = loadContent({ bridge: { sessionIndex: null, subscribedChannels: staleRows } });
+  const unknownAnswer = await unknown.api.scanSubscriptions({ index: 2 });
+  t.check(
+    'an unreadable session is not treated as another account',
+    unknownAnswer.ok === true,
+    JSON.stringify(unknownAnswer),
+  );
+  const noIndex = loadContent({ bridge: { sessionIndex: 0, subscribedChannels: staleRows } });
+  const noIndexAnswer = await noIndex.api.scanSubscriptions();
+  t.check('a scan that names no account is read as before', noIndexAnswer.ok === true, JSON.stringify(noIndexAnswer));
 
   await page.api.showScanResult({ error: 'nope' });
   const overlay = page.doc.getElementById('ytc-scan-overlay');
