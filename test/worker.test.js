@@ -1499,6 +1499,56 @@ export default async function run(t) {
       String(mock.notifications.length),
     );
 
+    t.section('a notification Chrome refuses');
+
+    const twoChannels = async () => {
+      await wipe();
+      await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, avatar: 'https://yt3.ggpht.com/mkbhd' });
+      await putChannel({ id: BEAST, title: 'MrBeast', seeded: true, avatar: 'https://yt3.ggpht.com/beast' });
+      installFetch({
+        feeds: {
+          [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'refused0001', t: 'Refused', at: AT.newest }]),
+          [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'shown000001', t: 'Shown', at: AT.mid }]),
+        },
+      });
+    };
+
+    await twoChannels();
+    mock.notificationFail = (opts) => opts.iconUrl === 'https://yt3.ggpht.com/mkbhd';
+    await runSweep({ scope: 'all' });
+    const refusedIcon = mock.notifications.find((row) => row.title === 'Marques Brownlee');
+    t.check(
+      'a picture Chrome cannot load falls back to the extension icon',
+      String(refusedIcon?.iconUrl || '').endsWith('icons/icon128.png'),
+      JSON.stringify(mock.notifications),
+    );
+    t.check(
+      'and the next channel still alerts with its own picture',
+      mock.notifications.some((row) => row.title === 'MrBeast' && row.iconUrl === 'https://yt3.ggpht.com/beast'),
+      JSON.stringify(mock.notifications),
+    );
+
+    await twoChannels();
+    mock.notificationFail = (opts) => opts.title === 'Marques Brownlee';
+    const refusedSweep = await runSweep({ scope: 'all' });
+    t.check(
+      'a channel whose alert fails every way does not stop the others',
+      mock.notifications.length === 1 && mock.notifications[0].title === 'MrBeast',
+      JSON.stringify(mock.notifications),
+    );
+    const refusedPoll = await readPollState();
+    t.check(
+      'the check still finishes and records itself',
+      refusedSweep.ok === true && refusedPoll.lastPollAt > 0,
+      JSON.stringify(refusedSweep),
+    );
+    t.check(
+      'only the alert that showed is marked as alerted',
+      refusedPoll.notified.includes('shown000001') && !refusedPoll.notified.includes('refused0001'),
+      JSON.stringify(refusedPoll.notified),
+    );
+    mock.notificationFail = null;
+
     t.section('favourite vs notifyNormal');
 
     await wipe();

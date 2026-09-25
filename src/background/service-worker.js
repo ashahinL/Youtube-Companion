@@ -662,19 +662,31 @@ function shouldNotifyItem(item, channel, settings, poll) {
   return !!settings.alerts.notifyNormal;
 }
 
+/**
+ * True when the alert is on screen. Chrome rejects a notification whose
+ * icon it cannot load, and a channel picture is a remote image, so that
+ * one retries with the extension's own icon. A failure is this channel's
+ * alone: throwing here used to end the check before the channels after it
+ * were alerted or anything was marked.
+ */
 async function notifyChannel(channel, items, settings) {
   const newest = newestOf(items);
-  if (!newest) return;
+  if (!newest) return false;
   const title = channel.title || channel.handle || channel.id;
   const message = items.length === 1 ? newest.t : await nNewVideosText(items.length, settings);
   const id = notificationIdFor(channel.id);
-  notificationVideos.set(id, newest.v);
-  await chromeApi().notifications.create(id, {
-    type: 'basic',
-    iconUrl: iconUrlFor(channel, settings),
-    title,
-    message,
-  });
+  const ownIcon = chromeApi().runtime.getURL(EXT_ICON);
+  const icons = [...new Set([iconUrlFor(channel, settings), ownIcon])];
+  for (const iconUrl of icons) {
+    try {
+      await chromeApi().notifications.create(id, { type: 'basic', iconUrl, title, message });
+      notificationVideos.set(id, newest.v);
+      return true;
+    } catch {
+      // Next icon, or give up on this channel only.
+    }
+  }
+  return false;
 }
 
 async function notifyNewItems({ added, unseeded, quiet, settings, generations }) {
@@ -718,7 +730,7 @@ async function notifyNewItems({ added, unseeded, quiet, settings, generations })
   for (const [channelId, items] of byChannel) {
     const channel = byId.get(channelId);
     if (!channel) continue;
-    await notifyChannel(channel, items, settings);
+    if (!(await notifyChannel(channel, items, settings))) continue;
     for (const item of items) alerted.push(item.v);
   }
   if (alerted.length) poll = markNotified(poll, alerted);

@@ -229,6 +229,10 @@ export function installChromeMock(initial = {}) {
     notifications: {
       create(id, options, callback) {
         const opts = options && typeof options === 'object' ? options : {};
+        // Chrome rejects a notification whose icon it cannot load.
+        if (typeof handle.notificationFail === 'function' && handle.notificationFail(opts)) {
+          return Promise.reject(new Error('Unable to download all specified images.'));
+        }
         handle.notifications.push({
           id,
           type: opts.type,
@@ -419,6 +423,7 @@ export function installChromeMock(initial = {}) {
     handle.onTabMessage = null;
     handle.activeTab = null;
     handle.sessionSetHold = null;
+    handle.notificationFail = null;
     for (const key of Object.keys(alarms)) delete alarms[key];
     for (const key of Object.keys(session)) delete session[key];
     handle.badgeText = '';
