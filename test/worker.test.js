@@ -9,6 +9,7 @@ import { writeSettings } from '../src/lib/settings.js';
 import {
   addChannel,
   readChannels,
+  writeChannels,
   readFeed,
   saveFeed,
   readVideoMeta,
@@ -2329,6 +2330,23 @@ export default async function run(t) {
       already.ok === false && already.error === 'already added' && already.id === MKBHD,
       JSON.stringify(already),
     );
+
+    const listBeforeFull = await readChannels();
+    const capList = listBeforeFull.concat(Array.from({ length: 2000 - listBeforeFull.length }, (_, i) => ({
+      id: `UCfull${String(i).padStart(18, '0')}`, title: `Full ${i}`, handle: '', groups: [],
+    })));
+    await writeChannels(capList);
+    const realFetch = globalThis.fetch;
+    let fullFetches = 0;
+    globalThis.fetch = async () => { fullFetches += 1; throw new Error('no fetch expected'); };
+    const manualAtCap = await handleMessage({ type: 'addChannel', input: 'UC0000000000000000000abc' });
+    globalThis.fetch = realFetch;
+    t.check(
+      'Add is refused at 2,000 channels, before any request',
+      manualAtCap.ok === false && manualAtCap.error === 'list full' && fullFetches === 0 && (await readChannels()).length === 2000,
+      JSON.stringify({ manualAtCap, fullFetches }),
+    );
+    await writeChannels(listBeforeFull);
 
     const fromWatch = await handleMessage({
       type: 'addChannel',

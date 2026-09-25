@@ -59,6 +59,7 @@ import {
   writeQueueOpen,
   readWhatsNewSeen,
   writeWhatsNewSeen,
+  MAX_CHANNELS,
 } from '../lib/store.js';
 import {
   feedChannelIds,
@@ -1036,15 +1037,18 @@ async function flushSeeds() {
 export async function addChannelByInput(input) {
   const id = await resolveChannelId(input, ytOpts());
   if (!id) return { ok: false, error: 'not a channel' };
-  const existing = (await readChannels()).find((ch) => ch.id === id);
-  if (existing) return { ok: false, error: 'already added', id };
+  const listed = await readChannels();
+  if (listed.some((ch) => ch.id === id)) return { ok: false, error: 'already added', id };
+  // Checked before the header fetch too, so a full list costs no request.
+  if (listed.length >= MAX_CHANNELS) return { ok: false, error: 'list full', id };
   const header = await fetchChannelHeader(id, ytOpts());
-  const { added } = await addChannel({
+  const { added, full } = await addChannel({
     id,
     handle: header.handle || '',
     title: header.title || '',
     avatar: isAvatarUrl(header.avatar) ? header.avatar : '',
   });
+  if (full) return { ok: false, error: 'list full', id };
   if (!added) return { ok: false, error: 'already added', id };
   await syncAlarms();
   const channel = (await readChannels()).find((ch) => ch.id === id);

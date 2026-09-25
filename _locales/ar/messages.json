@@ -125,6 +125,16 @@
     "message": "هذه ليست قناة",
     "description": "Inline error when the Watchlist input does not resolve to a YouTube channel."
   },
+  "watchlistFull": {
+    "message": "في قائمتك $MAX$ قناة، وهو الحد الأقصى. احذف قناة لتضيف أخرى.",
+    "description": "Error when Add or Follow is refused because the list is at the channel cap. $MAX$ is the limit.",
+    "placeholders": {
+      "max": {
+        "content": "$1",
+        "example": "2000"
+      }
+    }
+  },
   "watchlistError": {
     "message": "حدث خطأ: $ERROR$",
     "description": "Inline error for an unexpected worker failure. $ERROR$ is the worker's error text.",

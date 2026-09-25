@@ -12,6 +12,11 @@ import {
   queueEntryFromItem,
   sanitizeQueue,
 } from './view.js';
+import { MAX_BACKUP_CHANNELS } from './backup.js';
+
+// The same ceiling as an import: every channel is a request on each check,
+// from the user's own address.
+export const MAX_CHANNELS = MAX_BACKUP_CHANNELS;
 
 const DEFAULT_POLL_STATE = {
   running: false,
@@ -94,6 +99,7 @@ export async function addChannel(entry) {
     const id = entry?.id;
     if (!id) return { added: false, channels };
     if (channels.some((ch) => ch.id === id)) return { added: false, channels };
+    if (channels.length >= MAX_CHANNELS) return { added: false, full: true, channels };
     const record = {
       id,
       handle: entry.handle ?? '',

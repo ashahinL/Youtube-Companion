@@ -177,6 +177,13 @@ export default async function run(t) {
     t.check('duplicate id leaves the original title',
       dup.channels[0].title === 'Marques Brownlee');
 
+    const kept = await readChannels();
+    await writeChannels(Array.from({ length: 2000 }, (_, i) => ({ id: `UCcap${String(i).padStart(19, '0')}`, title: `Cap ${i}` })));
+    const pastCap = await addChannel({ id: 'UCoverTheCap000000000000', title: 'One too many' });
+    t.check('a list at 2,000 channels takes no more', pastCap.added === false && pastCap.full === true && pastCap.channels.length === 2000,
+      JSON.stringify({ added: pastCap.added, full: pastCap.full, n: pastCap.channels.length }));
+    await writeChannels(kept);
+
     t.section('updateChannel / setFavorite');
 
     await updateChannel('UCBJycsmduvYEL83R_U4JriQ', { lastVideoAt: 99, lastError: { at: 1, message: 'x' } });
