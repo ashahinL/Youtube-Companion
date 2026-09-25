@@ -471,6 +471,31 @@ export default async function run(t) {
   });
   t.check('a dropped avatar still imports the channel', withAvatars.channels.length === avatarCases.length);
 
+  t.section('imported text and dates are cleaned');
+
+  const beforeImport = Date.now();
+  const dirty = mergeBackup(emptyState(), {
+    channels: [
+      { id: 'UC0000000000000000000001', title: `  A\u0000B\nC${'x'.repeat(300)}`, handle: '@good.handle', lastVideoAt: beforeImport + 365 * 86400000 },
+      { id: 'UC0000000000000000000002', title: 42, handle: 'no at sign', lastVideoAt: 1000 },
+      { id: 'UC0000000000000000000003', title: 'Plain', handle: '@bad/handle', lastVideoAt: -5 },
+      { id: 'UC0000000000000000000004', title: 'Arabic', handle: '@قناة' },
+    ],
+  }, 'replace');
+  const [one, two, three, four] = dirty.channels;
+  t.check('control characters in a title become spaces', one.title.startsWith('A B C'), JSON.stringify(one.title.slice(0, 10)));
+  t.check('a title is cut at 200 characters', one.title.length === 200, String(one.title.length));
+  t.check('a title that is not text is empty', two.title === '', JSON.stringify(two.title));
+  t.check('a good handle is kept', one.handle === '@good.handle' && four.handle === '@قناة', `${one.handle} ${four.handle}`);
+  t.check('a malformed handle is left blank', two.handle === '' && three.handle === '', `${two.handle}|${three.handle}`);
+  t.check(
+    'a lastVideoAt in the future becomes the import time',
+    one.lastVideoAt >= beforeImport && one.lastVideoAt <= Date.now(),
+    String(one.lastVideoAt - beforeImport),
+  );
+  t.check('a past lastVideoAt is kept', two.lastVideoAt === 1000, String(two.lastVideoAt));
+  t.check('a negative lastVideoAt is 0', three.lastVideoAt === 0 && four.lastVideoAt === 0, `${three.lastVideoAt} ${four.lastVideoAt}`);
+
   t.section('cover picture stays out of backups');
 
   const withUrl = buildBackup({

@@ -50,6 +50,21 @@ function usableId(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+// The same cleaning Takeout and the YouTube import give a file's text:
+// titles are shown as text, never markup, so control characters are the
+// only thing that could still upset a row.
+function cleanTitle(value) {
+  return typeof value === 'string'
+    ? value.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 200)
+    : '';
+}
+
+// A bad handle is left blank; the next check reads it from the channel.
+function cleanHandle(value) {
+  const handle = typeof value === 'string' ? value.trim() : '';
+  return /^@[^\s/?#@]{1,100}$/.test(handle) ? handle : '';
+}
+
 function cloneData(value) {
   try {
     return structuredClone(value);
@@ -112,8 +127,8 @@ function normalizeChannel(raw, now) {
   const lastVideoAt = Number(raw.lastVideoAt);
   return {
     id,
-    handle: typeof raw.handle === 'string' ? raw.handle : '',
-    title: typeof raw.title === 'string' ? raw.title : '',
+    handle: cleanHandle(raw.handle),
+    title: cleanTitle(raw.title),
     // The popup shows it as an <img> and alerts use it as their icon, so an
     // address from a file would be fetched. Only YouTube's own hosts load.
     avatar: isAvatarUrl(raw.avatar) ? raw.avatar : '',
@@ -121,7 +136,9 @@ function normalizeChannel(raw, now) {
     muted: !!raw.muted,
     groups: sanitizeChannelGroups(raw.groups),
     addedAt: now,
-    lastVideoAt: Number.isFinite(lastVideoAt) ? lastVideoAt : 0,
+    // A date past now, from a wrong clock or an edited file, would keep
+    // every upload before it quiet until that day comes.
+    lastVideoAt: Number.isFinite(lastVideoAt) && lastVideoAt > 0 ? Math.min(lastVideoAt, now) : 0,
     lastFetchAt: 0,
     lastError: null,
     seeded: false,
