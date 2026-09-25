@@ -477,6 +477,22 @@ export default async function run(t) {
       sorted[2].id === '4' && sorted[3].id === '2',
       sorted.map((c) => c.id + ':' + c.title).join(','));
     t.check('does not mutate the input', channels[0].id === '1');
+    const byFeed = sortChannelsForDisplay(channels, [{ v: 'x', c: '2', at: 400 }, { v: 'y', c: '9', at: 999 }]);
+    t.check('a newer feed row lifts its channel above lastVideoAt',
+      byFeed.map((c) => c.id).join(',') === '3,2,1,4', byFeed.map((c) => c.id).join(','));
+
+    const bigList = Array.from({ length: 2000 }, (_, i) => ({ id: `c${i}`, title: `Channel ${i}`, lastVideoAt: i % 97 }));
+    const bigFeed = Array.from({ length: 500 }, (_, i) => ({ v: `v${i}`, c: `c${i * 4}`, at: 1000 + i }));
+    let rowReads = 0;
+    const countedFeed = new Proxy(bigFeed, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) rowReads += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    const bigSorted = sortChannelsForDisplay(bigList, countedFeed);
+    t.check('2,000 channels read a 500-row feed once, not once per comparison',
+      rowReads <= bigFeed.length && bigSorted[0].id === 'c1996', `${rowReads} row reads, first ${bigSorted[0].id}`);
 
     t.section('changes that land at the same time');
 

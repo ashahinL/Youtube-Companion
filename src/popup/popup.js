@@ -159,6 +159,10 @@ let audioSleepPending = false;
 const FEED_PAGE = 50;
 let feedLimit = FEED_PAGE;
 let feedPageKey = '';
+// The Watchlist pages the same way: a list of 2,000 channels drew every row,
+// each with its ⋯ menu, on every key typed in its box.
+let watchlistLimit = FEED_PAGE;
+let watchlistPageKey = '';
 let feedGroupsScrolledTo;
 let groupWrite = Promise.resolve();
 // Unsent rename text, kept across re-renders so a checkbox tick landing
@@ -1110,6 +1114,11 @@ function showMoreFeed() {
   renderFeeds(locale);
 }
 
+function showMoreWatchlist() {
+  watchlistLimit += FEED_PAGE;
+  renderWatchlist(locale);
+}
+
 function renderWatchlist(locale) {
   const form = document.getElementById('watchlist-add-form');
   const input = document.getElementById('watchlist-input');
@@ -1171,8 +1180,15 @@ function renderWatchlist(locale) {
     ? t('watchlistShowing', [String(shown.length), String(channels.length)])
     : '';
 
-  listEl.replaceChildren();
-  for (const ch of shown) listEl.appendChild(channelRow(ch, locale));
+  if (q !== watchlistPageKey) {
+    watchlistPageKey = q;
+    watchlistLimit = FEED_PAGE;
+  }
+  listEl.replaceChildren(...shown.slice(0, watchlistLimit).map((ch) => channelRow(ch, locale)));
+  const moreEl = document.getElementById('watchlist-more');
+  const rest = shown.length - watchlistLimit;
+  moreEl.hidden = rest <= 0;
+  moreEl.textContent = rest > 0 ? t('feedShowMore', [String(Math.min(FEED_PAGE, rest))]) : '';
   emptyEl.hidden = watchlist.total > 0 || searching;
   const noMatch = watchlist.noMatch && !view.error;
   missEl.hidden = !noMatch;
@@ -3761,6 +3777,16 @@ function bindWatchlist() {
   document.getElementById('watchlist-undo-btn').addEventListener('click', () => {
     void undoRemove();
   });
+  const more = document.getElementById('watchlist-more');
+  more.addEventListener('click', () => {
+    const first = watchlistLimit;
+    showMoreWatchlist();
+    // A keyboard press lands on the first new row, not back at the button.
+    document.getElementById('watchlist-list').children[first]?.querySelector('.channel-row__main')?.focus();
+  });
+  new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting) && !more.hidden) showMoreWatchlist();
+  }, { rootMargin: '300px' }).observe(more);
 }
 
 function bindChannelSheet() {

@@ -1499,6 +1499,13 @@ export default async function run(t) {
     'more rows come from a button that scrolling also triggers',
     /id="feed-more"[^>]*hidden/.test(html) && /new IntersectionObserver/.test(js) && /showMoreFeed\(\)/.test(js),
   );
+  t.check(
+    'the Watchlist is drawn 50 rows at a time and starts again at one page on a new query',
+    /shown\.slice\(0, watchlistLimit\)/.test(js)
+      && /q !== watchlistPageKey[\s\S]{0,80}watchlistLimit = FEED_PAGE/.test(js)
+      && /id="watchlist-more"[^>]*hidden/.test(html)
+      && /showMoreWatchlist\(\);\s*\}[\s\S]{0,40}\.observe\(more\)/.test(js),
+  );
   t.check('thumbnails and avatars load lazily', (js.match(/img\.loading = 'lazy';/g) || []).length >= 2);
   t.check(
     'a feed row is not a focusable container',

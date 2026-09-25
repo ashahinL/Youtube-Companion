@@ -190,7 +190,7 @@ class FakeEl {
 }
 
 const REQUIRED = new Set([
-  'watchlist-add-form', 'watchlist-input', 'watchlist-clear', 'watchlist-undo-btn',
+  'watchlist-add-form', 'watchlist-input', 'watchlist-clear', 'watchlist-undo-btn', 'watchlist-more',
   'feed-add-form', 'feed-filter', 'feed-clear', 'feed-refresh', 'feed-goto-watchlist',
   'feed-waiting-refresh', 'feed-filter-clear', 'feed-favorites-only', 'feed-more',
   'settings', 'settings-export', 'settings-import-file', 'settings-import',

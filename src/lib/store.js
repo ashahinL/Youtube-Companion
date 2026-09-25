@@ -219,27 +219,32 @@ export async function deleteGroup(name) {
   });
 }
 
-function newestVideoAt(channel, feed) {
-  let newest = Number(channel?.lastVideoAt) || 0;
+// One pass over the feed. Looking each channel up in the feed from inside
+// the compare was about 20 million steps for 2,000 channels on every draw.
+function newestByChannel(feed) {
+  const newest = new Map();
   if (!Array.isArray(feed)) return newest;
-  const id = channel?.id;
   for (const item of feed) {
-    if (item && item.c === id) {
-      const at = Number(item.at) || 0;
-      if (at > newest) newest = at;
-    }
+    if (!item) continue;
+    const at = Number(item.at) || 0;
+    if (at > (newest.get(item.c) || 0)) newest.set(item.c, at);
   }
   return newest;
 }
 
 export function sortChannelsForDisplay(channels, feed) {
+  const inFeed = newestByChannel(feed);
+  const newestAt = new Map();
   const list = Array.isArray(channels) ? channels.slice() : [];
+  for (const ch of list) {
+    newestAt.set(ch, Math.max(Number(ch?.lastVideoAt) || 0, inFeed.get(ch?.id) || 0));
+  }
   list.sort((a, b) => {
     const favA = a?.favorite ? 1 : 0;
     const favB = b?.favorite ? 1 : 0;
     if (favA !== favB) return favB - favA;
-    const atA = newestVideoAt(a, feed);
-    const atB = newestVideoAt(b, feed);
+    const atA = newestAt.get(a);
+    const atB = newestAt.get(b);
     if (atA !== atB) return atB - atA;
     const tA = String(a?.title || '');
     const tB = String(b?.title || '');
