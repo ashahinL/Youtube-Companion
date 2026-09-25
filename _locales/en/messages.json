@@ -197,6 +197,20 @@
     "message": "The last check of this channel failed.",
     "description": "Channel sheet, when the channel's last check failed for a reason not covered by the other messages."
   },
+  "errorYouTubeHttp": {
+    "message": "YouTube didn't answer (error $CODE$). Try again later.",
+    "description": "Inline error when a request to YouTube got an HTTP error. $CODE$ is the status number, such as 500.",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "500"
+      }
+    }
+  },
+  "errorYouTubeUnreadable": {
+    "message": "YouTube's answer couldn't be read. Try again later.",
+    "description": "Inline error when YouTube's answer to a request could not be parsed."
+  },
   "channelProblemRetry": {
     "message": "Retry",
     "description": "Button beside the problem sentence in the channel sheet. Checks this one channel again."
@@ -890,6 +904,40 @@
   "settingsImportTooMany": {
     "message": "Merging that backup would go past $MAX$ channels.",
     "description": "Error when a Merge import, with the channels already on the list, would pass the cap. $MAX$ is the limit.",
+    "placeholders": {
+      "max": {
+        "content": "$1",
+        "example": "2000"
+      }
+    }
+  },
+  "settingsImportNotJson": {
+    "message": "That file is not a valid backup file.",
+    "description": "Backup import error when the file is not JSON."
+  },
+  "settingsImportNotBackup": {
+    "message": "That file is not a Companion for YouTube backup.",
+    "description": "Backup import error when the file is JSON from something else."
+  },
+  "settingsImportBadVersion": {
+    "message": "This backup version is not supported.",
+    "description": "Backup import error when the file's format version is unknown."
+  },
+  "settingsImportNoChannels": {
+    "message": "That backup has no channel list.",
+    "description": "Backup import error when the file has no channels array."
+  },
+  "settingsImportBadId": {
+    "message": "A channel in that file has no valid channel id.",
+    "description": "Backup import error when a channel entry has a missing or malformed id."
+  },
+  "settingsImportTooLarge": {
+    "message": "That file is too large to be a backup.",
+    "description": "Backup import error when the picked file is over the size limit."
+  },
+  "settingsImportFileTooMany": {
+    "message": "That backup has more than $MAX$ channels.",
+    "description": "Backup import error when the file alone lists more channels than the cap. $MAX$ is the limit.",
     "placeholders": {
       "max": {
         "content": "$1",

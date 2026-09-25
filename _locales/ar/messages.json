@@ -197,6 +197,20 @@
     "message": "فشل آخر فحص لهذه القناة.",
     "description": "Channel sheet, when the channel's last check failed for a reason not covered by the other messages."
   },
+  "errorYouTubeHttp": {
+    "message": "لم يستجب يوتيوب (خطأ $CODE$). حاول مرة أخرى لاحقًا.",
+    "description": "Inline error when a request to YouTube got an HTTP error. $CODE$ is the status number, such as 500.",
+    "placeholders": {
+      "code": {
+        "content": "$1",
+        "example": "500"
+      }
+    }
+  },
+  "errorYouTubeUnreadable": {
+    "message": "تعذّرت قراءة ردّ يوتيوب. حاول مرة أخرى لاحقًا.",
+    "description": "Inline error when YouTube's answer to a request could not be parsed."
+  },
   "channelProblemRetry": {
     "message": "إعادة المحاولة",
     "description": "Button beside the problem sentence in the channel sheet. Checks this one channel again."
@@ -890,6 +904,40 @@
   "settingsImportTooMany": {
     "message": "دمج هذه النسخة سيجعل عدد القنوات أكثر من $MAX$.",
     "description": "Error when a Merge import, with the channels already on the list, would pass the cap. $MAX$ is the limit.",
+    "placeholders": {
+      "max": {
+        "content": "$1",
+        "example": "2000"
+      }
+    }
+  },
+  "settingsImportNotJson": {
+    "message": "هذا الملف ليس ملف نسخة احتياطية صالحًا.",
+    "description": "Backup import error when the file is not JSON."
+  },
+  "settingsImportNotBackup": {
+    "message": "هذا الملف ليس نسخة احتياطية من رفيق ليوتيوب.",
+    "description": "Backup import error when the file is JSON from something else."
+  },
+  "settingsImportBadVersion": {
+    "message": "إصدار هذه النسخة الاحتياطية غير مدعوم.",
+    "description": "Backup import error when the file's format version is unknown."
+  },
+  "settingsImportNoChannels": {
+    "message": "لا توجد قائمة قنوات في هذه النسخة الاحتياطية.",
+    "description": "Backup import error when the file has no channels array."
+  },
+  "settingsImportBadId": {
+    "message": "في هذا الملف قناة بلا معرّف قناة صالح.",
+    "description": "Backup import error when a channel entry has a missing or malformed id."
+  },
+  "settingsImportTooLarge": {
+    "message": "هذا الملف أكبر من أن يكون نسخة احتياطية.",
+    "description": "Backup import error when the picked file is over the size limit."
+  },
+  "settingsImportFileTooMany": {
+    "message": "في هذه النسخة الاحتياطية أكثر من $MAX$ قناة.",
+    "description": "Backup import error when the file alone lists more channels than the cap. $MAX$ is the limit.",
     "placeholders": {
       "max": {
         "content": "$1",

@@ -25,15 +25,17 @@ const VERSION = 1;
 export const MAX_BACKUP_CHANNELS = 2000;
 export const MAX_BACKUP_BYTES = 2_000_000;
 
+// Codes, not sentences: the popup turns each into a message in the
+// person's language (backupImportMessage in view.js).
 const ERR = {
-  json: 'That file is not valid JSON.',
-  app: 'That file is not a Companion for YouTube backup.',
-  version: 'This backup version is not supported.',
-  channels: 'That backup has no channel list.',
-  id: 'A channel in that file has no valid channel id.',
-  size: 'That file is too large to be a backup.',
-  count: `That backup has more than ${MAX_BACKUP_CHANNELS} channels.`,
-  merge: `Merging that backup would go past ${MAX_BACKUP_CHANNELS} channels.`,
+  json: 'json',
+  app: 'app',
+  version: 'version',
+  channels: 'channels',
+  id: 'id',
+  size: 'size',
+  count: 'count',
+  merge: 'merge',
 };
 
 function isPlainObject(value) {

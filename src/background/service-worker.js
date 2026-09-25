@@ -1792,7 +1792,7 @@ export async function handleMessage(msg, sender) {
           try {
             text = JSON.stringify(raw ?? null);
           } catch {
-            return { ok: false, error: 'That file is not valid JSON.' };
+            return { ok: false, error: 'json' };
           }
         }
         const parsed = parseBackup(text);

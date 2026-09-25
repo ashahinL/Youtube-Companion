@@ -54,6 +54,7 @@ import {
   followView,
   followActionState,
   backupImportMessage,
+  ytErrorMessage,
   pageChannelsView,
   sleepMinutesLeft,
   menuNavIndex,
@@ -65,7 +66,8 @@ import {
   sanitizeQueue,
   queueView,
 } from '../src/lib/view.js';
-import { MAX_BACKUP_CHANNELS } from '../src/lib/backup.js';
+import { MAX_BACKUP_CHANNELS, parseBackup, backupSizeError } from '../src/lib/backup.js';
+import { YtError } from '../src/lib/yt.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -919,24 +921,73 @@ export default async function run(t) {
 
   t.section('backup import error');
 
+  const locales = Object.fromEntries(['en', 'ar'].map((loc) => [
+    loc,
+    JSON.parse(fs.readFileSync(path.join(ROOT, '_locales', loc, 'messages.json'), 'utf8')),
+  ]));
+  const backupCodes = [
+    parseBackup('{').error,
+    parseBackup('[]').error,
+    parseBackup(JSON.stringify({ app: 'youtube-companion', version: 99, channels: [] })).error,
+    parseBackup(JSON.stringify({ app: 'youtube-companion', version: 1 })).error,
+    parseBackup(JSON.stringify({ app: 'youtube-companion', version: 1, channels: [{ id: 'x' }] })).error,
+    parseBackup(JSON.stringify({
+      app: 'youtube-companion',
+      version: 1,
+      channels: Array.from({ length: MAX_BACKUP_CHANNELS + 1 }, (_, i) => ({ id: `UC${String(i).padStart(22, '0')}` })),
+    })).error,
+    backupSizeError(Number.MAX_SAFE_INTEGER),
+    'merge',
+  ];
+  for (const code of backupCodes) {
+    const mapped = backupImportMessage(code, MAX_BACKUP_CHANNELS);
+    t.check(
+      `backup error "${code}" has a message in English and Arabic`,
+      !!mapped.key && !!locales.en[mapped.key]?.message && !!locales.ar[mapped.key]?.message,
+      JSON.stringify(mapped),
+    );
+  }
   t.check(
-    'merge past the cap maps to settingsImportTooMany',
-    same(backupImportMessage(`Merging that backup would go past ${MAX_BACKUP_CHANNELS} channels.`, MAX_BACKUP_CHANNELS), {
+    'merge past the cap maps to settingsImportTooMany with the cap',
+    same(backupImportMessage('merge', MAX_BACKUP_CHANNELS), {
       key: 'settingsImportTooMany',
       subs: [String(MAX_BACKUP_CHANNELS)],
     }),
   );
   t.check(
-    'any other backup error stays as the worker text',
-    same(backupImportMessage('That file is not valid JSON.', MAX_BACKUP_CHANNELS), {
-      key: '',
-      text: 'That file is not valid JSON.',
+    'a file over the cap names the cap',
+    same(backupImportMessage('count', MAX_BACKUP_CHANNELS), {
+      key: 'settingsImportFileTooMany',
+      subs: [String(MAX_BACKUP_CHANNELS)],
     }),
   );
   t.check(
-    'an empty error is empty text, not the cap key',
+    'an unknown error stays as its text',
+    same(backupImportMessage('not allowed', MAX_BACKUP_CHANNELS), { key: '', text: 'not allowed' }),
+  );
+  t.check(
+    'an empty error is empty text',
     same(backupImportMessage('', MAX_BACKUP_CHANNELS), { key: '', text: '' }),
   );
+  t.check(
+    'a key on Object.prototype is not a backup code',
+    same(backupImportMessage('toString', MAX_BACKUP_CHANNELS), { key: '', text: 'toString' }),
+  );
+
+  t.section('YouTube request errors');
+
+  const ytCases = [
+    [new YtError('network', 'browse').message, 'channelProblemNetwork', []],
+    [new YtError('http', 'feed', 404).message, 'errorYouTubeHttp', ['404']],
+    [new YtError('http', 'resolve_url', 500).message, 'errorYouTubeHttp', ['500']],
+    [new YtError('parse', 'player').message, 'errorYouTubeUnreadable', []],
+  ];
+  for (const [text, key, subs] of ytCases) {
+    t.check(`"${text}" is a translated sentence`, same(ytErrorMessage(text), { key, subs }), JSON.stringify(ytErrorMessage(text)));
+    t.check(`${key} exists in English and Arabic`, !!locales.en[key]?.message && !!locales.ar[key]?.message);
+  }
+  t.check('other text is not a YouTube error', ytErrorMessage('already added') === null && ytErrorMessage('') === null);
+  t.check('a sentence that only contains the words is not one', ytErrorMessage('the browse network error came back twice') === null);
 
   t.section('credited channels');
 

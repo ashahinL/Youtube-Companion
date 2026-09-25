@@ -57,6 +57,7 @@ import {
   followView,
   followActionState,
   backupImportMessage,
+  ytErrorMessage,
   pageChannelsView,
   sleepMinutesLeft,
   menuNavIndex,
@@ -291,15 +292,15 @@ function formatError(error) {
   const code = String(error || '');
   if (code === 'already added') return t('watchlistAlreadyAdded');
   if (code === 'not a channel') return t('watchlistNotAChannel');
-  const backup = backupImportMessage(code, MAX_BACKUP_CHANNELS);
-  if (backup.key) return t(backup.key, backup.subs);
+  const yt = ytErrorMessage(code);
+  if (yt) return t(yt.key, yt.subs);
   return t('watchlistError', [code]);
 }
 
 function formatBackupNotice(error) {
   const mapped = backupImportMessage(error, MAX_BACKUP_CHANNELS);
   if (mapped.key) return t(mapped.key, mapped.subs);
-  return String(error || formatError(''));
+  return formatError(error);
 }
 
 function ltrRun(el) {
@@ -3674,7 +3675,7 @@ function bindSettings() {
     if (tooLarge) {
       view.pendingImportText = '';
       view.importStage = 'idle';
-      view.backupNotice = { text: tooLarge, error: true };
+      view.backupNotice = { text: formatBackupNotice(tooLarge), error: true };
       render();
       return;
     }

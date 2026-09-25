@@ -604,17 +604,42 @@ export function followActionState(rows, pendingInputs) {
   });
 }
 
+const BACKUP_ERROR_KEYS = {
+  json: 'settingsImportNotJson',
+  app: 'settingsImportNotBackup',
+  version: 'settingsImportBadVersion',
+  channels: 'settingsImportNoChannels',
+  id: 'settingsImportBadId',
+  size: 'settingsImportTooLarge',
+  count: 'settingsImportFileTooMany',
+  merge: 'settingsImportTooMany',
+};
+
 /**
- * Backup merge past the channel cap is an English sentence from the worker.
- * Map that one; every other backup error is already a sentence to show as-is.
+ * The message for a backup error code from backup.js. An unknown code is
+ * handed back as text for the caller's own fallback.
  */
 export function backupImportMessage(error, maxChannels) {
-  const max = Number(maxChannels);
   const code = String(error || '');
-  if (Number.isFinite(max) && code === `Merging that backup would go past ${max} channels.`) {
-    return { key: 'settingsImportTooMany', subs: [String(max)] };
-  }
-  return { key: '', text: code };
+  const key = Object.hasOwn(BACKUP_ERROR_KEYS, code) ? BACKUP_ERROR_KEYS[code] : '';
+  if (!key) return { key: '', text: code };
+  const max = Number(maxChannels);
+  const needsMax = code === 'count' || code === 'merge';
+  return { key, subs: needsMax && Number.isFinite(max) ? [String(max)] : [] };
+}
+
+/**
+ * A YtError reaches the popup only as its English message, such as
+ * "browse network error" or "feed failed (404)". Returns the message key
+ * for it, or null for any other text.
+ */
+export function ytErrorMessage(error) {
+  const text = String(error || '');
+  const http = text.match(/^\S+ failed \((\d{3})\)$/);
+  if (http) return { key: 'errorYouTubeHttp', subs: [http[1]] };
+  if (/^\S+ network error$/.test(text)) return { key: 'channelProblemNetwork', subs: [] };
+  if (/^\S+ parse error$/.test(text)) return { key: 'errorYouTubeUnreadable', subs: [] };
+  return null;
 }
 
 /** Whole minutes left on a sleep timer, rounded up; 0 when none runs. */

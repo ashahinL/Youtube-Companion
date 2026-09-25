@@ -2750,7 +2750,7 @@ export default async function run(t) {
     });
     t.check(
       'a merge backup that would pass 2,000 is refused',
-      mergeOver.ok === false && typeof mergeOver.error === 'string' && mergeOver.error.includes('2000'),
+      mergeOver.ok === false && mergeOver.error === 'merge',
       JSON.stringify(mergeOver),
     );
     t.check('and adds none of it', (await readChannels()).length === 1990);

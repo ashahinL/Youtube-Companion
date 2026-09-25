@@ -565,8 +565,8 @@ export default async function run(t) {
     String(overMerge.error),
   );
   t.check(
-    'the merge error names the cap',
-    typeof overMerge.error === 'string' && overMerge.error.includes(String(MAX_BACKUP_CHANNELS)),
+    'the merge error is the merge code',
+    overMerge.error === 'merge',
     String(overMerge.error),
   );
 
