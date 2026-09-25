@@ -1096,13 +1096,13 @@ export async function importTakeout(text) {
   return addImportedChannels(parsed.channels);
 }
 
-async function focusChannelsTab(tab) {
+async function focusTab(tab) {
   const api = chromeApi();
   if (!tab || typeof tab.id !== 'number') return tab;
   try {
     await api.tabs.update(tab.id, { active: true });
   } catch {
-    // The scan can still run if the tab could not be activated.
+    // The caller carries on even if the tab could not be activated.
   }
   if (typeof tab.windowId === 'number') {
     try {
@@ -1123,9 +1123,9 @@ async function openChannelsTab() {
     existing = [];
   }
   const found = (existing || []).find((tab) => tab && typeof tab.id === 'number');
-  if (found) return focusChannelsTab(found);
+  if (found) return focusTab(found);
   const created = await api.tabs.create({ url: CHANNELS_PAGE, active: true });
-  return focusChannelsTab(created);
+  return focusTab(created);
 }
 
 async function sendToTab(tabId, message) {
@@ -1584,6 +1584,13 @@ export async function handleMessage(msg, sender) {
 }
 
 export async function onNotificationClicked(id) {
+  // Chrome leaves a clicked notification on screen, so every further click
+  // opened the same video in one more tab. Clear it before anything awaits.
+  try {
+    Promise.resolve(chromeApi().notifications.clear(id)).catch(() => {});
+  } catch {
+    // Opening the video matters more than removing the alert.
+  }
   const mapped = notificationVideos.get(id);
   if (mapped) notificationVideos.delete(id);
 
@@ -1600,7 +1607,21 @@ export async function onNotificationClicked(id) {
       ? watchUrl(newest.v, newest.k)
       : `https://www.youtube.com/channel/${channelId}/videos`;
   }
-  await chromeApi().tabs.create({ url, active: true });
+  // macOS can keep a clicked alert in Notification Center, so a later click
+  // still arrives: go to the tab it already opened instead of a new one.
+  const api = chromeApi();
+  let open = [];
+  try {
+    open = await api.tabs.query({ url: `${url}*` });
+  } catch {
+    open = [];
+  }
+  const found = (open || []).find((tab) => tab && typeof tab.id === 'number');
+  if (found) {
+    await focusTab(found);
+    return;
+  }
+  await api.tabs.create({ url, active: true });
 }
 
 function onAlarm(alarm) {

@@ -121,6 +121,7 @@ export function installChromeMock(initial = {}) {
     alarmsCreated: [],
     alarmsCleared: [],
     notifications: [],
+    notificationsCleared: [],
     badgeText: '',
     badgeTexts: [],
     badgeColor: null,
@@ -239,6 +240,7 @@ export function installChromeMock(initial = {}) {
         return Promise.resolve(id);
       },
       clear(id, callback) {
+        handle.notificationsCleared.push(id);
         if (typeof callback === 'function') callback(true);
         return Promise.resolve(true);
       },
@@ -405,6 +407,7 @@ export function installChromeMock(initial = {}) {
     handle.alarmsCreated.length = 0;
     handle.alarmsCleared.length = 0;
     handle.notifications.length = 0;
+    handle.notificationsCleared.length = 0;
     handle.badgeTexts.length = 0;
     handle.tabsCreated.length = 0;
     handle.tabsUpdated.length = 0;

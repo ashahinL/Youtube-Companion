@@ -1715,6 +1715,36 @@ export default async function run(t) {
     await onNotificationClicked('not-a-notification');
     t.check('invalid notification id opens nothing', mock.tabsCreated.length === 0);
 
+    t.section('a clicked notification goes away and does not stack tabs');
+
+    await saveFeed([
+      { v: 'newvid00001', c: CLICK_CH, t: 'New', at: 100, d: 1, vw: 0, k: 'video', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    mock.tabsUpdated.length = 0;
+    mock.windowsUpdated.length = 0;
+    mock.notificationsCleared.length = 0;
+    mock.urlTabs = [];
+    await onNotificationClicked(`yt:${CLICK_CH}`);
+    t.check(
+      'the click clears that notification',
+      mock.notificationsCleared.length === 1 && mock.notificationsCleared[0] === `yt:${CLICK_CH}`,
+      JSON.stringify(mock.notificationsCleared),
+    );
+    t.check('with no tab on the video yet, one tab opens', mock.tabsCreated.length === 1, String(mock.tabsCreated.length));
+
+    mock.tabsCreated.length = 0;
+    mock.urlTabs = [{ id: 31, windowId: 7, url: 'https://www.youtube.com/watch?v=newvid00001&t=12s' }];
+    await onNotificationClicked(`yt:${CLICK_CH}`);
+    t.check('a later click opens no new tab', mock.tabsCreated.length === 0, String(mock.tabsCreated.length));
+    t.check(
+      'it brings the tab already on that video forward',
+      mock.tabsUpdated.some((u) => u.tabId === 31 && u.active === true)
+        && mock.windowsUpdated.some((w) => w.windowId === 7 && w.focused === true),
+      JSON.stringify({ tabs: mock.tabsUpdated, windows: mock.windowsUpdated }),
+    );
+    mock.urlTabs = null;
+
     t.section('badge math');
 
     await wipe();
