@@ -1747,6 +1747,11 @@ export async function handleMessage(msg, sender) {
         return { ok: true, queue };
       }
       case 'queue.ended': {
+        // A record left by a closed tab is never cleared: tab ids are not
+        // reused within a browser session and session storage ends with it,
+        // so no live tab can match it, and the next playAll overwrites it.
+        // Listening for tab closes woke the worker for every tab closed
+        // anywhere in the browser.
         const play = await readQueuePlay();
         if (!play) return { ok: false };
         if (sender?.tab?.id !== play.tabId) return { ok: false };
@@ -1948,12 +1953,6 @@ onSettingsChanged(() => {
   syncUninstallUrl().catch(() => {});
 });
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
-chromeApi().tabs.onRemoved.addListener((tabId) => {
-  void (async () => {
-    const play = await readQueuePlay();
-    if (play && play.tabId === tabId) await writeQueuePlay(null);
-  })();
-});
 
 /**
  * The keys Chrome actually bound: `shortcut` toggles audio mode, `popup` opens

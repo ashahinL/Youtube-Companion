@@ -4282,11 +4282,20 @@ export default async function run(t) {
     const playedAgain = await handleMessage({ type: 'queue.playAll' });
     const liveTab = mock.tabsCreated[mock.tabsCreated.length - 1].id;
     t.check('second playAll opened a tab', playedAgain.ok === true && liveTab != null);
+    t.check('nothing listens for tab closes', mock.tabRemovedListeners.length === 0, String(mock.tabRemovedListeners.length));
     mock.fireTabRemoved(liveTab);
     await wait(20);
-    const afterClose = await globalThis.chrome.storage.session.get('queuePlay');
-    t.check('closing the play tab clears queuePlay', afterClose.queuePlay === undefined, JSON.stringify(afterClose));
-    t.check('closing the tab leaves the queue', (await readQueue())[0]?.v === Q1);
+    t.check('closing the play tab leaves the queue', (await readQueue())[0]?.v === Q1);
+    const fromOtherTab = await handleMessage({ type: 'queue.ended', v: Q1 }, { tab: { id: liveTab + 1000 } });
+    t.check('a left-over record does not answer another tab', fromOtherTab.ok === false && (await readQueue())[0]?.v === Q1);
+    const playedThird = await handleMessage({ type: 'queue.playAll' });
+    const thirdTab = mock.tabsCreated[mock.tabsCreated.length - 1].id;
+    const afterReplay = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check(
+      'the next playAll replaces the left-over record',
+      playedThird.ok === true && thirdTab !== liveTab && afterReplay.queuePlay?.tabId === thirdTab,
+      JSON.stringify(afterReplay),
+    );
 
     await wipe();
     await writeSettings({ audio: { openFeedInAudioMode: true } });
