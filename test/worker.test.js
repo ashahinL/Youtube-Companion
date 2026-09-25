@@ -3401,6 +3401,7 @@ export default async function run(t) {
       { v: 'keepvid0001', c: MKBHD, t: 'Keep', at: 10 },
       { v: 'dropvid0001', c: BEAST, t: 'Drop', at: 11 },
     ]);
+    await saveVideoMeta({ keepvid0001: { k: 'video', at: 10 }, dropvid0001: { k: 'video', at: 11 } });
     await writePollState({ notified: ['keepvid0001'] });
     let stillThere = null;
     const replaceSeen = scriptedScan(async (message) => {
@@ -3424,6 +3425,12 @@ export default async function run(t) {
     const replacedList = await readChannels();
     const replacedKept = replacedList.find((ch) => ch.id === MKBHD);
     const replacedFresh = replacedList.find((ch) => ch.id === LINUS);
+    const metaAfterReplace = await readVideoMeta();
+    t.check(
+      'replace drops the removed channel\'s video records and keeps the rest',
+      !('dropvid0001' in metaAfterReplace) && 'keepvid0001' in metaAfterReplace,
+      JSON.stringify(Object.keys(metaAfterReplace)),
+    );
     const download = replaceSeen.find((message) => message.type === 'subscriptions.download');
     const parsedBackup = download ? parseBackup(download.text) : { ok: false };
     const secondChoose = replaceSeen.filter((message) => message.type === 'subscriptions.choose')[1];

@@ -1245,9 +1245,19 @@ async function replaceWithScanned(scanned) {
     if (!next.ok) return next;
     await writeChannels(next.channels);
     await saveFeed(next.feed);
-    return next;
+    // Records carry no channel id, so the rows this replace dropped are the
+    // only way to find a removed channel's videos. Older ones leave at the cap.
+    const gone = new Set(next.removedIds);
+    const kept = new Set(next.feed.map((item) => item.v));
+    const deadVideos = feed.filter((item) => gone.has(item.c) && !kept.has(item.v)).map((item) => item.v);
+    return { ...next, deadVideos };
   });
   if (!plan.ok) return { ok: false, error: plan.error };
+  if (plan.deadVideos.length) {
+    const meta = await readVideoMeta();
+    for (const v of plan.deadVideos) delete meta[v];
+    await saveVideoMeta(meta);
+  }
   for (const id of plan.removedIds) pendingSeeds.delete(id);
   for (const id of plan.freshIds) pendingSeeds.add(id);
   await syncAlarms();
