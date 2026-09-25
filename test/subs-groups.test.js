@@ -420,6 +420,34 @@ export default async function run(t) {
   t.check('All leaves a class it did not add', bare.classList.contains('kept'));
   t.check('All does not remove YouTube nodes', contents.children.length === before && contents.children.includes(sentinel));
 
+  const manyChannels = Array.from({ length: 2000 }, (_, i) => ({
+    id: `UC${String(i).padStart(22, '0')}`,
+    title: `Channel ${i}`,
+    handle: i % 10 === 0 ? '' : `@ch${i}`,
+    groups: i % 2 === 0 ? ['Big'] : [],
+  }));
+  let channelReads = 0;
+  const countedChannels = new Proxy(manyChannels, {
+    get(target, key, receiver) {
+      if (typeof key === 'string' && /^\d+$/.test(key)) channelReads += 1;
+      return Reflect.get(target, key, receiver);
+    },
+  });
+  const bigPage = createEl('div');
+  const bigCards = Array.from({ length: 300 }, (_, i) => card({ href: `/@ch${i}`, text: `Channel ${i}` }));
+  for (const el of bigCards) bigPage.appendChild(el);
+  const bigResult = box.applySubsFilter(bigPage, countedChannels, 'big');
+  t.check(
+    '300 cards read a 2,000-channel list a few times, not once per card',
+    channelReads <= manyChannels.length * 4,
+    `${channelReads} channel reads`,
+  );
+  t.check(
+    'and still match by handle and by name',
+    bigResult.visible === 150 && !hidden(bigCards[2]) && !hidden(bigCards[10]) && hidden(bigCards[3]),
+    JSON.stringify(bigResult),
+  );
+
   t.section('brake');
 
   t.check('twelve visible cards are enough', box.subsBrakeDue(12, 0) === true);

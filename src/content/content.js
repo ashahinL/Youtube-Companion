@@ -2902,25 +2902,35 @@
   }
 
   // A stored handle can stay empty until a later check fills it in. The
-  // card still shows the channel's name, so that is the fallback. A card
-  // with no channel link has nothing safe to match, so it stays hidden.
-  function cardInGroup(card, channels, groupName) {
-    const link = cardChannelLink(card);
-    if (!link) return false;
-    const handle = handleFromHref(linkHref(link));
-    const visible = nameKey(cardVisibleName(card));
+  // card still shows the channel's name, so that is the fallback: only for
+  // members with no handle, so a handle that does not match stays a miss.
+  // Built once per paint; walking every channel for every card stalled
+  // the page with a few hundred cards and a long list.
+  function groupMatcher(channels, groupName) {
+    const handles = new Set();
+    const names = new Set();
     const list = Array.isArray(channels) ? channels : [];
     for (let i = 0; i < list.length; i++) {
       const ch = list[i];
       if (!channelInGroup(ch, groupName)) continue;
       const stored = handleKey(ch && ch.handle);
-      if (stored) {
-        if (handle && stored === handle) return true;
-        continue;
+      if (stored) handles.add(stored);
+      else {
+        const name = nameKey(ch && ch.title);
+        if (name) names.add(name);
       }
-      if (visible && nameKey(ch && ch.title) === visible) return true;
     }
-    return false;
+    return { handles: handles, names: names };
+  }
+
+  // A card with no channel link has nothing safe to match, so it stays hidden.
+  function cardInGroup(card, matcher) {
+    const link = cardChannelLink(card);
+    if (!link) return false;
+    const handle = handleFromHref(linkHref(link));
+    if (handle && matcher.handles.has(handle)) return true;
+    const visible = nameKey(cardVisibleName(card));
+    return !!visible && matcher.names.has(visible);
   }
 
   function childElements(parent) {
@@ -2946,11 +2956,12 @@
       }
       return { visible: visible, loaded: loaded, filtered: false, group: '' };
     }
+    const matcher = groupMatcher(channels, group);
     for (let i = 0; i < kids.length; i++) {
       const el = kids[i];
       if (tagNameOf(el) !== 'ytd-rich-item-renderer') continue;
       loaded += 1;
-      const show = cardInGroup(el, channels, group);
+      const show = cardInGroup(el, matcher);
       if (show) {
         removeClass(el, SUBS_HIDDEN_CLASS);
         visible += 1;
