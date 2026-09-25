@@ -170,7 +170,7 @@ async function loadSession(opts) {
     },
   };
 
-  const box = { win: null, listeners: [] };
+  const box = { win: null, listeners: [], winListeners: [], docListeners: [] };
   const sandbox = {
     __ytcHarness: true,
     URL,
@@ -199,10 +199,15 @@ async function loadSession(opts) {
         });
         return el;
       },
-      addEventListener() {},
+      visibilityState: 'visible',
+      addEventListener(type, fn, options) {
+        const signal = options && options.signal;
+        box.docListeners.push({ type, fn, signal });
+      },
     },
-    addEventListener(type, fn) {
+    addEventListener(type, fn, options) {
       if (type === 'message') box.listeners.push(fn);
+      else box.winListeners.push({ type, fn, signal: options && options.signal });
     },
     postMessage(data) {
       if (data && data.dir === 'adopt') {
@@ -242,9 +247,20 @@ async function loadSession(opts) {
   box.win = vm.runInContext('globalThis', sandbox);
   vm.runInContext(coreSrc, sandbox, { filename: 'src/content/core.js' });
   vm.runInContext(contentSrc, sandbox, { filename: 'src/content/content.js' });
+  const fireTo = (list, type) => {
+    for (const entry of list.slice()) {
+      if (entry.type === type && !(entry.signal && entry.signal.aborted)) entry.fn({ type });
+    }
+  };
   return {
     engine: sandbox.AudioModeContent,
     calls,
+    video,
+    fireWindow(type) { fireTo(box.winListeners, type); },
+    hidePage() {
+      sandbox.document.visibilityState = 'hidden';
+      fireTo(box.docListeners, 'visibilitychange');
+    },
     async restoreLastQuality() {
       const sets = calls.filter((c) => c[0] === 'setPlaybackQuality');
       return sets.length ? sets[sets.length - 1][1] : undefined;
@@ -672,6 +688,26 @@ export default async function run(t) {
     'unknown settings.audio.restoreQuality falls back to hd720',
     engine.restoreFallbackFromSettings({ audio: { restoreQuality: 'nope' } }) === 'hd720',
   );
+
+  t.section('listening is saved when the tab goes away');
+
+  async function listenThen(leave) {
+    await globalThis.chrome.storage.local.clear();
+    const sess = await loadSession({ quality: 'hd720' });
+    await sess.engine.enable();
+    sess.video.currentTime += 1;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    leave(sess);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const got = await globalThis.chrome.storage.local.get('audioStats');
+    await sess.engine.disable();
+    return got.audioStats?.totals?.listened || 0;
+  }
+  const onPagehide = await listenThen((sess) => sess.fireWindow('pagehide'));
+  t.check('closing the tab saves the listening since the last save', onPagehide >= 1, String(onPagehide));
+  const onHidden = await listenThen((sess) => sess.hidePage());
+  t.check('a hidden page saves the listening since the last save', onHidden >= 1, String(onHidden));
+  await globalThis.chrome.storage.local.clear();
 
   t.section('restore quality through a session');
 

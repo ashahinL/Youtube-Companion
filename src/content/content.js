@@ -1145,6 +1145,22 @@
     const flushId = setInterval(function () {
       persistAudioStats(current.accumulator.drain()).catch(function () {});
     }, FLUSH_MS);
+    // Closing the tab would lose up to FLUSH_MS of listening. A storage write
+    // started from pagehide or a hidden page usually lands before it goes.
+    const flushNow = function () {
+      if (session !== current) return;
+      sample(current);
+      persistAudioStats(current.accumulator.drain()).catch(function () {});
+    };
+    try {
+      const win = root.window || root;
+      if (win && win.addEventListener) win.addEventListener('pagehide', flushNow, { signal: signal });
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'hidden') flushNow();
+      }, { signal: signal });
+    } catch (err) {
+      // swallow
+    }
     signal.addEventListener('abort', function () {
       clearInterval(sampleId);
       clearInterval(flushId);
