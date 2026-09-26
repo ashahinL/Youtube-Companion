@@ -8,7 +8,8 @@ const YT_ORIGIN = 'https://www.youtube.com';
 const INNERTUBE = `${YT_ORIGIN}/youtubei/v1`;
 
 // The version youtube.com itself sent on 2026-09-14 (docs/youtube.md). An old
-// one still answers today, but it is the first thing YouTube can stop serving.
+// one still answers today, but it is the first thing YouTube can stop serving,
+// so ship day refreshes it (RELEASING.md).
 const INNERTUBE_CONTEXT = {
   context: {
     client: {

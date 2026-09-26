@@ -58,6 +58,13 @@ and wait in line again. Do that only for a fix that cannot wait.
 1. **Check `dev`.** Clean `git status`, `npm run check` and `npm test` green,
    and the last GitHub Actions run on `dev` green. Steps 2 to 6 happen on
    `dev`.
+
+   Then refresh the Innertube client version. Open youtube.com's homepage
+   source, find `"INNERTUBE_CONTEXT_CLIENT_VERSION"`, and if it differs from
+   `clientVersion` in `src/lib/yt.js`, put the new one there and in
+   `docs/youtube.md` (with the date), and run the gates again. An old
+   version still answers, but it is the first thing YouTube can stop
+   serving.
 2. **Test by hand on youtube.com.** Reload the extension on
    `chrome://extensions` first, then reload the YouTube tab (reloading
    YouTube alone does not load the new script). Confirm the live scripts
