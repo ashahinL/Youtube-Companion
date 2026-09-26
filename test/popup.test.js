@@ -44,6 +44,32 @@ function stripColorRoots(css) {
   return out;
 }
 
+// A runner boots popup.js in its own process and prints one result line.
+function forwardRun(t, file, marker, label) {
+  const child = spawnSync(process.execPath, [path.join(ROOT, file)], {
+    encoding: 'utf8',
+    cwd: ROOT,
+    timeout: 60000,
+  });
+  const line = String(child.stdout || '').split(/\r?\n/).find((row) => row.startsWith(marker + ' '));
+  let payload = null;
+  if (line) {
+    try {
+      payload = JSON.parse(line.slice(marker.length + 1));
+    } catch {
+      payload = null;
+    }
+  }
+  t.check(
+    label,
+    !!payload && Array.isArray(payload.checks),
+    payload ? '' : `${child.status}\n${child.stderr || ''}\n${child.stdout || ''}`,
+  );
+  for (const item of payload?.checks || []) {
+    t.check(item.label, item.ok === true, item.detail || '');
+  }
+}
+
 export default async function run(t) {
   const html = fs.readFileSync(path.join(POPUP, 'popup.html'), 'utf8');
   const css = fs.readFileSync(path.join(POPUP, 'popup.css'), 'utf8');
@@ -171,10 +197,6 @@ export default async function run(t) {
     /ch\.favorite/.test(js) && /channel-row__fav/.test(js) && /channel-row__fav\s*\{/.test(css),
   );
   t.check(
-    'the favourite mark carries an accessible name',
-    /channel-row__fav[\s\S]{0,240}watchlistFavorite/.test(js),
-  );
-  t.check(
     'the title keeps its own row so it can still ellipsis beside the mark',
     /channel-row__name/.test(js) && /\.channel-row__name\s*\{[^}]*display:\s*flex/.test(css),
   );
@@ -189,7 +211,6 @@ export default async function run(t) {
     'popup does not search YouTube by name',
     !/searchChannels/.test(js) && !/runSearch/.test(js),
   );
-  t.check('typed Add only fires for a channel ref', /isChannelRef\(input\)/.test(js));
   t.check(
     'already-listed handle disables Add rather than erroring',
     /listedMatch\(input,\s*view\.channels,\s*view\.feed\)/.test(js) && /watchlistOnList/.test(js),
@@ -199,42 +220,21 @@ export default async function run(t) {
     'Add stays available when the box is empty',
     /addable = !q \|\|/.test(viewJs),
   );
-  t.check(
-    'empty Add reads the focused tab',
-    /tabs\.query\s*\(\s*\{[^}]*active:\s*true/.test(js) && /watchlistNoCurrentTab/.test(js),
-  );
 
   t.section('watchlist row menu');
 
-  t.check('row actions are a ⋯ menu', /menu__toggle/.test(js) && /⋯/.test(js));
   t.check('menu can favourite a channel', /watchlistFavoriteAdd/.test(js));
   t.check(
     'menu unfavourites when already a favourite',
     /watchlistFavoriteRemove/.test(js),
   );
-  t.check('menu remove is a danger item', /menu__item--danger/.test(js));
   t.check(
     'menu mutes and unmutes a channel\'s alerts',
     /watchlistMuteAdd/.test(js) && /watchlistMuteRemove/.test(js) && /type:\s*'setMuted'/.test(js),
   );
   t.check(
-    'menu opens Groups… next to favourite and mute',
-    /watchlistGroups/.test(js)
-      && /list\.append\(\s*fav,\s*mute,\s*groups,\s*remove\s*\)/.test(js)
-      && /openGroupsSheet\(\s*ch\.id\s*\)/.test(js),
-  );
-  t.check(
-    'Groups… is not a danger item',
-    /buttonEl\(\s*'menu__item',\s*t\('watchlistGroups'\)/.test(js),
-  );
-  t.check(
     'a watchlist row lists the channel\'s groups in footnote text',
     /channel-row__groups/.test(js) && /\.channel-row__groups\s*\{/.test(css),
-  );
-  t.check('a muted row says so', /ch\.muted\)[\s\S]{0,80}watchlistMuted'/.test(js));
-  t.check(
-    'menu remove calls removeChannel with no extra confirm',
-    /removeChannel\(\s*ch\.id\s*\)/.test(js) && !/pendingRemoveId/.test(js),
   );
   t.check('no star favourite button', !/['"]★['"]/.test(js));
   t.check(
@@ -243,38 +243,9 @@ export default async function run(t) {
       && !/watchlistRemoveConfirm/.test(js)
       && !/watchlistRemoveCancel/.test(js),
   );
-  t.check('a click outside closes the menu', /addEventListener\(\s*'click'\s*,\s*closeAllMenus/.test(js));
   t.check(
     '⋯ is a menu button',
     /aria-haspopup',\s*'menu'/.test(js) && /aria-expanded/.test(js),
-  );
-  t.check(
-    'the ⋯ popup is role=menu with menuitem children',
-    /setAttribute\(\s*'role',\s*'menu'/.test(js)
-      && /setAttribute\(\s*'role',\s*'menuitem'/.test(js),
-  );
-  t.check(
-    '⋯ keyboard wrapping lives in view.js',
-    /menuNavIndex/.test(js) && /export function menuNavIndex/.test(viewJs),
-  );
-  t.check(
-    'opening ⋯ with Enter/Space/ArrowDown focuses the first item',
-    /menuItems\(list\)\[0\]\?\.focus/.test(js)
-      && /event\.key !== 'ArrowDown'/.test(js),
-  );
-  t.check(
-    'ArrowUp/ArrowDown/Home/End move ⋯ menu focus through menuNavIndex',
-    /function onChannelMenuKeydown[\s\S]{0,700}menuNavIndex\(event\.key/.test(js)
-      && /event\.key !== 'Home'/.test(js)
-      && /event\.key !== 'End'/.test(js),
-  );
-  t.check(
-    'Escape on the ⋯ menu returns focus to the button',
-    /function onChannelMenuKeydown[\s\S]{0,400}closeAllMenus\(\{\s*restoreFocus:\s*true\s*\}\)/.test(js),
-  );
-  t.check(
-    'Tab closes the ⋯ menu',
-    /function onChannelMenuKeydown[\s\S]{0,80}event\.key === 'Tab'[\s\S]{0,40}closeAllMenus\(\)/.test(js),
   );
   t.check(
     'Escape closes an open menu before the sheet',
@@ -320,7 +291,6 @@ export default async function run(t) {
     !/<form\b[^>]*id="feed-add-form"[\s\S]*?id="feed-refresh"[\s\S]*?<\/form>/.test(f),
   );
   t.check('has list container', /id="feed-list"/.test(f));
-  t.check('typed Feeds Add only fires for a channel ref', /submitAdd\(filter\.value,\s*'feeds'\)/.test(js));
   t.check(
     'already-listed channel disables Feeds Add rather than erroring',
     /listedMatch\(q,\s*channels,\s*feed\)/.test(viewJs) && /watchlistOnList/.test(js),
@@ -330,33 +300,16 @@ export default async function run(t) {
     'Feeds Add stays available when the box is empty',
     /addable = !q \|\| \(isChannelRef\(q\) && !onList\)/.test(viewJs),
   );
-  t.check(
-    'empty Feeds Add reads the focused tab',
-    /submitAdd\(filter\.value,\s*'feeds'\)/.test(js) && /watchlistNoCurrentTab/.test(js),
-  );
-  t.check('Feeds Add sends addChannel', /type:\s*'addChannel'/.test(js));
   t.check('a successful add shows channelAdded', /channelAdded/.test(js) && /banner--ok/.test(html));
   t.check(
     'and names the channel it added',
     /t\('channelAdded', \[isolate\(ch\.title \|\| ch\.handle \|\| ch\.id \|\| ''\)\]\)/.test(js) && /\$NAME\$/.test(en.channelAdded.message),
   );
   t.check(
-    'reload hides while its spinner runs',
-    /refreshBtn\.hidden = sweeping/.test(js) && /refreshBtn\.hidden = locked/.test(js),
-  );
-  t.check(
-    'render treats pollState.running as sweeping',
-    (js.match(/view\.sweeping \|\| !!view\.pollState\?\.running/g) || []).length >= 2,
-  );
-  t.check(
     'requestSweep does not assign pollState.running into view.sweeping',
     !/view\.sweeping\s*=\s*[^\n]*pollState/.test(js),
   );
   t.check('has a favourites-only checkbox', /id="feed-favorites-only"/.test(f));
-  t.check(
-    'favourites-only writes feed.favoritesOnly',
-    /feed\.favoritesOnly/.test(js) && /favOnly/.test(js),
-  );
   t.check('has a group chip row', /id="feed-groups"/.test(f));
   t.check(
     'the chip row sits between the add form and Favourites only',
@@ -368,16 +321,6 @@ export default async function run(t) {
     'the chip row starts hidden',
     !!groupsTag && /\bhidden\b/.test(groupsTag[0]),
     groupsTag ? groupsTag[0] : 'missing',
-  );
-  t.check(
-    'chips are buttons with aria-pressed',
-    /feed-groups__chip/.test(js)
-      && /setAttribute\(\s*'aria-pressed'/.test(js)
-      && /btn\.type = 'button'/.test(js),
-  );
-  t.check(
-    'the chip row writes feed.group',
-    /feed\.group/.test(js) && /data-group/.test(js),
   );
   const chipRowRule = css.match(/\.feed-groups\s*\{[^}]*\}/);
   t.check('chip row rule exists', !!chipRowRule, 'missing .feed-groups');
@@ -402,10 +345,6 @@ export default async function run(t) {
   t.check(
     'the selected chip uses the accent token',
     /\.feed-groups__chip\[aria-pressed='true'\]\s*\{[^}]*var\(--accent\)/.test(css),
-  );
-  t.check(
-    'the channel sheet does not use favourites-only',
-    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts,\s*Date\.now\(\)\s*\)\s*\.filter\(\s*\(item\)\s*=>\s*item\.c === ch\.id\s*\)/.test(js),
   );
 
   const emptyIds = [...f.matchAll(/id="(feed-empty-[^"]+)"/g)].map((m) => m[1]);
@@ -924,23 +863,6 @@ export default async function run(t) {
     /absoluteTime\([^;]*\blocale\b/.test(js),
   );
 
-  const arrowIdx = js.indexOf("event.key !== 'ArrowLeft'");
-  t.check('has tab arrow handler', arrowIdx >= 0);
-  const arrowEnd = arrowIdx >= 0 ? js.indexOf('activate(next)', arrowIdx) : -1;
-  const arrowBlock = arrowIdx >= 0 && arrowEnd >= 0
-    ? js.slice(arrowIdx, arrowEnd + 'activate(next)'.length)
-    : '';
-  t.check(
-    'tab arrows read direction from computed style',
-    /getComputedStyle\s*\(\s*document\.documentElement\s*\)\.direction/.test(arrowBlock),
-    arrowBlock.slice(0, 240),
-  );
-  t.check(
-    'tab arrows do not take direction from the locale',
-    !/\blocale\b/.test(arrowBlock),
-    arrowBlock,
-  );
-
   t.section('assets');
 
   t.check('references popup.css', /href="popup\.css"/.test(html));
@@ -1101,23 +1023,10 @@ export default async function run(t) {
     'sheet has a problem sentence with a Retry button',
     /id="channel-sheet-problem"[\s\S]{0,240}id="channel-sheet-problem-text"[\s\S]{0,240}id="channel-sheet-retry"/.test(html),
   );
-  t.check('Retry sweeps only that channel', /channel-sheet-retry[\s\S]{0,160}onlyId:\s*view\.sheetId/.test(js));
   t.check('a failed row shows translated text, not the worker\'s English', !/lastError\.message/.test(js));
   t.check(
     'watchlist row opens the channel sheet by id',
     /openChannelSheet\(\s*ch\.id\s*\)/.test(js),
-  );
-  t.check(
-    'feed channel name opens the channel sheet by id',
-    /openChannelSheet\(\s*channel\.id\s*\)/.test(js),
-  );
-  t.check(
-    'sheet refresh sweeps only that channel',
-    /onlyId:\s*view\.sheetId/.test(js),
-  );
-  t.check(
-    'sheet lists stored feed items for that channel',
-    /visibleFeedItems\(\s*view\.feed,\s*!!view\.settings\?\.feed\?\.showShorts,\s*Date\.now\(\)\s*\)\s*\.filter/.test(js),
   );
   t.check(
     'does not open a detached channel window',
@@ -1130,34 +1039,12 @@ export default async function run(t) {
     openFn ? openFn[0].slice(0, 240) : 'missing function',
   );
   t.check(
-    'Escape closes the sheet',
-    /event\.key !== 'Escape'/.test(js) && /closeChannelSheet/.test(js),
-  );
-  t.check(
     'sheet is position fixed',
     /\.sheet\s*\{[^}]*position:\s*fixed/.test(css),
   );
   t.check(
-    'sheet traps Tab inside the panel',
-    /function trapSheetTab/.test(js)
-      && /function sheetFocusables/.test(js)
-      && /sheet__panel/.test(js),
-  );
-  t.check(
     'sheet focusables are queried on the key, not cached',
     /function trapSheetTab/.test(js) && /sheetFocusables\(\)/.test(js),
-  );
-  t.check(
-    'watchlist opener sets data-channel-id',
-    /channel-row__main[\s\S]{0,120}dataset\.channelId/.test(js),
-  );
-  t.check(
-    'feed opener sets data-channel-id',
-    /feed-row__channel[\s\S]{0,120}dataset\.channelId/.test(js),
-  );
-  t.check(
-    'closing the sheet restores focus to the opener',
-    /function closeChannelSheet/.test(js) && /focusSheetOpener/.test(js),
   );
   t.check(
     'missing opener falls back to the active tab',
@@ -1213,10 +1100,6 @@ export default async function run(t) {
       && !/async function undoRemove[\s\S]{0,200}withBusy/.test(js),
   );
   t.check(
-    'a storage write of channels or the feed redraws the open tab',
-    /storage\.onChanged\.addListener[\s\S]{0,900}changes\.channels[\s\S]{0,900}changes\.feed/.test(js),
-  );
-  t.check(
     'a merge that would pass the cap uses settingsImportTooMany',
     /backupImportMessage/.test(js) && /formatBackupNotice/.test(js)
       && /settingsImportTooMany/.test(viewJs),
@@ -1250,14 +1133,9 @@ export default async function run(t) {
 
   t.section('new since last visit');
 
-  t.check('isNewSince decides the dot', /isNewSince\(/.test(js) && /function isNewSince/.test(viewJs));
   t.check(
     'popupOpened keeps the previous lastSeenAt',
     /previousLastSeenAt/.test(js) && /previousLastSeenAt/.test(worker),
-  );
-  t.check(
-    'the popup holds lastSeenAt for this open',
-    /view\.feedSeenAt/.test(js) && /previousLastSeenAt/.test(js),
   );
   t.check(
     'a new row wears a New tag, not a bare dot',
@@ -1268,18 +1146,6 @@ export default async function run(t) {
     'the New tag uses the accent',
     /\.feed-tag--new\s*\{[^}]*background:\s*var\(--accent\)/.test(css)
       && /\.feed-tag--new\s*\{[^}]*color:\s*var\(--on-accent\)/.test(css),
-  );
-  t.check(
-    'the New marker is a word, not colour alone',
-    /feed-tag--new['\`][^)]*t\('feedItemNew'\)/.test(js) && 'feedItemNew' in en,
-  );
-  t.check(
-    'the New marker sits above the row buttons, not in front of the title',
-    js.indexOf("actions.className = 'feed-row__actions'")
-      < js.indexOf("actions.appendChild(textEl('span', 'feed-tag feed-tag--new'")
-      && js.indexOf("actions.appendChild(textEl('span', 'feed-tag feed-tag--new'")
-        < js.indexOf("buttons.className = 'feed-row__buttons'")
-      && !/headline\.appendChild\(textEl\('span', 'feed-tag feed-tag--new'/.test(js),
   );
   t.check(
     'the buttons stay put when a row has no New marker',
@@ -1325,14 +1191,6 @@ export default async function run(t) {
     /function openGroupsSheet[\s\S]{0,400}render\(\)/.test(js)
       && !/function openGroupsSheet[\s\S]{0,500}\bsend\s*\(/.test(js),
   );
-  t.check(
-    'Escape closes the groups sheet when no row is being renamed or deleted',
-    /if \(view\.groupsSheetId\)[\s\S]{0,600}closeGroupsSheet\(\)/.test(js),
-  );
-  t.check(
-    'ticking a group box sends setChannelGroup',
-    /type:\s*'setChannelGroup'/.test(js),
-  );
   const applyStart = js.indexOf('async function applyGroup');
   const applyEnd = applyStart >= 0 ? js.indexOf('\nasync function', applyStart + 1) : -1;
   const applyFn = applyStart >= 0
@@ -1374,26 +1232,11 @@ export default async function run(t) {
       && /feedGroupsScrolledTo = selected/.test(js),
   );
   t.check(
-    'each group row has Rename and Delete buttons named for the group',
-    /t\('groupsRename', \[name\]\)/.test(js) && /t\('groupsDelete', \[name\]\)/.test(js)
-      && 'groupsRename' in en && 'groupsDelete' in en,
-  );
-  t.check(
     'the row buttons name the group in both languages',
     /Rename \$1/.test(en.groupsRename.message) && /Delete \$1/.test(en.groupsDelete.message)
       && /[\u0600-\u06FF]/.test(ar.groupsRename.message) && /\$1/.test(ar.groupsRename.message)
       && /[\u0600-\u06FF]/.test(ar.groupsDelete.message) && /\$1/.test(ar.groupsDelete.message),
     `${en.groupsRename.message} / ${ar.groupsRename.message}`,
-  );
-  t.check(
-    'rename is an inline field with Save and Cancel',
-    /groups-row--edit/.test(js) && /void submitGroupRename\(name, input\.value\)/.test(js)
-      && /t\('groupsSave'\)/.test(js) && /t\('groupsCancel'\)/.test(js),
-  );
-  t.check(
-    'Escape cancels a rename or delete confirm instead of closing the sheet',
-    /if \(view\.groupEdit \|\| view\.groupConfirm\)[\s\S]{0,400}closeGroupsSheet/.test(js)
-      && !/if \(view\.groupEdit \|\| view\.groupConfirm\)[\s\S]{0,120}closeGroupsSheet\(\)/.test(js),
   );
   t.check(
     'delete asks inline with the channel count, never confirm()',
@@ -1557,11 +1400,6 @@ export default async function run(t) {
     /\.feed-row__queue\s*\{[^}]*position:\s*relative/.test(css)
       && /\.feed-row__queue\s*\{[^}]*z-index:\s*2/.test(css)
       && /\.feed-row__open\s*\{[^}]*z-index:\s*1/.test(css),
-  );
-  t.check(
-    'live and premiere rows have no queue button',
-    /item\.k !== 'live' && item\.k !== 'premiere'/.test(js)
-      && /feed-row__queue/.test(js),
   );
   t.check(
     'the player card has a queue button',
@@ -1732,26 +1570,9 @@ export default async function run(t) {
       && en.audioPickerGoToTab.message !== ar.audioPickerGoToTab.message,
   );
 
-  const child = spawnSync(process.execPath, [path.join(ROOT, 'test/popup-picker-run.js')], {
-    encoding: 'utf8',
-    cwd: ROOT,
-    timeout: 30000,
-  });
-  const line = String(child.stdout || '').split(/\r?\n/).find((row) => row.startsWith('PICKER_RESULT '));
-  let payload = null;
-  if (line) {
-    try {
-      payload = JSON.parse(line.slice('PICKER_RESULT '.length));
-    } catch {
-      payload = null;
-    }
-  }
-  t.check(
-    'picker behaviour suite ran',
-    !!payload && Array.isArray(payload.checks),
-    payload ? '' : `${child.status}\n${child.stderr || ''}\n${child.stdout || ''}`,
-  );
-  for (const item of payload?.checks || []) {
-    t.check(item.label, item.ok === true, item.detail || '');
-  }
+  forwardRun(t, 'test/popup-picker-run.js', 'PICKER_RESULT', 'picker behaviour suite ran');
+
+  t.section('popup driven like a person');
+
+  forwardRun(t, 'test/popup-run.js', 'POPUP_RESULT', 'popup behaviour suite ran');
 }

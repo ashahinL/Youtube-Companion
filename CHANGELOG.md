@@ -48,6 +48,11 @@ shipped yet waits under Unreleased. How a version ships:
 - Clear watchlist also drops stored video details. Alert history is kept, so
   channels added back still never alert twice.
 
+**For contributors**
+- The popup tests load the real popup page in a small fake browser and
+  click, type and press keys on it, instead of searching the popup's code.
+- Ship day now refreshes the YouTube client version (`RELEASING.md`).
+
 ## 2.0.0 — 2026-09-19
 
 **New**

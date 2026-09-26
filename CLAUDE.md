@@ -334,7 +334,9 @@ Most live as comments at the line they protect. These span files or tools:
   `chrome://extensions` (the version there) and by inspecting the content
   scripts in DevTools' "Content scripts" section.
 - **A test that asserts a call exists is not a test.** A structural grep once
-  passed while the handler holding the call was unreachable. Anything that must
+  passed while the handler holding the call was unreachable. Popup behaviour
+  goes in `test/popup-run.js`, which loads the real `popup.html` into a fake
+  DOM (`test/helpers/fake-dom.js`) and clicks it. Anything that must
   actually fire on youtube.com is checked in a browser by hand.
 - **Persist a durable flag the moment it changes**, not at the next convenient
   write. MV3 can kill the worker in between; clearing a flag in memory and
