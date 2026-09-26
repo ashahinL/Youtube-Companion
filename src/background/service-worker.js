@@ -112,6 +112,8 @@ const OVERLAY_MESSAGE_KEYS = [
   'scanExportFailed',
   'scanRemoved',
   'scanRemovedOne',
+  'scanRemovedNames',
+  'scanRemovedNamesMore',
   'scanReplaceEmpty',
   'subsGroupsAll',
   'subsGroupsLabel',
@@ -1198,6 +1200,7 @@ export function planImportedReplace(channels, feed, scanned, now = Date.now()) {
     removed: 0,
     skipped: 0,
     removedIds: [],
+    removedNames: [],
     freshIds: [],
   };
   if (seen.size === 0) return { ...empty, error: 'empty' };
@@ -1208,6 +1211,7 @@ export function planImportedReplace(channels, feed, scanned, now = Date.now()) {
   }
   const kept = [];
   const removedIds = [];
+  const removedNames = [];
   const removedSeen = new Set();
   const keptSeen = new Set();
   for (const ch of current) {
@@ -1216,6 +1220,7 @@ export function planImportedReplace(channels, feed, scanned, now = Date.now()) {
       if (!removedSeen.has(ch.id)) {
         removedSeen.add(ch.id);
         removedIds.push(ch.id);
+        removedNames.push(ch.title || ch.handle || ch.id);
       }
       continue;
     }
@@ -1239,6 +1244,7 @@ export function planImportedReplace(channels, feed, scanned, now = Date.now()) {
     removed: removedIds.length,
     skipped: considered - fresh.length,
     removedIds,
+    removedNames,
     freshIds: fresh.map((ch) => ch.id),
   };
 }
@@ -1285,6 +1291,10 @@ export async function addImportedChannels(list) {
   return { ok: true, added: fresh.length, skipped: considered - fresh.length, removed: 0 };
 }
 
+// A replace can drop hundreds; the first few names are enough to tell
+// whether it did what the person meant.
+const REMOVED_NAMES_SHOWN = 3;
+
 /**
  * One write of the channel list. Channels in both lists keep their records.
  * Extras leave the list and the feed together. Fresh rows are unseeded, the
@@ -1320,6 +1330,7 @@ async function replaceWithScanned(scanned) {
     added: plan.added,
     removed: plan.removed,
     skipped: plan.skipped,
+    removedNames: plan.removedNames.slice(0, REMOVED_NAMES_SHOWN),
   };
 }
 
@@ -1380,6 +1391,9 @@ async function tellTab(tabId, fields) {
       added: Number(fields && fields.added) || 0,
       skipped: Number(fields && fields.skipped) || 0,
       removed: Number(fields && fields.removed) || 0,
+      removedNames: Array.isArray(fields && fields.removedNames)
+        ? fields.removedNames.slice(0, REMOVED_NAMES_SHOWN).map((name) => String(name).slice(0, 200))
+        : [],
       error: (fields && fields.error) || '',
       account,
       avatar,
@@ -1575,6 +1589,7 @@ export async function importFromYouTube() {
         added: imported.added,
         skipped: imported.skipped,
         removed,
+        removedNames: imported.removedNames,
         account: index,
         avatar,
       });

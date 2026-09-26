@@ -33,6 +33,8 @@ shipped yet waits under Unreleased. How a version ships:
   just those, so a big list is easy to clean up.
 - New-video alerts have two buttons: Listen opens the video in audio mode,
   and Add to Up next queues it.
+- After Import from YouTube replaces your list, the result names the first
+  channels it removed, so you can tell it did what you meant.
 
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the

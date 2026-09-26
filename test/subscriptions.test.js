@@ -192,6 +192,8 @@ function loadContent(opts = {}) {
       scanExportFailed: 'Could not save the backup',
       scanRemoved: 'Removed $1 channels',
       scanRemovedOne: 'Removed $1 channel',
+      scanRemovedNames: 'Removed: $1',
+      scanRemovedNamesMore: 'Removed: $1 and others',
       scanReplaceEmpty: 'Nothing was changed. An empty list cannot replace your watchlist.',
       scanChoose: 'Choose an account',
       scanStay: 'Do not close this tab',
@@ -223,6 +225,8 @@ function loadContent(opts = {}) {
       scanReplaceWarnOne: 'ستُستبدل قائمتك الحالية. القنوات التي ستُحذف منها: $1، مع فيديوهاتها. لا يمكن التراجع.',
       scanRemoved: 'القنوات المحذوفة: $1',
       scanRemovedOne: 'القنوات المحذوفة: $1',
+      scanRemovedNames: 'حُذفت: $1',
+      scanRemovedNamesMore: 'حُذفت: $1 وغيرها',
       scanExportSaved: 'تم الحفظ: $1',
     },
   };
@@ -974,13 +978,42 @@ export default async function run(t) {
       && !overlay.querySelector('.ytc-scan-another').hasAttribute('hidden'),
     `${textOf(overlay, 'ytc-scan-title')} | ${textOf(overlay, 'ytc-scan-sub')}`,
   );
-  await page.api.showScanResult({ added: 0, removed: 1, account: 0 });
+  t.check('with no names given, no names line shows', overlay.querySelector('.ytc-scan-names').hasAttribute('hidden'));
+  await page.api.showScanResult({
+    added: 2,
+    removed: 5,
+    removedNames: ['Linus Tech Tips', 'MrBeast', 'Veritasium'],
+    account: 1,
+  });
+  t.check(
+    'a replace names the first channels it removed, and says there were others',
+    textOf(overlay, 'ytc-scan-sub') === 'Removed 5 channels'
+      && textOf(overlay, 'ytc-scan-names') === 'Removed: Linus Tech Tips, MrBeast, Veritasium and others'
+      && !overlay.querySelector('.ytc-scan-names').hasAttribute('hidden'),
+    textOf(overlay, 'ytc-scan-names'),
+  );
+  await page.api.showScanResult({ added: 0, removed: 1, removedNames: ['MrBeast', 42], account: 0 });
   t.check(
     'only removals use Removed as the headline',
     textOf(overlay, 'ytc-scan-title') === 'Removed 1 channel'
       && overlay.querySelector('.ytc-scan-sub').hasAttribute('hidden'),
     textOf(overlay, 'ytc-scan-title'),
   );
+  t.check(
+    'every removed channel named needs no "and others"',
+    textOf(overlay, 'ytc-scan-names') === 'Removed: MrBeast',
+    textOf(overlay, 'ytc-scan-names'),
+  );
+  page.setLocale('ar');
+  await page.api.showScanResult({ added: 0, removed: 4, removedNames: ['أ', 'ب'], account: 0 });
+  t.check(
+    'Arabic joins the names with the Arabic comma',
+    textOf(overlay, 'ytc-scan-names') === 'حُذفت: أ\u060c ب وغيرها',
+    textOf(overlay, 'ytc-scan-names'),
+  );
+  page.setLocale('en');
+  await page.api.showScanResult({ added: 0, removed: 0, skipped: 4, removedNames: ['Stale'] });
+  t.check('a result that removed nothing hides the names line', overlay.querySelector('.ytc-scan-names').hasAttribute('hidden'));
   await page.api.showScanResult({ added: 0, removed: 0, skipped: 4 });
   t.check(
     'nothing removed still says the list already has them',

@@ -2241,6 +2241,8 @@ export default async function run(t) {
         'scanLoaded',
         'scanNothing',
         'scanRemoved',
+        'scanRemovedNames',
+        'scanRemovedNamesMore',
         'scanRemovedOne',
         'scanReplaceCancel',
         'scanReplaceDelete',
@@ -3522,6 +3524,12 @@ export default async function run(t) {
       'replace drops the removed channel\'s video records and keeps the rest',
       !('dropvid0001' in metaAfterReplace) && 'keepvid0001' in metaAfterReplace,
       JSON.stringify(Object.keys(metaAfterReplace)),
+    );
+    const replaceResult = replaceSeen.find((message) => message.type === 'subscriptions.result');
+    t.check(
+      'the result tells the tab which channel the replace removed',
+      JSON.stringify(replaceResult?.removedNames) === JSON.stringify(['MrBeast']),
+      JSON.stringify(replaceResult?.removedNames),
     );
     const download = replaceSeen.find((message) => message.type === 'subscriptions.download');
     const parsedBackup = download ? parseBackup(download.text) : { ok: false };

@@ -2087,6 +2087,8 @@
       title.className = 'ytc-scan-title';
       title.setAttribute('role', 'status');
       const sub = scanNode('ytc-scan-sub');
+      const names = scanNode('ytc-scan-names');
+      setScanHidden(names, true);
       const count = scanNode('ytc-scan-count');
       const label = document.createElement('span');
       label.className = 'ytc-scan-count-label';
@@ -2125,6 +2127,7 @@
       el.appendChild(who);
       el.appendChild(title);
       el.appendChild(sub);
+      el.appendChild(names);
       el.appendChild(count);
       el.appendChild(loaded);
       el.appendChild(picker);
@@ -2240,6 +2243,24 @@
     }
   }
 
+  // Which channels a replace dropped: the first few names, and "and others"
+  // when there were more.
+  function paintRemovedNames(el, got, mode, info) {
+    const line = el.querySelector('.ytc-scan-names');
+    if (!line) return;
+    const names = (info && info.removedNames) || [];
+    const removed = Number(info && info.removed) || 0;
+    const show = (mode === 'added' || mode === 'removed') && removed > 0 && names.length > 0;
+    setScanHidden(line, !show);
+    if (!show) {
+      line.textContent = '';
+      return;
+    }
+    const joined = names.join(got && got.locale === 'ar' ? '\u060c ' : ', ');
+    const key = removed > names.length ? 'scanRemovedNamesMore' : 'scanRemovedNames';
+    line.textContent = messageOf(got && got.pack, key, [joined]);
+  }
+
   function paintScanMode(got, mode, info) {
     clearAccountPickTimer();
     const el = ensureScanOverlay(got);
@@ -2248,6 +2269,7 @@
     const pack = got && got.pack;
     const title = el.querySelector('.ytc-scan-title');
     const sub = el.querySelector('.ytc-scan-sub');
+    paintRemovedNames(el, got, mode, info);
     const count = el.querySelector('.ytc-scan-count');
     const loaded = el.querySelector('.ytc-scan-loaded');
     const spinner = el.querySelector('.ytc-scan-spinner');
@@ -2457,10 +2479,12 @@
     const skipped = Number(msg && msg.skipped) || 0;
     const removed = Number(msg && msg.removed) || 0;
     const account = msg && msg.account;
+    const names = msg && Array.isArray(msg.removedNames) ? msg.removedNames : [];
     return {
       added: added,
       skipped: skipped,
       removed: removed > 0 ? removed : 0,
+      removedNames: names.filter(function (name) { return typeof name === 'string' && name; }).slice(0, 3),
       account: typeof account === 'number' ? account : null,
       avatar: msg && typeof msg.avatar === 'string' ? msg.avatar : '',
     };

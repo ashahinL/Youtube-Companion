@@ -276,6 +276,7 @@ html[dark] #ytc-scan-overlay {
 }
 
 #ytc-scan-overlay .ytc-scan-sub,
+#ytc-scan-overlay .ytc-scan-names,
 #ytc-scan-overlay .ytc-scan-loaded,
 #ytc-scan-overlay .ytc-scan-count-label {
   all: unset;

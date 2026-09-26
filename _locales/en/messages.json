@@ -1348,6 +1348,26 @@
       }
     }
   },
+  "scanRemovedNames": {
+    "message": "Removed: $NAMES$",
+    "description": "Line on the YouTube tab after a replace import, naming the channels it removed. $NAMES$ is up to three channel names joined by commas.",
+    "placeholders": {
+      "names": {
+        "content": "$1",
+        "example": "Linus Tech Tips, MrBeast"
+      }
+    }
+  },
+  "scanRemovedNamesMore": {
+    "message": "Removed: $NAMES$ and others",
+    "description": "Same line when the replace removed more channels than it names.",
+    "placeholders": {
+      "names": {
+        "content": "$1",
+        "example": "Linus Tech Tips, MrBeast"
+      }
+    }
+  },
   "scanReplaceEmpty": {
     "message": "Nothing was changed. An empty list cannot replace your watchlist.",
     "description": "Shown when Replace is refused because the scan found no channels. The watchlist is left as it was."

@@ -104,7 +104,8 @@ asks.
   is not subscribed to, the person chooses Add new (merge) or Replace (an
   inline warning that the current list will be deleted, with Export my list
   first; channels in both lists keep favourite, mute and groups; there is
-  no undo). Takeout stays add-only. Imported channels start unseeded, so their
+  no undo; the result names the first three channels it removed). Takeout
+  stays add-only. Imported channels start unseeded, so their
   first check is silent; pictures fill in a few per check, more in the
   first day after they were added.
 - **Welcome page** opens once on a fresh install, never on an update: import
