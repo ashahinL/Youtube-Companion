@@ -1506,6 +1506,11 @@ export default async function run(t) {
       && /id="watchlist-more"[^>]*hidden/.test(html)
       && /showMoreWatchlist\(\);\s*\}[\s\S]{0,40}\.observe\(more\)/.test(js),
   );
+  t.check(
+    'Feeds, the Watchlist and the channel sheet keep focus across a redraw',
+    (js.match(/const \w+Focus = focusSpot\(listEl, document\.activeElement\);\s*listEl\.replaceChildren\([^;]*keyed\(/g) || []).length === 3
+      && (js.match(/restoreFocusSpot\(listEl, \w+Focus\);/g) || []).length === 3,
+  );
   t.check('thumbnails and avatars load lazily', (js.match(/img\.loading = 'lazy';/g) || []).length >= 2);
   t.check(
     'a feed row is not a focusable container',

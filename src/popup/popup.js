@@ -34,6 +34,7 @@ import {
   applyDirection,
 } from '../lib/i18n.js';
 import { applyTheme } from '../lib/theme.js';
+import { focusSpot, restoreFocusSpot } from '../lib/focus.js';
 import {
   isChannelRef,
   listedMatch,
@@ -306,6 +307,12 @@ function formatBackupNotice(error) {
   const mapped = backupImportMessage(error, MAX_BACKUP_CHANNELS);
   if (mapped.key) return t(mapped.key, mapped.subs);
   return formatError(error);
+}
+
+// A row's key lets a redraw put focus back on it (lib/focus.js).
+function keyed(row, key) {
+  row.dataset.rowKey = key;
+  return row;
 }
 
 function ltrRun(el) {
@@ -1085,7 +1092,9 @@ function renderFeeds(locale) {
     feedPageKey = pageKey;
     feedLimit = FEED_PAGE;
   }
-  listEl.replaceChildren(...shown.slice(0, feedLimit).map((item) => feedRow(item, locale, channelsById.get(item.c))));
+  const feedFocus = focusSpot(listEl, document.activeElement);
+  listEl.replaceChildren(...shown.slice(0, feedLimit).map((item) => keyed(feedRow(item, locale, channelsById.get(item.c)), item.v)));
+  restoreFocusSpot(listEl, feedFocus);
   const moreEl = document.getElementById('feed-more');
   const rest = shown.length - feedLimit;
   moreEl.hidden = rest <= 0;
@@ -1186,7 +1195,9 @@ function renderWatchlist(locale) {
     watchlistPageKey = q;
     watchlistLimit = FEED_PAGE;
   }
-  listEl.replaceChildren(...shown.slice(0, watchlistLimit).map((ch) => channelRow(ch, locale)));
+  const watchlistFocus = focusSpot(listEl, document.activeElement);
+  listEl.replaceChildren(...shown.slice(0, watchlistLimit).map((ch) => keyed(channelRow(ch, locale), ch.id)));
+  restoreFocusSpot(listEl, watchlistFocus);
   const moreEl = document.getElementById('watchlist-more');
   const rest = shown.length - watchlistLimit;
   moreEl.hidden = rest <= 0;
@@ -1328,10 +1339,9 @@ function renderChannelSheet() {
 
   const items = visibleFeedItems(view.feed, !!view.settings?.feed?.showShorts, Date.now())
     .filter((item) => item.c === ch.id);
-  listEl.replaceChildren();
-  for (const item of items) {
-    listEl.appendChild(feedRow(item, locale, ch, { showChannel: false }));
-  }
+  const sheetFocus = focusSpot(listEl, document.activeElement);
+  listEl.replaceChildren(...items.map((item) => keyed(feedRow(item, locale, ch, { showChannel: false }), item.v)));
+  restoreFocusSpot(listEl, sheetFocus);
 
   const hasItems = items.length > 0;
   listEl.hidden = !hasItems;
@@ -1339,7 +1349,7 @@ function renderChannelSheet() {
 
   const itemsNow = sheetFocusables();
   if (!itemsNow.includes(document.activeElement)) {
-    // The focused video row was rebuilt, or ↻ was hidden under focus.
+    // The focused video row is gone, or ↻ was hidden under focus.
     document.getElementById('channel-sheet-close')?.focus?.();
   }
 }

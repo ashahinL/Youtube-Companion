@@ -15,6 +15,7 @@ const SUITES = [
   ['manifest + locales', './skeleton.test.js'],
   ['popup shell',        './popup.test.js'],
   ['popup view',         './view.test.js'],
+  ['focus',              './focus.test.js'],
   ['welcome page',       './welcome.test.js'],
   ["what's new page",    './whatsnew.test.js'],
   ['shots',              './shots.test.js'],
