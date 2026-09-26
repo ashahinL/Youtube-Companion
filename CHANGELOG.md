@@ -29,6 +29,8 @@ shipped yet waits under Unreleased. How a version ships:
 - The channel sheet has a ↗ button that opens the channel on YouTube.
 - Clear watchlist's confirm offers Export my list first, like Replace does.
 - Hovering the toolbar icon says what the badge number means ("3 new videos").
+- When channels fail their check, an "N failing" chip on the Watchlist shows
+  just those, so a big list is easy to clean up.
 
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the

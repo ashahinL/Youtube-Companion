@@ -678,6 +678,23 @@ export default async function run(t) {
     }).shown) === `${OTH},${FAV}`,
   );
 
+  const broken = base.channels.map((ch) => (ch.id === OTH ? { ...ch, lastError: { message: 'Feed failed (500)' } } : ch));
+  const wlFailing = watchlistView({ channels: broken, feed: base.feed, query: '', failingOnly: true });
+  t.check(
+    'failing-only shows just the channels whose check failed',
+    ids(wlFailing.shown) === OTH && wlFailing.failingCount === 1 && wlFailing.failingOnly && wlFailing.total === 2,
+    ids(wlFailing.shown),
+  );
+  t.check(
+    'failing-only still takes the text filter',
+    watchlistView({ channels: broken, feed: base.feed, query: 'fav', failingOnly: true }).shown.length === 0,
+  );
+  const wlHealthy = watchlistView({ channels: base.channels, feed: base.feed, query: '', failingOnly: true });
+  t.check(
+    'with nothing failing, failing-only lets go and every channel shows',
+    wlHealthy.shown.length === 2 && wlHealthy.failingCount === 0 && !wlHealthy.failingOnly,
+  );
+
   const wlFilter = watchlistView({ channels: base.channels, feed: base.feed, query: 'other' });
   t.check('Watchlist text filter matches a title', ids(wlFilter.shown) === OTH, ids(wlFilter.shown));
   t.check('Watchlist count total is the unfiltered length', wlFilter.total === 2, String(wlFilter.total));

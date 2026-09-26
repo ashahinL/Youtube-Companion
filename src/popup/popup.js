@@ -165,6 +165,8 @@ let feedPageKey = '';
 // each with its ⋯ menu, on every key typed in its box.
 let watchlistLimit = FEED_PAGE;
 let watchlistPageKey = '';
+// Not a setting: a clean-up view for this open only.
+let watchlistFailingOnly = false;
 let feedGroupsScrolledTo;
 let groupWrite = Promise.resolve();
 // Unsent rename text, kept across re-renders so a checkbox tick landing
@@ -1149,7 +1151,15 @@ function renderWatchlist(locale) {
     channels,
     feed: view.feed,
     query: input.value,
+    failingOnly: watchlistFailingOnly,
   });
+  watchlistFailingOnly = watchlist.failingOnly;
+  const filtersRow = document.getElementById('watchlist-filters');
+  const failingChip = document.getElementById('watchlist-failing');
+  filtersRow.hidden = watchlist.failingCount === 0;
+  failingChip.textContent = tCount('watchlistFailing', watchlist.failingCount);
+  failingChip.title = t('watchlistFailingTitle');
+  failingChip.setAttribute('aria-pressed', watchlist.failingOnly ? 'true' : 'false');
   const q = watchlist.query;
   const { shown, onList, addable } = watchlist;
 
@@ -1187,13 +1197,15 @@ function renderWatchlist(locale) {
   undoBtn.disabled = view.undoing;
 
   const searching = !!q;
-  countEl.hidden = !searching;
-  countEl.textContent = searching
+  const narrowed = searching || watchlist.failingOnly;
+  countEl.hidden = !narrowed;
+  countEl.textContent = narrowed
     ? t('watchlistShowing', [String(shown.length), String(channels.length)])
     : '';
 
-  if (q !== watchlistPageKey) {
-    watchlistPageKey = q;
+  const pageKey = JSON.stringify([q, watchlist.failingOnly]);
+  if (pageKey !== watchlistPageKey) {
+    watchlistPageKey = pageKey;
     watchlistLimit = FEED_PAGE;
   }
   const watchlistFocus = focusSpot(listEl, document.activeElement);
@@ -3800,6 +3812,10 @@ function bindWatchlist() {
   });
   document.getElementById('watchlist-undo-btn').addEventListener('click', () => {
     void undoRemove();
+  });
+  document.getElementById('watchlist-failing')?.addEventListener('click', () => {
+    watchlistFailingOnly = !watchlistFailingOnly;
+    render();
   });
   const more = document.getElementById('watchlist-more');
   more.addEventListener('click', () => {

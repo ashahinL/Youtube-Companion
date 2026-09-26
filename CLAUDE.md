@@ -126,7 +126,9 @@ asks.
 - **Followed mark**: the Player tab's player card puts the same check before
   each channel name that is on the list.
 - **A failed channel** reads "Check failed" on its Watchlist row; its sheet
-  says why in a translated sentence, with Retry.
+  says why in a translated sentence, with Retry. While any channel is
+  failing, an "N failing" chip on the Watchlist narrows the list to them,
+  for this open only.
 - **Clicking a video** opens a new focused tab on youtube.com and closes the
   popup. A channel name opens the in-popup channel sheet, which shows stored
   videos and never fetches on open; its ↗ opens the channel's own page on

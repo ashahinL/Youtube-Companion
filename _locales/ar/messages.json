@@ -303,6 +303,30 @@
       }
     }
   },
+  "watchlistFailing": {
+    "message": "فشل التحقق: $COUNT$",
+    "description": "Watchlist chip that shows only channels whose last check failed. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "watchlistFailingOne": {
+    "message": "فشل التحقق: $COUNT$",
+    "description": "Singular of watchlistFailing.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "watchlistFailingTitle": {
+    "message": "اعرض فقط القنوات التي فشل آخر تحقق منها",
+    "description": "Tooltip of the Watchlist chip that shows only failing channels."
+  },
   "watchlistOpenChannel": {
     "message": "فتح $TITLE$",
     "description": "Accessible name of a Watchlist row. $TITLE$ is the channel title.",

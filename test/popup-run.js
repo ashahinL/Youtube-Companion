@@ -398,6 +398,23 @@ async function scenarios(ctx) {
   );
   check('a failed channel reads Check failed', rowOf(C).querySelector('.channel-row__warn')?.textContent === 'Check failed', rowOf(C).querySelector('.channel-row__warn')?.textContent);
 
+  const failingChip = $('watchlist-failing');
+  check(
+    'a failing channel puts an unpressed "1 failing" chip on the Watchlist',
+    !$('watchlist-filters').hidden && failingChip.textContent === '1 failing' && failingChip.getAttribute('aria-pressed') === 'false',
+    failingChip.textContent,
+  );
+  failingChip.click();
+  await settle();
+  check(
+    'pressing it shows only the failing channel',
+    rowKeys(wl).join() === C && failingChip.getAttribute('aria-pressed') === 'true' && $('watchlist-count').textContent === 'Showing 1 of 3',
+    rowKeys(wl).join() + ' ' + $('watchlist-count').textContent,
+  );
+  failingChip.click();
+  await settle();
+  check('pressing it again shows the whole list', wl.children.length === 3 && $('watchlist-count').hidden);
+
   const toggle = rowOf(B).querySelector('.menu__toggle');
   const list = rowOf(B).querySelector('.menu__list');
   toggle.click();
@@ -576,6 +593,34 @@ async function scenarios(ctx) {
     $('settings-backup-status').textContent,
   );
   $('settings-clear-cancel').click();
+  await settle();
+
+  // A long Watchlist is drawn a page at a time.
+  $('tab-watchlist').click();
+  await settle();
+  const many = Array.from({ length: 120 }, (_, i) => channel(`UC${String(i).padStart(22, '0')}`, `Bulk${i}`));
+  const savedChannels = state.channels;
+  state.channels = [...savedChannels, ...many];
+  await chrome.storage.local.set({ channels: structuredClone(state.channels) });
+  await settle();
+  const moreBtn = $('watchlist-more');
+  check('a long Watchlist draws 50 rows and offers more', wl.children.length === 50 && !moreBtn.hidden, `${wl.children.length} ${moreBtn.hidden}`);
+  moreBtn.click();
+  await settle();
+  check('Show more adds the next 50', wl.children.length === 100, String(wl.children.length));
+  const moreObserver = ctx.observers.find((o) => o.targets.includes(moreBtn));
+  moreObserver.fn([{ isIntersecting: true, target: moreBtn }]);
+  await settle();
+  check('scrolling to the end draws the rest', wl.children.length === 122 && moreBtn.hidden, String(wl.children.length));
+  const wlInput = $('watchlist-input');
+  wlInput.value = 'bulk';
+  wlInput.dispatchEvent(new FakeEvent('input', { bubbles: true }));
+  await settle();
+  check('a new search starts again at one page', wl.children.length === 50, String(wl.children.length));
+  wlInput.value = '';
+  wlInput.dispatchEvent(new FakeEvent('input', { bubbles: true }));
+  state.channels = savedChannels;
+  await chrome.storage.local.set({ channels: structuredClone(state.channels) });
   await settle();
 
   // Tabs move with the arrow keys.

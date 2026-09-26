@@ -812,14 +812,21 @@ export function queueView({ queue, open, cap } = {}) {
   };
 }
 
-export function watchlistView({ channels, feed, query }) {
+// `failingOnly` narrows to channels whose last check failed. It lets go by
+// itself once none are failing, so the list is never stuck on an empty view.
+export function watchlistView({ channels, feed, query, failingOnly = false }) {
   const q = String(query || '').trim();
-  const shown = q ? channels.filter((ch) => matchesWatchlist(ch, q)) : channels;
+  const failing = channels.filter((ch) => channelProblem(ch.lastError));
+  const narrowed = failingOnly && failing.length > 0;
+  const base = narrowed ? failing : channels;
+  const shown = q ? base.filter((ch) => matchesWatchlist(ch, q)) : base;
   const onList = !!listedMatch(q, channels, feed);
   const addable = !q || (isChannelRef(q) && !onList);
   const searching = !!q;
   return {
     shown,
+    failingCount: failing.length,
+    failingOnly: narrowed,
     total: channels.length,
     onList,
     addable,

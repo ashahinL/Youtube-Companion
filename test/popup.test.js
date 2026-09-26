@@ -1343,11 +1343,8 @@ export default async function run(t) {
     /id="feed-more"[^>]*hidden/.test(html) && /new IntersectionObserver/.test(js) && /showMoreFeed\(\)/.test(js),
   );
   t.check(
-    'the Watchlist is drawn 50 rows at a time and starts again at one page on a new query',
-    /shown\.slice\(0, watchlistLimit\)/.test(js)
-      && /q !== watchlistPageKey[\s\S]{0,80}watchlistLimit = FEED_PAGE/.test(js)
-      && /id="watchlist-more"[^>]*hidden/.test(html)
-      && /showMoreWatchlist\(\);\s*\}[\s\S]{0,40}\.observe\(more\)/.test(js),
+    'Show more on the Watchlist starts hidden',
+    /id="watchlist-more"[^>]*hidden/.test(html),
   );
   t.check(
     'Feeds, the Watchlist and the channel sheet keep focus across a redraw',

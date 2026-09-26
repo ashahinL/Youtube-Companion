@@ -303,6 +303,30 @@
       }
     }
   },
+  "watchlistFailing": {
+    "message": "$COUNT$ failing",
+    "description": "Watchlist chip that shows only channels whose last check failed. $COUNT$ is how many.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "watchlistFailingOne": {
+    "message": "$COUNT$ failing",
+    "description": "Singular of watchlistFailing.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "watchlistFailingTitle": {
+    "message": "Show only the channels whose last check failed",
+    "description": "Tooltip of the Watchlist chip that shows only failing channels."
+  },
   "watchlistOpenChannel": {
     "message": "Open $TITLE$",
     "description": "Accessible name of a Watchlist row. $TITLE$ is the channel title.",
