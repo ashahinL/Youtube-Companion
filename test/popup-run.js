@@ -605,6 +605,29 @@ async function scenarios(ctx) {
   $('settings-clear-cancel').click();
   await settle();
 
+  // Show more in Feeds puts keyboard focus on the first new row.
+  $('tab-feeds').click();
+  await settle();
+  const savedFeed = state.feed;
+  const bulkFeed = Array.from({ length: 60 }, (_, i) => video(`bulkvid${String(i).padStart(4, '0')}`, A, 100 + i));
+  state.feed = [...savedFeed, ...bulkFeed];
+  await chrome.storage.local.set({ feed: structuredClone(state.feed) });
+  await settle();
+  const feedMore = $('feed-more');
+  check('a long feed draws 50 rows and offers more', $('feed-list').children.length === 50 && !feedMore.hidden, String($('feed-list').children.length));
+  feedMore.focus();
+  feedMore.click();
+  await settle();
+  const firstNew = $('feed-list').children[50];
+  check(
+    'Show more in Feeds moves focus to the first new row\'s open button',
+    $('feed-list').children.length > 50 && active() === firstNew?.querySelector('.feed-row__open'),
+    active().className || active().id,
+  );
+  state.feed = savedFeed;
+  await chrome.storage.local.set({ feed: structuredClone(state.feed) });
+  await settle();
+
   // A long Watchlist is drawn a page at a time.
   $('tab-watchlist').click();
   await settle();

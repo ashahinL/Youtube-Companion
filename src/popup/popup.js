@@ -2930,7 +2930,8 @@ function bindFeeds() {
     const first = feedLimit;
     showMoreFeed();
     // A keyboard press lands on the first new row, not back at the button.
-    document.getElementById('feed-list').children[first]?.focus();
+    // The row itself is a plain box; its open button is what takes focus.
+    document.getElementById('feed-list').children[first]?.querySelector('.feed-row__open')?.focus();
   });
   // Scrolling near the end draws the next page without a click.
   new IntersectionObserver((entries) => {
