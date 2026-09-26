@@ -17,13 +17,17 @@ When a listing goes live, put its link in the README's install section.
 
 ## The package
 
-The same zip goes to both stores: `companion-for-youtube-2.0.0.zip`, 38
-entries, 652,434 bytes, SHA-256
-`d939e0cb0871cb9ae2c55e362422909ecec9b7437e86f4e9c4573dc482a8924e`, packed on
-2026-09-19 from `main` at `v2.0.0`.
+The same zip goes to both stores: `companion-for-youtube-2.1.0.zip`, 42
+entries, 704,426 bytes, SHA-256
+`b69f928b05b0f07a5662efa1037838015653f48de805fed225594c17acea5a5f`, packed on
+2026-09-26 from `main` at `v2.1.0`.
 
-- Download it from the [v2.0.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.0.0), or
-- run `npm run pack` on a fresh clone of the `v2.0.0` tag.
+- Download it from the [v2.1.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.1.0), or
+- run `npm run pack` on a fresh clone of the `v2.1.0` tag.
+
+2.0.0 was `companion-for-youtube-2.0.0.zip`, 38 entries, 652,434 bytes,
+SHA-256 `d939e0cb0871cb9ae2c55e362422909ecec9b7437e86f4e9c4573dc482a8924e`,
+on the [v2.0.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.0.0).
 
 Most of the jump from 1.0.0's 174,899 bytes is the six What's new pictures
 and the InstaPay QR code, which are PNGs inside `src/`.
@@ -39,9 +43,9 @@ the same files inside. To check a zip against a tag, compare the files, not
 the hash:
 
 ```bash
-mkdir /tmp/z && unzip -q companion-for-youtube-2.0.0.zip -d /tmp/z
+mkdir /tmp/z && unzip -q companion-for-youtube-2.1.0.zip -d /tmp/z
 cd /tmp/z && find . -type f | sed 's|^\./||' | while read f; do
-  git -C <repo> show v2.0.0:"$f" | cmp -s - "$f" || echo "differs: $f"; done
+  git -C <repo> show v2.1.0:"$f" | cmp -s - "$f" || echo "differs: $f"; done
 ```
 
 A later version is packed on its ship day, from its tag, into
@@ -338,6 +342,9 @@ matter more than for most extensions.
 
 Partner Center → Edge → **Create new extension**, then page by page. Every
 page but Store listings ends with **Save & Continue** at the top right.
+
+Use Edge itself for Partner Center. In Brave it crashed while uploading the
+screenshots for 2.1.0 (owner, 2026-09-26).
 
 1. **Packages** — upload the zip. Partner Center reported *Languages in
    package: Arabic, English* and the five permissions plus the host.
