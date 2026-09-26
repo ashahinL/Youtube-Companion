@@ -956,6 +956,7 @@
   const YTP_SETTINGS_MENU = '.ytp-settings-menu';
   const YTP_MENU_ITEM = '.ytp-menuitem';
   const YTP_MENU_ITEM_LABEL = '.ytp-menuitem-label';
+  const YTP_MENU_ITEM_CONTENT = '.ytp-menuitem-content';
 
   function menuItems(rootEl) {
     if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return [];
@@ -965,6 +966,16 @@
   function itemLabel(el) {
     const lab = el.querySelector(YTP_MENU_ITEM_LABEL);
     return ((lab && lab.textContent) || el.textContent || '').trim();
+  }
+
+  // The label is translated ("الجودة" in Arabic), so the row is also found
+  // by its value, which names a resolution such as "Auto (720p)" in every
+  // language. No other row of the gear menu shows one.
+  function isQualityRow(el) {
+    if (!el || typeof el.querySelector !== 'function') return false;
+    if (/quality/i.test(itemLabel(el))) return true;
+    const value = el.querySelector(YTP_MENU_ITEM_CONTENT);
+    return /\d{3,4}p/.test((value && value.textContent) || '');
   }
 
   async function pinViaSettingsMenu(quality, signal) {
@@ -981,7 +992,7 @@
       const rows = menuItems(menu);
       let qualityRow = null;
       for (let i = 0; i < rows.length; i++) {
-        if (/quality/i.test(itemLabel(rows[i]))) {
+        if (isQualityRow(rows[i])) {
           qualityRow = rows[i];
           break;
         }
@@ -3655,6 +3666,7 @@
     PRESETS,
     DEFAULT_PRESET,
     pickAudioQuality,
+    isQualityRow,
     lookupPreset,
     sanitizeHex,
     overlayLookFromSettings,

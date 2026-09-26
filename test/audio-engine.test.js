@@ -669,6 +669,27 @@ export default async function run(t) {
   t.check('picks tiny when it is offered', engine.pickAudioQuality(['hd1080', 'hd720', 'small', 'tiny']) === 'tiny');
   t.check('falls back to small when tiny is absent', engine.pickAudioQuality(['hd1080', 'hd720', 'small']) === 'small');
   t.check('tiny wins when both tiny and small are offered', engine.pickAudioQuality(['small', 'tiny']) === 'tiny');
+
+  // A gear-menu row: label and value, as the fallback reads them.
+  const menuRow = (label, value) => {
+    const parts = {
+      '.ytp-menuitem-label': { textContent: label },
+      '.ytp-menuitem-content': { textContent: value },
+    };
+    return { textContent: label + value, querySelector: (sel) => parts[sel] || null };
+  };
+  t.check('the English Quality row is found by its label', engine.isQualityRow(menuRow('Quality', 'Auto (1080p)')) === true);
+  t.check(
+    'the Arabic quality row is found by the resolution it shows',
+    engine.isQualityRow(menuRow('الجودة', 'تلقائي (720p)')) === true
+      && engine.isQualityRow(menuRow('Qualität', '1080p60 HD')) === true,
+  );
+  t.check(
+    'rows that show words are not the quality row',
+    engine.isQualityRow(menuRow('سرعة التشغيل', 'عادية')) === false
+      && engine.isQualityRow(menuRow('Subtitles/CC', 'Off')) === false
+      && engine.isQualityRow(null) === false,
+  );
   t.check('asks for tiny when the list is empty', engine.pickAudioQuality([]) === 'tiny');
   t.check('asks for tiny when the list is missing', engine.pickAudioQuality(undefined) === 'tiny');
   t.check('asks for tiny when the list is null', engine.pickAudioQuality(null) === 'tiny');

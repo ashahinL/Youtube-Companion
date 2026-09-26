@@ -280,7 +280,10 @@ to it in a browser by hand. The bullets under it were measured.
   32.5px).
 - When the API is ignored, the fallback drives the player's own settings menu
   (gear → quality → level). It depends on YouTube's class names and is the
-  first thing to check when audio mode stops pinning.
+  first thing to check when audio mode stops pinning. The quality row's label
+  is translated, so it is also found by its value, which names a resolution
+  ("Auto (720p)"). That the value keeps the `720p` form on an Arabic YouTube
+  is not measured yet.
 
 Not measured yet: that `#movie_player` exists at `document_idle` on a fresh
 watch page, how much video has buffered by then, and that a short plays in the
