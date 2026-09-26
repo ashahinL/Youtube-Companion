@@ -50,7 +50,7 @@ GET https://www.youtube.com/feeds/videos.xml?channel_id=UC...
 
 ```
 POST https://www.youtube.com/youtubei/v1/navigation/resolve_url
-{"context":{"client":{"clientName":"WEB","clientVersion":"2.20260911.01.00","hl":"en","gl":"US"}},
+{"context":{"client":{"clientName":"WEB","clientVersion":"2.20260925.01.00","hl":"en","gl":"US"}},
  "url":"https://www.youtube.com/@mkbhd"}
 ```
 
@@ -58,7 +58,10 @@ POST https://www.youtube.com/youtubei/v1/navigation/resolve_url
   `"INNERTUBE_CONTEXT_CLIENT_VERSION":"2.20260911.01.00"` on 2026-09-14. The
   version used before, `2.20240304.00.00`, still answered that day with the
   same results from `resolve_url` (1,170 bytes), `browse` and `player`, and
-  every parser read both answers the same.
+  every parser read both answers the same. On 2026-09-26 the homepage carried
+  `2.20260925.01.00`; `resolve_url` for `@mkbhd` answered `200` with the same
+  body under it and under `2.20260911.01.00` (1,993 bytes as served,
+  pretty-printed), so the pinned version moved up.
 
 - `200`, **1,170 bytes**. The id is `endpoint.browseEndpoint.browseId`.
 - `endpoint.commandMetadata.resolveUrlCommandMetadata.isVanityUrl` tells a

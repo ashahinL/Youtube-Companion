@@ -2102,80 +2102,80 @@
       }
     }
   },
-  "whatsNewQueueTitle": {
-    "message": "التالي",
-    "description": "What's new page: heading of the listen-later queue feature."
-  },
-  "whatsNewQueueBody": {
-    "message": "رتّب ما تريد سماعه. أضف فيديوهات من الموجز أو من المشغّل، ثم اضغط «تشغيل الكل» فتُشغَّل واحدًا بعد الآخر في تبويب واحد، مع وضع الصوت أو بدونه.",
-    "description": "What's new page: the listen-later queue."
-  },
-  "whatsNewQueueShot": {
-    "message": "تبويب المشغّل وثلاثة فيديوهات مرتّبة تحت «التالي»",
-    "description": "Alt text for the Up next screenshot."
-  },
-  "whatsNewGroupsTitle": {
-    "message": "مجموعات القنوات",
-    "description": "What's new page: heading of the channel groups feature."
-  },
-  "whatsNewGroupsBody": {
-    "message": "ضع القناة في ما تشاء من المجموعات المسمّاة من قائمة ⋯ الخاصة بها، ثم اقصر الموجز على مجموعة واحدة بلمسة. تبقى المجموعة ما بقيت فيها قناة، ولا شيء لتضبطه.",
-    "description": "What's new page: channel groups."
-  },
-  "whatsNewGroupsShot": {
-    "message": "تبويب الموجز وصف من رقاقات المجموعات فوق الفيديوهات",
-    "description": "Alt text for the channel groups screenshot."
-  },
   "whatsNewImportTitle": {
-    "message": "انقل اشتراكاتك",
-    "description": "What's new page: heading of the Takeout import feature."
+    "message": "استيراد من يوتيوب",
+    "description": "What's new page: heading of the Import from YouTube feature."
   },
   "whatsNewImportBody": {
-    "message": "نزّل ملف subscriptions.csv من Google Takeout واخترْه في صفحة الترحيب. يُقرأ الملف على جهازك، ولا يسجّل شيء الدخول، وتصل القنوات دون وابل من التنبيهات.",
-    "description": "What's new page: the Google Takeout import."
+    "message": "اضغط «استيراد من يوتيوب» فيقرأ الملحق اشتراكاتك من تبويب يوتيوب الذي سجّلت الدخول إليه. وإن كان أكثر من حساب Google مسجّلًا، تختار أيّها. تُقرأ القائمة على جهازك ولا يخرج منه شيء، وتصل القنوات دون وابل من التنبيهات.",
+    "description": "What's new page: Import from YouTube."
   },
   "whatsNewImportShot": {
     "message": "تبويب قائمة المتابعة يعرض القنوات المتابَعة",
     "description": "Alt text for the watchlist screenshot."
   },
+  "whatsNewGroupsTitle": {
+    "message": "مجموعاتك على يوتيوب",
+    "description": "What's new page: heading of the groups-on-YouTube feature."
+  },
+  "whatsNewGroupsBody": {
+    "message": "شرائح المجموعات التي في الموجز صارت أيضًا في صفحة الاشتراكات على يوتيوب نفسه. اختر واحدة لترى فيديوهات تلك المجموعة وحدها هناك. ويمكنك إيقاف ذلك من الإعدادات.",
+    "description": "What's new page: the group chips on YouTube's Subscriptions page."
+  },
+  "whatsNewGroupsShot": {
+    "message": "تبويب الموجز وصف من شرائح المجموعات فوق الفيديوهات",
+    "description": "Alt text for the channel groups screenshot."
+  },
+  "whatsNewThemeTitle": {
+    "message": "فاتح أو داكن",
+    "description": "What's new page: heading of the theme feature."
+  },
+  "whatsNewThemeBody": {
+    "message": "اختر فاتح أو داكن أو النظام من الإعدادات. تتبع اختيارَك نافذة الملحق وصفحة الترحيب وهذه الصفحة.",
+    "description": "What's new page: the theme setting."
+  },
+  "whatsNewThemeShot": {
+    "message": "تبويب المشغّل بالسمة الفاتحة",
+    "description": "Alt text for the light theme screenshot."
+  },
   "whatsNewMoreTitle": {
     "message": "وأكثر من ذلك",
     "description": "What's new page: heading of the short list of smaller changes."
   },
-  "whatsNewMorePlayer": {
-    "message": "صار تبويب الصوت اسمه «مشغّل»، ويفتح الملحق على الموجز إلا إذا كان هناك فيديو يعمل فعلًا.",
+  "whatsNewMoreGroupEdit": {
+    "message": "أعد تسمية مجموعة أو احذفها من لوحة المجموعات. وإعادة التسمية إلى اسم مستخدم تدمج المجموعتين.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreFollow": {
-    "message": "زر «متابعة» للقناة التي تشاهدها، ولكل قناة في فيديو شارك في صنعه أكثر من واحدة.",
+  "whatsNewMoreAlerts": {
+    "message": "لتنبيهات الفيديوهات الجديدة زرّان: «استمع» و«إضافة إلى التالي».",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreSleep": {
-    "message": "مؤقّت نوم: إيقاف مؤقّت بعد 15 أو 30 أو 60 دقيقة، ويستمر العدّ بعد إغلاق الملحق.",
+  "whatsNewMoreFailing": {
+    "message": "عندما يفشل التحقق من قنوات، تعرضها وحدها شريحة في قائمة المتابعة.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreMute": {
-    "message": "أسكِت تنبيهات قناة واحدة مع بقاء فيديوهاتها في موجزك.",
+  "whatsNewMoreChannelLink": {
+    "message": "زر ↗ في لوحة القناة يفتح القناة على يوتيوب.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreUndo": {
-    "message": "تراجع بعد إزالة قناة، فتعود بنجمتها وبموضعها في القائمة.",
+  "whatsNewMoreTabJump": {
+    "message": "عند فتح أكثر من تبويب يوتيوب، ينقلك زر ↗ في تبويب المشغّل إلى أحدها مباشرة، ولو كان في نافذة أخرى.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreShortcut": {
-    "message": "افتح الملحق بـ Alt+Shift+Y.",
+  "whatsNewMoreTooltip": {
+    "message": "مرّر المؤشر فوق أيقونة الملحق لتقرأ ما يعنيه الرقم عليها.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreNewTag": {
-    "message": "وسم «جديد» على الفيديوهات التي وصلت منذ آخر زيارة.",
+  "whatsNewMoreErrors": {
+    "message": "كل رسالة خطأ جملة كاملة بلغتك.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreCover": {
-    "message": "غلاف وضع الصوت صورة من جهازك، لا عنوان من الويب.",
+  "whatsNewMoreStats": {
+    "message": "بطاقات الإحصاءات الأربع في تبويب المشغّل صارت في صف واحد.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreBackoff": {
-    "message": "تتمهّل الفحوصات عندما يمانع يوتيوب، فلا تلقى اختبار تحقّق على يوتيوب الخاص بك.",
+  "whatsNewMoreClearExport": {
+    "message": "يعرض «مسح قائمة المتابعة» تصدير قائمتك أولًا.",
     "description": "What's new page, short list."
   },
   "whatsNewAgain": {

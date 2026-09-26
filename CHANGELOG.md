@@ -6,6 +6,8 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+## 2.1.0 — 2026-09-26
+
 **New**
 - Your groups show up as chips on YouTube's own subscriptions page. Pick
   one to hide videos from other channels, or All to show everything again.

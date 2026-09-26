@@ -524,7 +524,7 @@ export function storeReviewsUrl(userAgent) {
  * release of fixes has nothing to show, and reading the version would ask
  * everyone to look at an unchanged page.
  */
-export const WHATS_NEW_VERSION = '2.0';
+export const WHATS_NEW_VERSION = '2.1';
 export const WHATS_NEW_KEY = 'whatsNewSeen';
 
 /** True until the reader has acknowledged `current`. */

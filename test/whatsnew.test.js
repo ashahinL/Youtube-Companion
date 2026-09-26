@@ -140,7 +140,7 @@ export default async function run(t) {
     'the heading carries the release',
     en.whatsNewTitle.message.includes('$RELEASE$') && ar.whatsNewTitle.message.includes('$RELEASE$'),
   );
-  t.check('the Arabic page is really Arabic', /[؀-ۿ]/.test(ar.whatsNewQueueBody.message));
+  t.check('the Arabic page is really Arabic', /[؀-ۿ]/.test(ar.whatsNewImportBody.message));
 
   t.section('offered once, reopened on purpose');
 

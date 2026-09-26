@@ -20,6 +20,7 @@
   var params = new URLSearchParams(root.location.search);
   var scene = params.get('scene') || 'player';
   var locale = params.get('locale') === 'ar' ? 'ar' : 'en';
+  var theme = ['light', 'dark'].indexOf(params.get('theme')) >= 0 ? params.get('theme') : 'system';
 
   function demo() {
     return root.SHOTS_DEMO || {};
@@ -50,7 +51,7 @@
     return out;
   }
 
-  var settings = merge(demo().defaultSettings || {}, { ui: { locale: locale } });
+  var settings = merge(demo().defaultSettings || {}, { ui: { locale: locale, theme: theme } });
   var sessionStore = {};
 
   function snapshot() {
@@ -330,7 +331,9 @@
   function whenPopupReady(done) {
     var start = Date.now();
     (function tick() {
-      var opening = document.body.classList.contains('is-opening');
+      // The stub loads in <head>, ahead of theme-boot.js, so the body may
+      // not exist yet on the first tick.
+      var opening = !document.body || document.body.classList.contains('is-opening');
       var chosen = document.querySelector('[role="tab"][aria-selected="true"]');
       if ((!opening && chosen) || Date.now() - start >= 3000) {
         done();

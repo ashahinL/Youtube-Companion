@@ -14,7 +14,7 @@ const INNERTUBE_CONTEXT = {
   context: {
     client: {
       clientName: 'WEB',
-      clientVersion: '2.20260911.01.00',
+      clientVersion: '2.20260925.01.00',
       hl: 'en',
       gl: 'US',
     },

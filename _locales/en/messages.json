@@ -2102,80 +2102,80 @@
       }
     }
   },
-  "whatsNewQueueTitle": {
-    "message": "Up next",
-    "description": "What's new page: heading of the listen-later queue feature."
-  },
-  "whatsNewQueueBody": {
-    "message": "Line up what you want to hear. Add videos from Feeds or from the player, press Play all, and they play one after another in a single tab — with audio mode on or off.",
-    "description": "What's new page: the listen-later queue."
-  },
-  "whatsNewQueueShot": {
-    "message": "The Player tab with three videos lined up under Up next",
-    "description": "Alt text for the Up next screenshot."
-  },
-  "whatsNewGroupsTitle": {
-    "message": "Channel groups",
-    "description": "What's new page: heading of the channel groups feature."
-  },
-  "whatsNewGroupsBody": {
-    "message": "Put a channel in as many named groups as you like from its ⋯ menu, then narrow Feeds to one group with a tap. A group exists for as long as a channel is in it, and there is nothing to set up.",
-    "description": "What's new page: channel groups."
-  },
-  "whatsNewGroupsShot": {
-    "message": "The Feeds tab with a row of group chips above the videos",
-    "description": "Alt text for the channel groups screenshot."
-  },
   "whatsNewImportTitle": {
-    "message": "Bring your subscriptions across",
-    "description": "What's new page: heading of the Takeout import feature."
+    "message": "Import from YouTube",
+    "description": "What's new page: heading of the Import from YouTube feature."
   },
   "whatsNewImportBody": {
-    "message": "Download subscriptions.csv from Google Takeout and pick it on the welcome page. The file is read on your device, nothing signs in, and the channels arrive without a burst of alerts.",
-    "description": "What's new page: the Google Takeout import."
+    "message": "Press Import from YouTube and the extension reads your subscriptions from your signed-in YouTube tab. With several Google accounts signed in, you pick which one. The list is read on your device, nothing leaves it, and the channels arrive without a burst of alerts.",
+    "description": "What's new page: Import from YouTube."
   },
   "whatsNewImportShot": {
     "message": "The Watchlist tab listing followed channels",
     "description": "Alt text for the watchlist screenshot."
   },
+  "whatsNewGroupsTitle": {
+    "message": "Your groups on YouTube",
+    "description": "What's new page: heading of the groups-on-YouTube feature."
+  },
+  "whatsNewGroupsBody": {
+    "message": "The group chips from Feeds now also sit on YouTube's own Subscriptions page. Pick one to see only that group's videos there. You can turn this off in Settings.",
+    "description": "What's new page: the group chips on YouTube's Subscriptions page."
+  },
+  "whatsNewGroupsShot": {
+    "message": "The Feeds tab with a row of group chips above the videos",
+    "description": "Alt text for the channel groups screenshot."
+  },
+  "whatsNewThemeTitle": {
+    "message": "Light or dark",
+    "description": "What's new page: heading of the theme feature."
+  },
+  "whatsNewThemeBody": {
+    "message": "Pick Light, Dark or System in Settings. The popup, the welcome page and this page all follow your choice.",
+    "description": "What's new page: the theme setting."
+  },
+  "whatsNewThemeShot": {
+    "message": "The Player tab in the light theme",
+    "description": "Alt text for the light theme screenshot."
+  },
   "whatsNewMoreTitle": {
     "message": "And a lot more",
     "description": "What's new page: heading of the short list of smaller changes."
   },
-  "whatsNewMorePlayer": {
-    "message": "The Audio tab is now Player, and the popup opens on Feeds unless something is actually playing.",
+  "whatsNewMoreGroupEdit": {
+    "message": "Rename or delete a group from the Groups sheet. Renaming onto a name you already use merges the two.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreFollow": {
-    "message": "A Follow button for the channel you are watching — every channel, on a video made by several.",
+  "whatsNewMoreAlerts": {
+    "message": "New-video alerts have two buttons: Listen, and Add to Up next.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreSleep": {
-    "message": "A sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the popup closes.",
+  "whatsNewMoreFailing": {
+    "message": "When channels fail their check, a chip on the Watchlist shows just those.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreMute": {
-    "message": "Mute alerts for one channel and keep its videos in your feed.",
+  "whatsNewMoreChannelLink": {
+    "message": "A ↗ on a channel's sheet opens that channel on YouTube.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreUndo": {
-    "message": "Undo after removing a channel — it comes back with its star and its place in the list.",
+  "whatsNewMoreTabJump": {
+    "message": "With several YouTube tabs open, a ↗ in the Player tab takes you straight to one, even in another window.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreShortcut": {
-    "message": "Open the popup with Alt+Shift+Y.",
+  "whatsNewMoreTooltip": {
+    "message": "Hover the toolbar icon to read what its number means.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreNewTag": {
-    "message": "A New tag on videos that arrived since your last visit.",
+  "whatsNewMoreErrors": {
+    "message": "Every error is a full sentence in your language.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreCover": {
-    "message": "Audio mode's cover is a picture from your device, never a web address.",
+  "whatsNewMoreStats": {
+    "message": "The Player tab's four statistics cards fit in one row.",
     "description": "What's new page, short list."
   },
-  "whatsNewMoreBackoff": {
-    "message": "Checks step back when YouTube pushes back, so you never meet a captcha on your own YouTube.",
+  "whatsNewMoreClearExport": {
+    "message": "Clear watchlist offers to export your list first.",
     "description": "What's new page, short list."
   },
   "whatsNewAgain": {

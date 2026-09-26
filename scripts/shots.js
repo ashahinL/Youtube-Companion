@@ -62,7 +62,7 @@ export const STORE_SHOTS = [
     name: 'screenshot-4-watchlist',
     img: 'watchlist.png',
     title: 'Add by link or @handle',
-    sub: 'Or bring your subscriptions over from a Google Takeout file.',
+    sub: 'Or import all your subscriptions from your signed-in YouTube tab.',
     dir: 'ltr',
   },
   {
@@ -108,10 +108,10 @@ export const SITE_SHOTS = [
 // they are scale 1 and there are only three of them per language — and both
 // languages, because an Arabic reader should not get English screenshots.
 export const PAGE_SHOTS = [
-  { name: 'page-player', file: 'player', scene: 'player', locale: 'en' },
+  { name: 'page-player', file: 'player', scene: 'player', locale: 'en', theme: 'light' },
   { name: 'page-feeds', file: 'feeds', scene: 'feeds', locale: 'en' },
   { name: 'page-watchlist', file: 'watchlist', scene: 'watchlist', locale: 'en' },
-  { name: 'page-player-ar', file: 'player-ar', scene: 'player', locale: 'ar' },
+  { name: 'page-player-ar', file: 'player-ar', scene: 'player', locale: 'ar', theme: 'light' },
   { name: 'page-feeds-ar', file: 'feeds-ar', scene: 'feeds', locale: 'ar' },
   { name: 'page-watchlist-ar', file: 'watchlist-ar', scene: 'watchlist', locale: 'ar' },
 ];
@@ -423,7 +423,8 @@ async function run() {
     for (const shot of PAGE_SHOTS) {
       if (!wanted(names, shot.name)) continue;
       const out = path.join(ROOT, 'src/whatsnew/img', `${shot.file}.png`);
-      const url = `${origin}/__shots/frame.html?scene=${encodeURIComponent(shot.scene)}&locale=${shot.locale}`;
+      const theme = shot.theme ? `&theme=${shot.theme}` : '';
+      const url = `${origin}/__shots/frame.html?scene=${encodeURIComponent(shot.scene)}&locale=${shot.locale}${theme}`;
       await capture(browser, url, out, 400, 600, 1);
     }
 

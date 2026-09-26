@@ -9,9 +9,9 @@ words. The name and the short description come from `_locales/*/messages.json`
 
 | Store | State | Record |
 |---|---|---|
-| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **in review**, submitted 2026-09-22 (Microsoft quotes 7 business days) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
-| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **uploaded** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
-| مرتكز (Mortakaz) | **Listed 2026-09-17** · 2.0.0 text and images **not pasted yet** | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
+| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **live by 2026-09-26** (submitted 2026-09-22) · 2.1.0 **not uploaded yet** | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
+| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **live 2026-09-20** · 2.1.0 **not uploaded yet** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
+| مرتكز (Mortakaz) | **Listed 2026-09-17** · still shows 1.0.0's text; updated only for a major version (owner, 2026-09-26) | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
 
 When a listing goes live, put its link in the README's install section.
 
@@ -119,11 +119,11 @@ the earlier file.
 | Mature content | No |
 | Visibility | Public, every region / market |
 | Edge search terms (7 max; used for both English and Arabic) | youtube subscriptions · youtube feed · no account · audio only · save data · upload alerts · arabic |
-| Languages shipped | English and Arabic. Hindi and Chinese are 3.0 work, not 2.0. |
+| Languages shipped | English and Arabic. |
 
 ## Description — English
 
-Written for 2.0. The stores cap this at 16,000 characters; it is well under.
+Written for 2.1. The stores cap this at 16,000 characters; it is well under.
 
 ```text
 Keep up with the YouTube channels you care about without signing in to anything, and listen with a fraction of the data.
@@ -131,22 +131,25 @@ Keep up with the YouTube channels you care about without signing in to anything,
 FEEDS
 • Every new video from the channels you follow, in one list, newest first
 • A New tag marks what arrived since you last opened the popup
-• Put channels in groups and show one group at a time
+• Put channels in groups and show one group at a time; rename, merge or delete a group whenever you like
+• Your groups also show as chips on YouTube's own Subscriptions page, so one tap narrows it there too
 • Live streams and premieres are tagged; Shorts stay hidden unless you want them
 • Filter by title or channel, or show only your favourites
 
 WATCHLIST
 • Add a channel by pasting its link or @handle, or press Add while you are on its page
 • On a YouTube channel or video you do not follow yet, a Follow button adds it in one press — every channel of a collab video too
-• Import your YouTube subscriptions from a Google Takeout file, read on your device
+• Import all your YouTube subscriptions from your signed-in YouTube tab, choosing the Google account if you have several. Signed out? A Google Takeout file works too. Both are read on your device
 • Star your favourites: they sit at the top and are checked more often
 • Mute a channel to keep it in your feed but out of your alerts
-• Open any channel to see its latest videos without leaving the popup
+• Open any channel to see its latest videos without leaving the popup, or jump to it on YouTube
+• Channels whose check fails are marked, and one tap shows just those
 • Removed one by mistake? Undo puts it back with its star, its place in the list and its videos
-• Clear the whole list in one go, after a confirm, to start over
+• Clear the whole list in one go, after a confirm that offers to export it first
 
 ALERTS
 • A desktop notification when a channel uploads: one per channel, not one per video
+• Listen and Add to Up next buttons right on the alert
 • The toolbar badge counts new videos since you last looked
 
 PLAYER, WITH AUDIO MODE
@@ -154,6 +157,7 @@ PLAYER, WITH AUDIO MODE
 • Switch it off and the video goes back to the quality you were watching
 • Pick the cover from a picture on your device; it stays on the device and is never uploaded
 • Seek, skip 10 seconds, change speed and volume from the popup
+• With several YouTube tabs open, pick which one to control, or jump straight to it
 • A sleep timer: pause after 15, 30 or 60 minutes, even with the popup closed
 • Open videos from your feed straight into audio mode
 • See how much data you saved this month and all time
@@ -166,16 +170,16 @@ UP NEXT
 • Up to 100 videos, and the list stays until you clear it
 
 PRIVATE BY DESIGN
-• No account, no Google sign-in, no API key
-• Reads only public youtube.com pages, without your YouTube cookies
-• YouTube pages cannot tell it is installed
+• No account of its own, no API key
+• Checks read only public youtube.com pages, without your YouTube cookies
+• Import from YouTube reads your list inside your own signed-in YouTube tab, only when you press it
 • Your channels, feed and settings stay in your browser: no analytics, no ads, no tracking
 • Export your channels and settings to a file, and import them back
 
 SUPPORT
 • Free, with no ads and no tracking. If it saves you time or data, the heart in the popup opens PayPal and InstaPay
 
-In English and Arabic, with a full right-to-left layout.
+In English and Arabic, with a full right-to-left layout. Light, dark, or follow your system.
 
 Free and open source: https://github.com/ashahinL/Youtube-Companion
 
@@ -190,22 +194,25 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 الموجز
 • كل فيديو جديد من القنوات التي تتابعها في قائمة واحدة، الأحدث أولًا
 • وسم «جديد» يميّز ما وصل منذ آخر مرة فتحت فيها النافذة
-• ضع قنواتك في مجموعات، واعرض مجموعة واحدة في كل مرة
+• ضع قنواتك في مجموعات، واعرض مجموعة واحدة في كل مرة؛ وأعد تسمية أي مجموعة أو ادمجها أو احذفها متى شئت
+• تظهر مجموعاتك أيضًا شرائحَ في صفحة الاشتراكات على يوتيوب نفسه، فتصفّيها هناك بضغطة
 • البث المباشر والعروض الأولى عليها وسم واضح، والفيديوهات القصيرة مخفية إلا إذا أردتها
 • صفِّ حسب العنوان أو القناة، أو اعرض المفضلة فقط
 
 قائمة المتابعة
 • أضف قناة بلصق رابطها أو ‎@handle، أو اضغط «إضافة» وأنت على صفحتها
 • على قناة أو فيديو لا تتابعه بعد، يظهر زر «متابعة» يضيفها بضغطة واحدة — وكل قنوات الفيديو المشترك أيضًا
-• استورد اشتراكاتك في يوتيوب من ملف Google Takeout، يُقرأ على جهازك
+• استورد كل اشتراكاتك في يوتيوب من تبويب يوتيوب الذي سجّلت الدخول إليه، واختر حساب Google إن كان لديك أكثر من حساب. غير مسجّل الدخول؟ يعمل ملف Google Takeout أيضًا. وكلاهما يُقرأ على جهازك
 • ميّز قنواتك المفضلة بنجمة: تظهر في الأعلى وتُفحص أكثر
 • اكتم قناة لتبقى في موجزك دون أن ترسل لك تنبيهات
-• افتح أي قناة لترى أحدث فيديوهاتها دون مغادرة النافذة
+• افتح أي قناة لترى أحدث فيديوهاتها دون مغادرة النافذة، أو انتقل إليها على يوتيوب
+• القنوات التي يفشل التحقق منها عليها علامة، وضغطة واحدة تعرضها وحدها
 • أزلت قناة بالخطأ؟ «تراجع» يعيدها بنجمتها وترتيبها في القائمة وفيديوهاتها
-• امسح القائمة بالكامل بضغطة واحدة بعد تأكيد، لتبدأ من جديد
+• امسح القائمة بالكامل بضغطة واحدة بعد تأكيد يعرض عليك تصديرها أولًا
 
 التنبيهات
 • إشعار على سطح المكتب عندما ترفع قناة فيديو: تنبيه واحد لكل قناة، لا لكل فيديو
+• زرّا «استمع» و«إضافة إلى التالي» على التنبيه نفسه
 • شارة شريط الأدوات تعدّ الفيديوهات الجديدة منذ آخر مرة نظرت فيها
 
 المشغّل ووضع الصوت
@@ -213,6 +220,7 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • أوقفه فيعود الفيديو إلى الجودة التي كنت تشاهد بها
 • اختر الغطاء من صورة على جهازك؛ تبقى على الجهاز ولا تُرفع إلى أي مكان
 • تحكم في التشغيل من النافذة: التقديم، والقفز 10 ثوانٍ، والسرعة، ومستوى الصوت
+• مع أكثر من تبويب يوتيوب، اختر أيّها تتحكم فيه، أو انتقل إليه مباشرة
 • مؤقت نوم: إيقاف بعد 15 أو 30 أو 60 دقيقة، حتى والنافذة مغلقة
 • افتح فيديوهات الموجز مباشرة في وضع الصوت
 • اعرف كم وفّرت من البيانات هذا الشهر وطوال الوقت
@@ -225,16 +233,16 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • حتى 100 فيديو، وتبقى القائمة حتى تحذفها
 
 الخصوصية أولًا
-• بلا حساب، وبلا تسجيل دخول بجوجل، وبلا مفتاح API
-• تقرأ صفحات youtube.com العامة فقط، ودون ملفات تعريف الارتباط الخاصة بحسابك
-• صفحات يوتيوب لا يمكنها معرفة أن الإضافة مثبتة
+• بلا حساب خاص بها، وبلا مفتاح API
+• الفحوصات تقرأ صفحات youtube.com العامة فقط، ودون ملفات تعريف الارتباط الخاصة بحسابك
+• «استيراد من يوتيوب» يقرأ قائمتك داخل تبويب يوتيوب الذي سجّلت الدخول إليه، وفقط حين تضغطه
 • قنواتك وموجزك وإعداداتك تبقى في متصفحك: بلا تحليلات ولا إعلانات ولا تتبّع
 • صدّر قنواتك وإعداداتك إلى ملف، واستوردها مرة أخرى
 
 الدعم
 • الإضافة مجانية بلا إعلانات ولا تتبّع. إن وفّرت عليك وقتًا أو بيانات، فأيقونة القلب في النافذة تفتح PayPal وInstaPay
 
-بالعربية والإنجليزية، مع واجهة كاملة من اليمين إلى اليسار.
+بالعربية والإنجليزية، مع واجهة كاملة من اليمين إلى اليسار. بسمة فاتحة أو داكنة، أو كما في نظامك.
 
 مجانية ومفتوحة المصدر: https://github.com/ashahinL/Youtube-Companion
 
@@ -300,7 +308,7 @@ A lighter way to use YouTube: follow channels without an account, get a merged f
 | `notifications` | Shows a desktop notification when a channel the user follows uploads a video. |
 | `activeTab` | When the user presses Add with the box empty, reads the URL of the tab they are on so the channel of that page can be added. Used only on that click. |
 | `declarativeNetRequestWithHostAccess` | YouTube's public endpoints reject requests whose Origin is chrome-extension://. One dynamic rule, limited to www.youtube.com requests initiated by this extension itself (initiatorDomains is the extension's own id), sets their Origin and Referer to https://www.youtube.com. It does not modify any request the user's browsing makes. |
-| Host permission `https://www.youtube.com/*` | Reads public channel feeds and public video details from https://www.youtube.com/* (no cookies are sent), and runs the audio-mode content script on YouTube pages to lower quality, cover the video and control playback. |
+| Host permission `https://www.youtube.com/*` | Reads public channel feeds and public video details from https://www.youtube.com/* (no cookies are sent), and runs content scripts on YouTube pages: audio mode (lower quality, cover the video, control playback); Import from YouTube, which reads the user's own subscription list in their signed-in tab only when they press it, keeping each channel's id, name and handle on the device; and the user's group chips on YouTube's Subscriptions page. |
 
 **Remote code:** No, I am not using remote code. All JavaScript is in the package.
 
@@ -320,7 +328,7 @@ The same text for Edge's **Notes for certification** and the Chrome Web
 Store's **Test instructions**:
 
 ```text
-No sign-in is needed to test. Add a channel by pasting https://www.youtube.com/@NASA into the Watchlist box and pressing Add; its videos appear under Feeds within a few seconds. Open any YouTube video, then turn on Audio mode in the Player tab.
+No sign-in is needed to test. Add a channel by pasting https://www.youtube.com/@NASA into the Watchlist box and pressing Add; its videos appear under Feeds within a few seconds. Open any YouTube video, then turn on Audio mode in the Player tab. Import from YouTube (Watchlist tab, when the list is empty, or Settings) needs a YouTube tab signed in to a Google account with subscriptions; it reads that account's subscriptions page in the tab and sends nothing anywhere.
 ```
 
 A reviewer opening the extension fresh sees an empty feed, so the steps

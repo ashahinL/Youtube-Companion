@@ -19,9 +19,9 @@ import { applyTheme } from '../lib/theme.js';
 // Each picture is a real popup frame, so an Arabic reader gets the Arabic
 // one rather than a page of English screenshots.
 const SHOTS = [
-  { id: 'shot-player', file: 'player', alt: 'whatsNewQueueShot' },
-  { id: 'shot-feeds', file: 'feeds', alt: 'whatsNewGroupsShot' },
   { id: 'shot-watchlist', file: 'watchlist', alt: 'whatsNewImportShot' },
+  { id: 'shot-feeds', file: 'feeds', alt: 'whatsNewGroupsShot' },
+  { id: 'shot-player', file: 'player', alt: 'whatsNewThemeShot' },
 ];
 
 let messages = {};
