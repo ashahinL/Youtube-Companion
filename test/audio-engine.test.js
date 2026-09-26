@@ -313,7 +313,7 @@ export default async function run(t) {
   const { fire, posts, sandbox, win, bridge, adopt } = loadAdoptedBridge(player);
 
   t.check('inject.js attaches AudioModeBridge', !!bridge);
-  t.check('adopted token is 64 hex chars', bridge.TOKEN_RE.test(bridge.getToken()), String(bridge.getToken()));
+  t.check('adopted token is 64 hex chars', bridge.TOKEN_RE.test(TOKEN) && bridge.hasToken(TOKEN));
   t.check('bridge has no fixed type name', !Object.prototype.hasOwnProperty.call(bridge, 'BRIDGE_TYPE'));
 
   function reset() {
@@ -449,28 +449,43 @@ export default async function run(t) {
   t.section('bridge token adoption');
 
   const fresh = loadBridge(player);
-  t.check('no token before adopt', fresh.bridge.getToken() === '', String(fresh.bridge.getToken()));
+  t.check('no token before adopt', !fresh.bridge.hasToken(TOKEN));
   calls.length = 0;
   fresh.fire(req({ source: fresh.win }));
   t.check('request without a token is ignored', calls.length === 0 && fresh.posts.length === 0, JSON.stringify({ calls, posts: fresh.posts }));
 
   fresh.adopt(TOKEN);
-  t.check('first adopt wins', fresh.bridge.getToken() === TOKEN, String(fresh.bridge.getToken()));
+  t.check('an adopt is taken', fresh.bridge.hasToken(TOKEN));
   t.check(
     'first adopt replies ready',
     fresh.posts.length === 1 && fresh.posts[0].data.dir === 'ready' && fresh.posts[0].data.type === TOKEN,
     JSON.stringify(fresh.posts[0]),
   );
 
-  const readyCount = fresh.posts.length;
-  fresh.adopt(OTHER_TOKEN);
-  t.check('later adopt is ignored', fresh.bridge.getToken() === TOKEN, String(fresh.bridge.getToken()));
-  t.check('later adopt does not reply', fresh.posts.length === readyCount, String(fresh.posts.length));
-
   calls.length = 0;
   fresh.posts.length = 0;
   fresh.fire(req({ source: fresh.win, data: { type: OTHER_TOKEN, dir: 'request', id: 1, method: 'getPlaybackQuality', args: [] } }));
-  t.check('messages with a later token are ignored', calls.length === 0 && fresh.posts.length === 0, JSON.stringify({ calls, posts: fresh.posts }));
+  t.check('a token that was never adopted is ignored', calls.length === 0 && fresh.posts.length === 0, JSON.stringify({ calls, posts: fresh.posts }));
+
+  // A page script that adopts first must not lock the content script out.
+  const taken = loadBridge(player);
+  taken.adopt(OTHER_TOKEN);
+  taken.posts.length = 0;
+  taken.adopt(TOKEN);
+  t.check(
+    'a token adopted after another one is still taken and answered ready',
+    taken.bridge.hasToken(TOKEN) && taken.posts.length === 1 && taken.posts[0].data.type === TOKEN && taken.posts[0].data.dir === 'ready',
+    JSON.stringify(taken.posts),
+  );
+  calls.length = 0;
+  taken.posts.length = 0;
+  taken.fire(req({ source: taken.win, data: { type: TOKEN, dir: 'request', id: 5, method: 'getPlaybackQuality', args: [] } }));
+  t.check(
+    'and its requests reach the player, answered under its own token',
+    calls.length === 1 && taken.posts.length === 1 && taken.posts[0].data.type === TOKEN && taken.posts[0].data.id === 5,
+    JSON.stringify({ calls, posts: taken.posts }),
+  );
+  calls.length = 0;
 
   fresh.fire(req({ source: fresh.win, data: { type: 'ytc-audio-bridge', dir: 'request', id: 1, method: 'getPlaybackQuality', args: [] } }));
   t.check('messages with a fixed name are ignored', calls.length === 0, JSON.stringify(calls));
@@ -479,10 +494,10 @@ export default async function run(t) {
   t.check('first token still calls the player', calls.length === 1 && calls[0][0] === 'getPlaybackQuality', JSON.stringify(calls));
 
   fresh.adopt('short');
-  t.check('short adopt is ignored', fresh.bridge.getToken() === TOKEN);
+  t.check('short adopt is ignored', !fresh.bridge.hasToken('short'));
   const uppercase = loadBridge(player);
   uppercase.adopt('AB'.repeat(32));
-  t.check('uppercase adopt is ignored', uppercase.bridge.getToken() === '');
+  t.check('uppercase adopt is ignored', !uppercase.bridge.hasToken('AB'.repeat(32)));
 
   const retry = loadBridge(player);
   retry.adopt(TOKEN);
@@ -1256,7 +1271,7 @@ export default async function run(t) {
   quietBridge.posts.length = 0;
   quietBridge.adopt(TOKEN);
   t.check(
-    'two copies still produce one ready (first adopt wins)',
+    'two copies still produce one ready',
     quietBridge.posts.filter((p) => p.data && p.data.dir === 'ready').length === 1,
     JSON.stringify(quietBridge.posts),
   );

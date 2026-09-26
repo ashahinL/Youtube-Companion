@@ -60,7 +60,12 @@
   // stringify 0.25; keep the list numeric so 0.25 === 0.25 holds.
   const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
-  let adopted = '';
+  // Every well-formed token is served, not only the first. A page script or
+  // another extension could adopt before the content script does, and a
+  // first-wins bridge would then ignore ours for good. Serving the page's
+  // own token gives it nothing it lacks: it can call its own player and
+  // read its own data. There is no cap, since a page could fill any cap.
+  const adopted = new Set();
 
   function isQuality(value) {
     return typeof value === 'string' && QUALITIES[value] === true;
@@ -123,12 +128,12 @@
   function readRequest(event, expectedWindow) {
     if (!isPageEvent(event, expectedWindow)) return null;
     const data = event.data;
-    if (!adopted || data.type !== adopted) return null;
+    if (typeof data.type !== 'string' || !adopted.has(data.type)) return null;
     if (data.dir !== 'request') return null;
     if (typeof data.id !== 'number' || !isFinite(data.id)) return null;
     const args = Array.isArray(data.args) ? data.args : null;
     if (!isAllowedCall(data.method, args)) return null;
-    return { id: data.id, method: data.method, args: args };
+    return { token: data.type, id: data.id, method: data.method, args: args };
   }
 
   function getPlayer() {
@@ -312,9 +317,9 @@
     postToPage({ type: token, dir: 'ready' });
   }
 
-  function reply(id, payload) {
+  function reply(token, id, payload) {
     const msg = {
-      type: adopted,
+      type: token,
       dir: 'response',
       id: id,
       ok: !!payload.ok,
@@ -325,19 +330,12 @@
   }
 
   function takeAdopt(event, token) {
-    if (adopted) {
-      if (adopted !== token) return;
-      if (event && typeof event.stopImmediatePropagation === 'function') {
-        event.stopImmediatePropagation();
-      }
-      replyReady(adopted);
-      return;
-    }
-    adopted = token;
+    adopted.add(token);
+    // A second copy of this file must not answer the same token again.
     if (event && typeof event.stopImmediatePropagation === 'function') {
       event.stopImmediatePropagation();
     }
-    replyReady(adopted);
+    replyReady(token);
   }
 
   let boundPlayer = null;
@@ -349,15 +347,16 @@
     try {
       player.addEventListener('onPlaybackQualityChange', function (ev) {
         try {
-          if (!adopted) return;
           let quality = ev;
           if (ev && typeof ev === 'object' && ev.data != null) quality = ev.data;
           if (typeof quality !== 'string') return;
-          postToPage({
-            type: adopted,
-            dir: 'event',
-            event: 'onPlaybackQualityChange',
-            quality: quality,
+          adopted.forEach(function (token) {
+            postToPage({
+              type: token,
+              dir: 'event',
+              event: 'onPlaybackQualityChange',
+              quality: quality,
+            });
           });
         } catch (err) {
           // swallow
@@ -378,30 +377,31 @@
       const req = readRequest(event, win);
       if (!req) return;
       if (req.method === 'collaborators') {
-        reply(req.id, { ok: true, result: readCollaborators() });
+        reply(req.token, req.id, { ok: true, result: readCollaborators() });
         return;
       }
       if (req.method === 'subscribedChannels') {
-        reply(req.id, { ok: true, result: readSubscribedChannels() });
+        reply(req.token, req.id, { ok: true, result: readSubscribedChannels() });
         return;
       }
       if (req.method === 'sessionIndex') {
-        reply(req.id, { ok: true, result: readSessionIndex() });
+        reply(req.token, req.id, { ok: true, result: readSessionIndex() });
         return;
       }
       const player = getPlayer();
       if (!player || typeof player[req.method] !== 'function') {
-        reply(req.id, { ok: false, error: 'no player' });
+        reply(req.token, req.id, { ok: false, error: 'no player' });
         return;
       }
       bindQualityEvents(player);
       const result = player[req.method].apply(player, req.args);
-      reply(req.id, { ok: true, result: result });
+      reply(req.token, req.id, { ok: true, result: result });
     } catch (err) {
       try {
-        const id = event && event.data && event.data.id;
-        if (typeof id === 'number' && isFinite(id) && adopted) {
-          reply(id, { ok: false, error: 'failed' });
+        const data = event && event.data;
+        const id = data && data.id;
+        if (typeof id === 'number' && isFinite(id) && adopted.has(data.type)) {
+          reply(data.type, id, { ok: false, error: 'failed' });
         }
       } catch (err2) {
         // swallow
@@ -431,7 +431,7 @@
     readSubscribedChannels,
     readSessionIndex,
     onMessage,
-    getToken: function () { return adopted; },
+    hasToken: function (token) { return adopted.has(token); },
   };
 
   // Named API is for the Node suite only. This file runs in MAIN world,
