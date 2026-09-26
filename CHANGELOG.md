@@ -69,6 +69,8 @@ shipped yet waits under Unreleased. How a version ships:
   fallback through the player's settings menu now works when YouTube is in
   a language other than English.
 - Emoji in a video title no longer come out as broken characters.
+- If Favourites only or a group chip on Feeds fails to save, Feeds says so;
+  the message used to land on the Settings tab.
 
 **For contributors**
 - The popup tests load the real popup page in a small fake browser and

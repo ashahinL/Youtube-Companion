@@ -2956,16 +2956,16 @@ function bindFeeds() {
     clearFeedQuery();
   });
   favBox.addEventListener('change', () => {
-    void patchSettings(buildPatch('feed.favoritesOnly', favBox.checked));
+    void patchSettings(buildPatch('feed.favoritesOnly', favBox.checked), { fromFeeds: true });
   });
   groupsRow?.addEventListener('click', (event) => {
     const btn = event.target.closest('[data-group]');
     if (!btn || !groupsRow.contains(btn)) return;
     const name = btn.getAttribute('data-group') || '';
-    void patchSettings(buildPatch('feed.group', name));
+    void patchSettings(buildPatch('feed.group', name), { fromFeeds: true });
   });
   emptyGroupAll?.addEventListener('click', () => {
-    void patchSettings(buildPatch('feed.group', ''));
+    void patchSettings(buildPatch('feed.group', ''), { fromFeeds: true });
   });
   gotoWatchlist.addEventListener('click', () => {
     const tab = document.getElementById('tab-watchlist');
@@ -2976,14 +2976,18 @@ function bindFeeds() {
 // Settings writes go through the worker so it can rebuild poll alarms
 // and the badge from the new values. A storage write from here would
 // leave both stale until the next restart.
-async function patchSettings(patch) {
+// A change made from Feeds says it failed in Feeds; the Settings notice
+// is on a tab the person is not looking at.
+async function patchSettings(patch, { fromFeeds = false } = {}) {
+  const fail = (text) => {
+    if (fromFeeds) view.feedNotice = text;
+    else view.backupNotice = { text, error: true };
+  };
   try {
     const snap = await send({ type: 'updateSettings', patch });
-    if (!applySnapshot(snap)) {
-      view.backupNotice = { text: formatError(snap?.error), error: true };
-    }
+    if (!applySnapshot(snap)) fail(formatError(snap?.error));
   } catch (err) {
-    view.backupNotice = { text: formatError(err?.message || err), error: true };
+    fail(formatError(err?.message || err));
   }
   await applyI18n(view.settings?.ui?.locale);
   applyTheme(view.settings?.ui?.theme);

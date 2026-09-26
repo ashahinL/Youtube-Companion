@@ -628,6 +628,27 @@ async function scenarios(ctx) {
   await chrome.storage.local.set({ feed: structuredClone(state.feed) });
   await settle();
 
+  // A settings write that fails from Feeds says so in Feeds.
+  const okUpdate = replies.updateSettings;
+  replies.updateSettings = () => ({ ok: false, error: 'failed' });
+  $('feed-groups').children[1].click();
+  await settle();
+  check(
+    'a group chip that fails to save says so on Feeds',
+    !$('feed-notice').hidden
+      && $('feed-notice').textContent === 'Something went wrong. Try again.'
+      && $('feed-notice').className.includes('banner--error'),
+    `${$('feed-notice').hidden} ${$('feed-notice').textContent}`,
+  );
+  replies.updateSettings = okUpdate;
+  $('tab-settings').click();
+  await settle();
+  check(
+    'and the Settings tab does not carry it',
+    !$('settings-backup-status').textContent.includes('Something went wrong'),
+    $('settings-backup-status').textContent,
+  );
+
   // A long Watchlist is drawn a page at a time.
   $('tab-watchlist').click();
   await settle();
