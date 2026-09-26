@@ -296,6 +296,23 @@ export default async function run(t) {
   t.check('feed parser is robust to attribute order', swapped.entries[0].views === 42, String(swapped.entries[0]?.views));
   t.check('feed parser trims video id whitespace', swapped.entries[0].v === 'abcdefghijk', swapped.entries[0]?.v);
 
+  const emoji = parseFeedXml(
+    `<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/">
+      <title>Emoji</title>
+      <link rel="self" href="http://www.youtube.com/feeds/videos.xml?channel_id=${mkbhdId}"/>
+      <entry>
+        <title>Hi &#128512; &#x1F389; &#233; &#9999999; &#55357;</title>
+        <yt:videoId>abcdefghijk</yt:videoId>
+        <published>2026-09-10T07:29:55+00:00</published>
+      </entry>
+    </feed>`,
+  );
+  t.check(
+    'numbered entities above 0xFFFF come out as the emoji they name',
+    emoji.entries[0]?.title === 'Hi \u{1F600} \u{1F389} \u00e9 &#9999999; &#55357;',
+    JSON.stringify(emoji.entries[0]?.title),
+  );
+
   let feedThrew = false;
   try {
     parseFeedXml('not xml at all');

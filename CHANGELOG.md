@@ -68,6 +68,7 @@ shipped yet waits under Unreleased. How a version ships:
 - When YouTube ignores audio mode's request for the lowest quality, the
   fallback through the player's settings menu now works when YouTube is in
   a language other than English.
+- Emoji in a video title no longer come out as broken characters.
 
 **For contributors**
 - The popup tests load the real popup page in a small fake browser and

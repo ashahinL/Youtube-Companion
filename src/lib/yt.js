@@ -161,6 +161,13 @@ function pickThumbUrl(thumbs, preferredWidth) {
   return '';
 }
 
+// fromCharCode cuts a code point above 0xFFFF, which is where emoji live. A
+// number no character has stays as it was written.
+function fromCodePoint(whole, code) {
+  const valid = code >= 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
+  return valid ? String.fromCodePoint(code) : whole;
+}
+
 function decodeEntities(text) {
   return String(text)
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
@@ -168,8 +175,8 @@ function decodeEntities(text) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (whole, n) => fromCodePoint(whole, Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (whole, n) => fromCodePoint(whole, parseInt(n, 16)))
     .replace(/&amp;/g, '&');
 }
 
