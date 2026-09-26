@@ -71,6 +71,9 @@ shipped yet waits under Unreleased. How a version ships:
 - Emoji in a video title no longer come out as broken characters.
 - If Favourites only or a group chip on Feeds fails to save, Feeds says so;
   the message used to land on the Settings tab.
+- A long Import from YouTube that waits on you several times now ends
+  cleanly before Chrome would stop it, and the YouTube tab says to start
+  again from the extension.
 
 **For contributors**
 - The popup tests load the real popup page in a small fake browser and

@@ -160,6 +160,10 @@ const SCAN_KEEPALIVE_MS = 20_000;
 // The keepalive ping does not reset that clock, so the account picker
 // gives up with a minute to spare. The content script uses the same wait.
 const ACCOUNT_PICK_MS = 4 * 60 * 1000;
+// One import is one message event however many times it waits on the tab
+// (account, Add new or Replace, exports, Import another account), so all
+// of its waits share one budget under the 5 minutes.
+const IMPORT_BUDGET_MS = 4.5 * 60 * 1000;
 // A tab that keeps answering "export" would hold this event open until
 // Chrome kills the worker. A handful of backups is enough to end the loop.
 const MAX_IMPORT_EXPORTS = 5;
@@ -1436,10 +1440,19 @@ async function requestTab(tabId, message) {
   return wrong || { ok: false, error: 'no script' };
 }
 
-async function requestAccounts(tabId, message) {
+/**
+ * A wait on the tab, capped at the picker's 4 minutes or what is left of the
+ * import's budget. `budget` marks a wait the budget cut short: the tab's own
+ * timer has not run out then, so the tab has to be told.
+ */
+async function requestAccounts(tabId, message, deadline = Infinity) {
+  const left = deadline - Date.now();
+  const expired = { ok: false, error: 'timeout', budget: left < ACCOUNT_PICK_MS };
+  const wait = Math.min(ACCOUNT_PICK_MS, left);
+  if (!(wait > 0)) return expired;
   let timer;
   const timeout = new Promise((resolve) => {
-    timer = setTimeout(() => resolve({ ok: false, error: 'timeout' }), ACCOUNT_PICK_MS);
+    timer = setTimeout(() => resolve(expired), wait);
   });
   try {
     return await Promise.race([requestTab(tabId, message), timeout]);
@@ -1466,7 +1479,7 @@ async function sendImportBackup(tabId) {
   return 'ok';
 }
 
-async function askImportChoice(tabId, fields) {
+async function askImportChoice(tabId, fields, deadline) {
   let exportsDone = 0;
   let exported = false;
   let exportError = false;
@@ -1482,9 +1495,9 @@ async function askImportChoice(tabId, fields) {
     if (exportError) message.exportError = true;
     exported = false;
     exportError = false;
-    const reply = await requestAccounts(tabId, message);
+    const reply = await requestAccounts(tabId, message, deadline);
     if (!reply || reply.ok !== true) {
-      return { ok: false, error: (reply && reply.error) || 'failed' };
+      return { ok: false, error: (reply && reply.error) || 'failed', budget: !!(reply && reply.budget) };
     }
     if (reply.mode === 'merge' || reply.mode === 'replace') return reply;
     if (reply.mode !== 'export') return { ok: false, error: 'failed' };
@@ -1516,6 +1529,7 @@ export async function importFromYouTube() {
     api.runtime.getPlatformInfo?.().catch?.(() => {});
   }, SCAN_KEEPALIVE_MS);
   try {
+    const deadline = Date.now() + IMPORT_BUDGET_MS;
     const tab = await openChannelsTab();
     const tabId = tab && tab.id;
     if (typeof tabId !== 'number') return { ok: false, error: 'no tab' };
@@ -1524,9 +1538,12 @@ export async function importFromYouTube() {
       const choice = await requestAccounts(tabId, {
         type: 'subscriptions.accounts',
         again: round > 0,
-      });
+      }, deadline);
       if (!choice || choice.ok !== true) {
-        if (choice && choice.error === 'timeout') return last || { ok: false, error: 'timeout' };
+        if (choice && choice.error === 'timeout') {
+          if (choice.budget) await tellTab(tabId, { error: 'timeout' });
+          return last || { ok: false, error: 'timeout' };
+        }
         if (choice && choice.error === 'done' && last) return last;
         const error = (choice && choice.error) || 'failed';
         if (error !== 'done') await tellTab(tabId, { error });
@@ -1547,7 +1564,7 @@ export async function importFromYouTube() {
           return { ok: false, error: 'failed' };
         }
       }
-      const scanned = await requestTab(tabId, { type: 'subscriptions.scan', index });
+      const scanned = await requestAccounts(tabId, { type: 'subscriptions.scan', index }, deadline);
       if (!scanned || scanned.ok !== true) {
         const error = (scanned && scanned.error) || 'failed';
         await tellTab(tabId, { error, account: index, avatar: choice.avatar });
@@ -1565,11 +1582,14 @@ export async function importFromYouTube() {
           extra: diff.extra,
           account: index,
           avatar,
-        });
+        }, deadline);
         if (!answer || answer.ok !== true) {
           const error = (answer && answer.error) || 'failed';
           if (error === 'done') return last || { ok: false, error: 'done' };
-          if (error === 'timeout') return last || { ok: false, error: 'timeout' };
+          if (error === 'timeout') {
+            if (answer.budget) await tellTab(tabId, { error: 'timeout', account: index, avatar });
+            return last || { ok: false, error: 'timeout' };
+          }
           await tellTab(tabId, { error, account: index, avatar });
           return last || { ok: false, error };
         }

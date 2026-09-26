@@ -869,6 +869,22 @@ export default async function run(t) {
     ],
   }, (reply) => picked.push(reply));
   t.check('an uncounted account still asks which one', picked.length === 0, JSON.stringify(picked));
+  const expiredBefore = !overlay.querySelector('.ytc-scan-expired').hasAttribute('hidden');
+  await page.api.showScanResult({ error: 'timeout' });
+  const liveScans = [];
+  const walkLive = (node) => {
+    if (!node) return;
+    if (node.className === 'ytc-scan-scan' && !node.hasAttribute('hidden')) liveScans.push(node);
+    for (const child of node.children || []) walkLive(child);
+  };
+  walkLive(overlay);
+  t.check(
+    'a worker that ran out of time takes the choices away and says to start again',
+    !expiredBefore && liveScans.length === 0
+      && !overlay.querySelector('.ytc-scan-expired').hasAttribute('hidden')
+      && textOf(overlay, 'ytc-scan-expired') === 'Start the import again from the extension',
+    `${expiredBefore} ${liveScans.length} ${textOf(overlay, 'ytc-scan-expired')}`,
+  );
 
   t.section('the lists differ');
 

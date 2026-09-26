@@ -2508,6 +2508,13 @@
       const got = await scanCopy();
       const error = msg && typeof msg.error === 'string' ? msg.error : '';
       const info = resultInfo(msg);
+      // The worker ran out of time before this tab's own timer did. What is
+      // on screen stays; only the choices go.
+      if (error === 'timeout') {
+        accountPickPack = got.pack;
+        onAccountPickExpired();
+        return;
+      }
       if (error === 'signedOut') paintScanMode(got, 'signedOut', info);
       else if (error === 'empty') paintScanMode(got, 'empty', info);
       else if (error) paintScanMode(got, 'failed', info);

@@ -3283,6 +3283,58 @@ export default async function run(t) {
       globalThis.clearTimeout = realClearTimeout;
     }
 
+    // Four minutes pass on the account picker; the scan gets what is left
+    // of the import's budget, not a fresh four minutes.
+    const realNow = Date.now;
+    let shift = 0;
+    const budgetTimers = [];
+    Date.now = () => realNow() + shift;
+    globalThis.setTimeout = (fn, ms) => {
+      if (ms > 25_000 && ms <= 30_000) {
+        budgetTimers.push({ fn, ms });
+        return { pick: budgetTimers.length };
+      }
+      return realSetTimeout(fn, ms);
+    };
+    globalThis.clearTimeout = (id) => {
+      if (id && id.pick) return;
+      return realClearTimeout(id);
+    };
+    mock.onTabMessage = async (_tabId, message) => {
+      if (message.type === 'subscriptions.accounts') {
+        shift = 4 * 60 * 1000;
+        return { ok: true, index: 0, current: 0 };
+      }
+      if (message.type === 'subscriptions.result') return { ok: true };
+      return new Promise(() => {});
+    };
+    const budgetMessages = mock.messagesSent.length;
+    const budgetImport = handleMessage({ type: 'importFromYouTube' });
+    try {
+      for (let i = 0; i < 200 && budgetTimers.length === 0; i++) await new Promise((r) => realSetTimeout(r, 0));
+      t.check(
+        'a scan after a long account pick waits only for the rest of the budget',
+        budgetTimers.length === 1,
+        JSON.stringify(budgetTimers.map((row) => row.ms)),
+      );
+      if (budgetTimers.length === 1) {
+        budgetTimers[0].fn();
+        const spent = await budgetImport;
+        t.check(
+          'the spent budget ends the import and the tab hears it timed out',
+          spent.ok === false && spent.error === 'timeout'
+            && mock.messagesSent.slice(budgetMessages).some((row) => row.message?.type === 'subscriptions.result'
+              && row.message.error === 'timeout'),
+          JSON.stringify(spent),
+        );
+      }
+    } finally {
+      Date.now = realNow;
+      globalThis.setTimeout = realSetTimeout;
+      globalThis.clearTimeout = realClearTimeout;
+    }
+    await waitForIdle();
+
     mock.onTabMessage = async () => ({ ok: false, error: 'signedOut' });
     const beforeFailedScan = (await readChannels()).length;
     const failedScan = await handleMessage({ type: 'importFromYouTube' });
