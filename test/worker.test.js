@@ -2831,15 +2831,25 @@ export default async function run(t) {
     t.check('and not asked again the same day', browsed.length === 0, JSON.stringify(browsed));
 
     await wipe();
-    const manyImported = Array.from({ length: 11 }, (_, i) => `UC${String(i).padStart(2, '0').repeat(11)}`);
+    const manyImported = Array.from({ length: 45 }, (_, i) => `UC${String(i).padStart(2, '0').repeat(11)}`);
     await handleMessage({ type: 'importTakeout', data: takeoutCsv(manyImported) });
     browsed = [];
     installFetch({ hook: headerHook(browsed) });
     await runSweep({ scope: 'all' });
-    t.check('at most 10 headers are read in one check', browsed.length === 10, String(browsed.length));
+    t.check('a list imported today reads up to 40 headers in one check', browsed.length === 40, String(browsed.length));
     browsed.length = 0;
     await runSweep({ scope: 'all' });
-    t.check('the rest come with the next check', browsed.length === 1, String(browsed.length));
+    t.check('the rest come with the next check', browsed.length === 5, String(browsed.length));
+
+    await wipe();
+    const dayAgo = Date.now() - 25 * 60 * 60_000;
+    await globalThis.chrome.storage.local.set({
+      channels: manyImported.slice(0, 11).map((id) => ({ id, title: id, addedAt: dayAgo, seeded: true })),
+    });
+    browsed = [];
+    installFetch({ hook: headerHook(browsed) });
+    await runSweep({ scope: 'all' });
+    t.check('an older list reads at most 10 headers in one check', browsed.length === 10, String(browsed.length));
 
     await wipe();
     await handleMessage({ type: 'importTakeout', data: takeoutCsv([BEAST, LINUS_ID]) });

@@ -37,6 +37,8 @@ shipped yet waits under Unreleased. How a version ships:
   block takes two rows instead of three.
 - Long numbers in the statistics cards now shrink to fit instead of being
   cut off.
+- Channel pictures fill in four times faster during the first day after an
+  import, so a big imported list stops looking blank sooner.
 
 **Fixes**
 - A scheduled stream the channel never started no longer sits in Feeds as a

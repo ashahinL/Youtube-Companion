@@ -141,6 +141,11 @@ const CHANNEL_FETCH_DELAY_MS = 250;
 // filling one in is a Videos-tab browse of about 35 KB. A few per check keeps
 // an import of hundreds from doubling the requests of the checks after it.
 const HEADER_FILLS_PER_SWEEP = 10;
+// A list imported in the last day is still mostly blank circles, and that
+// is when people look at it most, so its checks fill more. Pushback still
+// stops them at once.
+const HEADER_FILLS_FRESH = 40;
+const HEADER_FRESH_MS = 24 * 60 * 60_000;
 const HEADER_RETRY_MS = 24 * 60 * 60_000;
 
 // Chrome stops a worker after 30 seconds without an event or an extension
@@ -620,9 +625,10 @@ function feedFloor(feed, atById, maxItems) {
  */
 async function fillHeaders(channels, patchChannel, fetchImpl, shouldStop) {
   const now = Date.now();
-  const due = channels
-    .filter((ch) => !ch.avatar && now - (Number(ch.headerAt) || 0) >= HEADER_RETRY_MS)
-    .slice(0, HEADER_FILLS_PER_SWEEP);
+  const waiting = channels
+    .filter((ch) => !ch.avatar && now - (Number(ch.headerAt) || 0) >= HEADER_RETRY_MS);
+  const fresh = waiting.some((ch) => now - (Number(ch.addedAt) || 0) < HEADER_FRESH_MS);
+  const due = waiting.slice(0, fresh ? HEADER_FILLS_FRESH : HEADER_FILLS_PER_SWEEP);
   let pushedBack = false;
   await inLanes(due, LANES, CHANNEL_FETCH_DELAY_MS, async (ch) => {
     try {
