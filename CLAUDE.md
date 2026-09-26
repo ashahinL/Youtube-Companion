@@ -138,7 +138,9 @@ asks.
   one per video. Favourites always alert while alerts are on; other channels
   only if "Notify for non-favourite channels" is on. A video alerts once. A
   channel muted from its ⋯ menu never alerts, favourite or not, and stays in
-  the feed. The mute goes into backups.
+  the feed. The mute goes into backups. An alert has two buttons, Listen
+  (audio mode) and Add to Up next, both for the newest video; a live or
+  premiere alert has none.
 - **Shorts** hidden by default behind a setting, tagged `SHORT` when shown.
   **Live and premieres** are shown and tagged (`LIVE` red, `PREMIERE <time>`).
   A premiere past its start leaves Feeds and the badge once its channel is

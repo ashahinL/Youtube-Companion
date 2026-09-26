@@ -151,6 +151,7 @@ export function installChromeMock(initial = {}) {
     },
     alarmListeners: [],
     notificationClickListeners: [],
+    notificationButtonListeners: [],
   };
 
   function fire(changes, area = 'local') {
@@ -240,6 +241,7 @@ export function installChromeMock(initial = {}) {
           title: opts.title,
           message: opts.message,
           iconUrl: opts.iconUrl,
+          buttons: opts.buttons,
         });
         if (typeof callback === 'function') callback(id);
         return Promise.resolve(id);
@@ -248,6 +250,11 @@ export function installChromeMock(initial = {}) {
         handle.notificationsCleared.push(id);
         if (typeof callback === 'function') callback(true);
         return Promise.resolve(true);
+      },
+      onButtonClicked: {
+        addListener(fn) {
+          if (typeof fn === 'function') handle.notificationButtonListeners.push(fn);
+        },
       },
       onClicked: {
         addListener(fn) {

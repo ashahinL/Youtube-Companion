@@ -358,20 +358,29 @@ async function nNewVideosText(n, settings) {
   return fallback || (Number(n) === 1 ? `${n} new video` : `${n} new videos`);
 }
 
-/* The toolbar tooltip says what the badge number means. With nothing new it
- * is the plain name again, in the language the interface uses. */
-async function actionTitleText(n, settings) {
+/** One message in the language the interface uses, like nNewVideosText. */
+async function workerText(settings, key, fallback) {
   const locale = resolveLocale(settings?.ui?.locale, globalThis.navigator?.language);
-  let name = '';
   try {
-    name = translate(await loadMessages(locale), 'extActionTitle');
+    const text = translate(await loadMessages(locale), key);
+    if (text && text !== key) return text;
   } catch {
     // Fall through to Chrome's own lookup.
   }
-  if (!name || name === 'extActionTitle') {
-    name = chromeApi()?.i18n?.getMessage?.('extActionTitle') || 'Companion for YouTube';
-  }
+  return chromeApi()?.i18n?.getMessage?.(key) || fallback;
+}
+
+/* The toolbar tooltip says what the badge number means. With nothing new it
+ * is the plain name again, in the language the interface uses. */
+async function actionTitleText(n, settings) {
+  const name = await workerText(settings, 'extActionTitle', 'Companion for YouTube');
   return n > 0 ? `${name} — ${await nNewVideosText(n, settings)}` : name;
+}
+
+// Live streams and premieres cannot be queued from a feed row, so their
+// alerts carry no buttons either.
+function alertHasButtons(item) {
+  return !!item && item.k !== 'live' && item.k !== 'premiere';
 }
 
 function iconUrlFor(channel, settings) {
@@ -702,9 +711,18 @@ async function notifyChannel(channel, items, settings) {
   const id = notificationIdFor(channel.id);
   const ownIcon = chromeApi().runtime.getURL(EXT_ICON);
   const icons = [...new Set([iconUrlFor(channel, settings), ownIcon])];
+  // Both act on the newest video, the same one a click on the alert opens.
+  const buttons = alertHasButtons(newest)
+    ? [
+      { title: await workerText(settings, 'alertListen', 'Listen') },
+      { title: await workerText(settings, 'alertUpNext', 'Add to Up next') },
+    ]
+    : null;
   for (const iconUrl of icons) {
     try {
-      await chromeApi().notifications.create(id, { type: 'basic', iconUrl, title, message });
+      const options = { type: 'basic', iconUrl, title, message };
+      if (buttons) options.buttons = buttons;
+      await chromeApi().notifications.create(id, options);
       notificationVideos.set(id, newest.v);
       return true;
     } catch {
@@ -1885,6 +1903,36 @@ export async function handleMessage(msg, sender) {
   }
 }
 
+/**
+ * Button 0 opens the alert's video in audio mode, button 1 adds it to Up
+ * next. Like a click, it rebuilds from storage when the worker restarted.
+ */
+export async function onNotificationButtonClicked(id, index) {
+  try {
+    Promise.resolve(chromeApi().notifications.clear(id)).catch(() => {});
+  } catch {
+    // The action matters more than removing the alert.
+  }
+  const channelId = channelIdFromNotificationId(id);
+  if (!channelId) return;
+  const mapped = notificationVideos.get(id);
+  if (mapped) notificationVideos.delete(id);
+  const [feed, channels] = await Promise.all([readFeed(), readChannels()]);
+  const item = mapped
+    ? (feed || []).find((row) => row && row.v === mapped)
+    : newestForChannel(feed, channelId);
+  const v = item?.v || mapped;
+  if (!v) return;
+  if (index === 0) {
+    await openVideoTab(v, 'video', { audio: true });
+    return;
+  }
+  if (index === 1 && alertHasButtons(item)) {
+    const channel = channels.find((ch) => ch.id === channelId);
+    await addToQueue({ ...item, ct: item.ct || channel?.title || '' });
+  }
+}
+
 export async function onNotificationClicked(id) {
   // Chrome leaves a clicked notification on screen, so every further click
   // opened the same video in one more tab. Clear it before anything awaits.
@@ -1972,6 +2020,9 @@ chromeApi().runtime.onStartup.addListener(onBoot);
 chromeApi().alarms.onAlarm.addListener(onAlarm);
 chromeApi().notifications.onClicked.addListener((id) => {
   onNotificationClicked(id).catch(() => {});
+});
+chromeApi().notifications.onButtonClicked?.addListener((id, index) => {
+  onNotificationButtonClicked(id, index).catch(() => {});
 });
 chromeApi().runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!senderMayCall(message?.type, sender)) {

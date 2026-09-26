@@ -39,6 +39,14 @@
     "message": "Watchlist is empty",
     "description": "Empty state on the Watchlist tab when no channels have been added."
   },
+  "alertListen": {
+    "message": "Listen",
+    "description": "Button on a new-video alert. Opens the video in audio mode."
+  },
+  "alertUpNext": {
+    "message": "Add to Up next",
+    "description": "Button on a new-video alert. Adds the video to the Up next list in the Player tab."
+  },
   "nNewVideos": {
     "message": "$COUNT$ new videos",
     "description": "Desktop notification body when a channel uploaded more than one video since the last check. $COUNT$ is the number of new videos.",

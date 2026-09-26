@@ -31,6 +31,8 @@ shipped yet waits under Unreleased. How a version ships:
 - Hovering the toolbar icon says what the badge number means ("3 new videos").
 - When channels fail their check, an "N failing" chip on the Watchlist shows
   just those, so a big list is easy to clean up.
+- New-video alerts have two buttons: Listen opens the video in audio mode,
+  and Add to Up next queues it.
 
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the

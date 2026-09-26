@@ -335,6 +335,7 @@ export default async function run(t) {
     refreshBadge,
     addChannelByInput,
     onNotificationClicked,
+    onNotificationButtonClicked,
     onInstalled,
     syncUninstallUrl,
     addImportedChannels,
@@ -1713,6 +1714,11 @@ export default async function run(t) {
       mock.notifications[0].message === '3 new videos',
       mock.notifications[0]?.message,
     );
+    t.check(
+      'the alert offers Listen and Add to Up next',
+      (mock.notifications[0].buttons || []).map((b) => b.title).join('|') === 'Listen|Add to Up next',
+      JSON.stringify(mock.notifications[0].buttons),
+    );
 
     t.section('clicking a notification opens the newest');
 
@@ -1785,6 +1791,53 @@ export default async function run(t) {
     mock.tabsCreated.length = 0;
     await onNotificationClicked('not-a-notification');
     t.check('invalid notification id opens nothing', mock.tabsCreated.length === 0);
+
+    t.section('alert buttons');
+
+    await wipe();
+    await putChannel({ id: CLICK_CH, title: 'Click Channel', seeded: true });
+    await saveFeed([
+      { v: 'btnvid00001', c: CLICK_CH, t: 'Button video', at: 100, d: 60, vw: 0, k: 'video', st: 0 },
+      { v: 'btnvid00000', c: CLICK_CH, t: 'Older', at: 10, d: 60, vw: 0, k: 'video', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    mock.notificationsCleared.length = 0;
+    await onNotificationButtonClicked(`yt:${CLICK_CH}`, 0);
+    t.check(
+      'Listen opens the newest video in audio mode and clears the alert',
+      mock.tabsCreated.length === 1
+        && mock.tabsCreated[0].url.includes('btnvid00001')
+        && mock.tabsCreated[0].active === true
+        && mock.notificationsCleared.includes(`yt:${CLICK_CH}`),
+      JSON.stringify(mock.tabsCreated),
+    );
+    t.check(
+      'and marks that tab for audio mode',
+      mock.session[`audioOpen:${mock.tabsCreated[0]?.id}`] === true,
+      JSON.stringify(mock.session),
+    );
+    mock.tabsCreated.length = 0;
+    await onNotificationButtonClicked(`yt:${CLICK_CH}`, 1);
+    const queuedFromAlert = await readQueue();
+    t.check(
+      'Add to Up next queues the newest video with its channel name, and opens nothing',
+      queuedFromAlert.length === 1
+        && queuedFromAlert[0].v === 'btnvid00001'
+        && queuedFromAlert[0].ct === 'Click Channel'
+        && mock.tabsCreated.length === 0,
+      JSON.stringify(queuedFromAlert),
+    );
+    await onNotificationButtonClicked(`yt:${CLICK_CH}`, 1);
+    t.check('pressing it twice queues it once', (await readQueue()).length === 1);
+    await saveFeed([
+      { v: 'btnlive0001', c: CLICK_CH, t: 'Live now', at: 200, d: 0, vw: 0, k: 'live', st: 0 },
+    ]);
+    await onNotificationButtonClicked(`yt:${CLICK_CH}`, 1);
+    t.check('a live stream is never queued from an alert', (await readQueue()).length === 1);
+    mock.tabsCreated.length = 0;
+    await onNotificationButtonClicked('not-a-notification', 0);
+    t.check('an unknown alert id does nothing', mock.tabsCreated.length === 0);
+    await globalThis.chrome.storage.local.set({ queue: [] });
 
     t.section('a clicked notification goes away and does not stack tabs');
 
