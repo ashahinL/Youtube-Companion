@@ -2535,7 +2535,8 @@ function renderSettings(locale) {
   const cancelBtn = document.getElementById('settings-import-replace-cancel');
   const clearYes = document.getElementById('settings-clear-yes');
   const clearCancel = document.getElementById('settings-clear-cancel');
-  for (const btn of [exportBtn, importBtn, mergeBtn, replaceBtn, confirmBtn, cancelBtn, clearYes, clearCancel]) {
+  const clearExport = document.getElementById('settings-clear-export');
+  for (const btn of [exportBtn, importBtn, mergeBtn, replaceBtn, confirmBtn, cancelBtn, clearYes, clearCancel, clearExport]) {
     if (btn) btn.disabled = locked;
   }
   const clearBtn = document.getElementById('settings-clear');
@@ -3749,6 +3750,11 @@ function bindSettings() {
     view.backupNotice = null;
     render();
     document.getElementById('settings-clear-cancel')?.focus();
+  });
+  // Export is the only way back from Clear, so it sits in the confirm
+  // itself; the confirm stays open for the choice that follows.
+  document.getElementById('settings-clear-export')?.addEventListener('click', () => {
+    exportBackup();
   });
   document.getElementById('settings-clear-yes').addEventListener('click', () => {
     void clearWatchlist();

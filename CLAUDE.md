@@ -161,7 +161,8 @@ asks.
   which tab the player drives.
 - **Backup** exports settings and channels (merge or replace on import), not
   the feed. **Clear watchlist** sits in the same group: an inline confirm
-  naming the count, then every channel and the whole feed go. Alert history
+  naming the count, with Export my list first, then every channel and the
+  whole feed go. Alert history
   stays, so channels added back never alert twice. There is no undo; Export
   is the way back.
 - **Up next** is a listen-later queue in the Player tab, under the player

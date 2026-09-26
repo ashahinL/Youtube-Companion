@@ -845,6 +845,10 @@
       }
     }
   },
+  "settingsClearExport": {
+    "message": "صدّر قائمتي أولًا",
+    "description": "Button in the Clear watchlist confirm. Downloads a backup of the current list and leaves the confirm open."
+  },
   "settingsClearConfirm": {
     "message": "إزالة الكل",
     "description": "Confirms clearing the watchlist."

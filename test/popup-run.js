@@ -147,6 +147,9 @@ async function main() {
     removeItem: (k) => { store.delete(k); },
   };
   const copied = [];
+  const blobs = [];
+  URL.createObjectURL = (blob) => { blobs.push(blob); return `blob:test/${blobs.length}`; };
+  URL.revokeObjectURL = () => {};
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: {
@@ -176,7 +179,7 @@ async function main() {
   check('the popup opens on Feeds with rows drawn', opened, errors.join('\n') || `feeds hidden=${$('feeds')?.hidden}`);
   if (!opened) return;
 
-  await scenarios({ document, $, mock, win, observers, copied, closes: () => closes });
+  await scenarios({ document, $, mock, win, observers, copied, blobs, closes: () => closes });
 }
 
 const A = 'UCaaaaaaaaaaaaaaaaaaaaaa';
@@ -552,7 +555,32 @@ async function scenarios(ctx) {
   press(active(), 'Escape');
   await settle();
 
+  // Clear watchlist offers Export first
+  $('tab-settings').click();
+  await settle();
+  $('settings-clear').click();
+  await settle();
+  const clearRow = $('settings-clear-confirm');
+  check('Clear asks inline and names the count', !clearRow.hidden && $('settings-clear-prompt').textContent.includes('2'), $('settings-clear-prompt').textContent);
+  sent.length = 0;
+  ctx.blobs.length = 0;
+  $('settings-clear-export').click();
+  await settle();
+  const exported = ctx.blobs[0] ? JSON.parse(await ctx.blobs[0].text()) : null;
+  check(
+    'Export my list first downloads the list and leaves the confirm open',
+    exported?.channels?.length === 2
+      && !clearRow.hidden
+      && sentOf('clearChannels').length === 0
+      && $('settings-backup-status').textContent === 'Exported 2 channels.',
+    $('settings-backup-status').textContent,
+  );
+  $('settings-clear-cancel').click();
+  await settle();
+
   // Tabs move with the arrow keys.
+  $('tab-watchlist').click();
+  await settle();
   const tabWatch = $('tab-watchlist');
   tabWatch.focus();
   press(tabWatch, 'ArrowRight');
