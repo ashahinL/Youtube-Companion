@@ -125,6 +125,7 @@ export function installChromeMock(initial = {}) {
     badgeText: '',
     badgeTexts: [],
     badgeColor: null,
+    actionTitle: '',
     tabsCreated: [],
     tabsUpdated: [],
     tabsRemoved: [],
@@ -267,6 +268,9 @@ export function installChromeMock(initial = {}) {
       },
       async setBadgeBackgroundColor({ color } = {}) {
         handle.badgeColor = color;
+      },
+      async setTitle({ title } = {}) {
+        handle.actionTitle = title == null ? '' : String(title);
       },
     },
 

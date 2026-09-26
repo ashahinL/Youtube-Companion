@@ -5,7 +5,7 @@
 
 import fs from 'node:fs';
 import { installChromeMock } from './helpers/chrome-mock.js';
-import { writeSettings } from '../src/lib/settings.js';
+import { writeSettings, readSettings } from '../src/lib/settings.js';
 import {
   addChannel,
   readChannels,
@@ -1826,9 +1826,15 @@ export default async function run(t) {
       { v: 'v3', c: MKBHD, t: 'C', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
     ]);
     await writePollState({ lastSeenAt: 50 });
-    await writeSettings({ feed: { showShorts: false } });
+    const localeBefore = (await readSettings()).ui.locale;
+    await writeSettings({ feed: { showShorts: false }, ui: { locale: 'en' } });
     await refreshBadge();
     t.check('badge counts items newer than lastSeenAt, excluding shorts', mock.badgeText === '2', JSON.stringify(mock.badgeText));
+    t.check(
+      'the toolbar tooltip says what the number means',
+      mock.actionTitle === 'Companion for YouTube — 2 new videos',
+      mock.actionTitle,
+    );
 
     await writeSettings({ feed: { showShorts: true } });
     await refreshBadge();
@@ -1837,11 +1843,20 @@ export default async function run(t) {
     await writePollState({ lastSeenAt: 1000 });
     await refreshBadge();
     t.check('badge is empty string at zero', mock.badgeText === '', JSON.stringify(mock.badgeText));
+    t.check('with nothing new the tooltip is the plain name', mock.actionTitle === 'Companion for YouTube', mock.actionTitle);
     t.check('badge is never the string 0', mock.badgeText !== '0');
 
     await writePollState({ lastSeenAt: 0 });
     await refreshBadge();
     t.check('badge is 4 when lastSeenAt is 0 and shorts shown', mock.badgeText === '4', JSON.stringify(mock.badgeText));
+    await writeSettings({ ui: { locale: 'ar' } });
+    await refreshBadge();
+    t.check(
+      'the tooltip follows the interface language',
+      mock.actionTitle === 'رفيق ليوتيوب — فيديوهات جديدة: 4',
+      mock.actionTitle,
+    );
+    await writeSettings({ ui: { locale: localeBefore } });
     const beforeOpen = Date.now();
     const opened = await handleMessage({ type: 'popupOpened' });
     t.check('popupOpened clears the badge', mock.badgeText === '', JSON.stringify(mock.badgeText));

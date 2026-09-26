@@ -21,7 +21,7 @@ import {
 import { readSettings, writeSettings, onSettingsChanged, migrateAudioCover } from '../lib/settings.js';
 import { parseBackup, mergeBackup, buildBackup, backupSizeError } from '../lib/backup.js';
 import { parseTakeoutCsv, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
-import { resolveLocale, loadMessages, translateCount } from '../lib/i18n.js';
+import { resolveLocale, loadMessages, translate, translateCount } from '../lib/i18n.js';
 import {
   readChannels,
   writeChannels,
@@ -353,6 +353,22 @@ async function nNewVideosText(n, settings) {
   return fallback || (Number(n) === 1 ? `${n} new video` : `${n} new videos`);
 }
 
+/* The toolbar tooltip says what the badge number means. With nothing new it
+ * is the plain name again, in the language the interface uses. */
+async function actionTitleText(n, settings) {
+  const locale = resolveLocale(settings?.ui?.locale, globalThis.navigator?.language);
+  let name = '';
+  try {
+    name = translate(await loadMessages(locale), 'extActionTitle');
+  } catch {
+    // Fall through to Chrome's own lookup.
+  }
+  if (!name || name === 'extActionTitle') {
+    name = chromeApi()?.i18n?.getMessage?.('extActionTitle') || 'Companion for YouTube';
+  }
+  return n > 0 ? `${name} — ${await nNewVideosText(n, settings)}` : name;
+}
+
 function iconUrlFor(channel, settings) {
   if (settings.alerts.useAvatarIcon && channel?.avatar) return channel.avatar;
   return chromeApi().runtime.getURL(EXT_ICON);
@@ -500,6 +516,7 @@ export async function refreshBadge() {
   const n = newSinceCount(feed, poll.lastSeenAt, settings.feed.showShorts, channelIds);
   const text = n > 0 ? String(n) : '';
   await chromeApi().action.setBadgeText({ text });
+  await chromeApi().action.setTitle({ title: await actionTitleText(n, settings) });
 }
 
 async function collectState() {

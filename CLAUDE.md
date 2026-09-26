@@ -143,7 +143,7 @@ asks.
   comes back as live if it does start.
 - **Toolbar badge**: videos newer than the last popup open, counted with the
   same filters the Feeds tab applies. It is always the feed count, audio mode
-  or not.
+  or not. The icon's tooltip says the same in words ("3 new videos").
 - **English and Arabic**, full RTL, with a language override in Settings.
 - **Theme**: System, Light or Dark in Settings; it applies to the popup,
   welcome and What's new pages; the audio overlay and site/ keep their own
