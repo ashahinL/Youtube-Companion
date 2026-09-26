@@ -786,6 +786,67 @@ export default async function run(t) {
     page.sent.slice(sentBefore).some((msg) => msg && msg.type === 'subscriptions.close'),
   );
 
+  const pickedByClick = [];
+  page.api.openAccountPicker({
+    current: 0,
+    accounts: [
+      { index: 0, subscribed: 2, continuation: false, avatar: '' },
+      { index: 1, subscribed: 5, continuation: false, avatar: '' },
+    ],
+  }, (reply) => pickedByClick.push(reply));
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  const scanClick = (trusted) => {
+    const btn = [];
+    const walk = (node) => {
+      if (!node) return;
+      if (node.className === 'ytc-scan-scan') btn.push(node);
+      for (const child of node.children || []) walk(child);
+    };
+    walk(overlay);
+    // This test DOM has no firstChild, so clearNode leaves the earlier
+    // picker's buttons behind, hidden.
+    const shown = btn.filter((node) => !node.hasAttribute('hidden'));
+    const entry = shown[shown.length - 1].listeners.find((item) => item.type === 'click');
+    entry.fn({ isTrusted: trusted, preventDefault() {}, stopPropagation() {} });
+  };
+  scanClick(false);
+  t.check('a click the page made on Scan picks no account', pickedByClick.length === 0, JSON.stringify(pickedByClick));
+  scanClick(true);
+  t.check(
+    'a real click on Scan reads that account',
+    pickedByClick.length === 1 && pickedByClick[0].index === 1,
+    JSON.stringify(pickedByClick),
+  );
+  await page.api.showScanResult({ added: 1, skipped: 0, account: 0, avatar: '' });
+  const heldPicks = [];
+  page.api.chooseAccounts({
+    current: 0,
+    accounts: [
+      { index: 0, subscribed: 2, continuation: false, avatar: '' },
+      { index: 1, subscribed: 5, continuation: false, avatar: '' },
+    ],
+  }, (reply) => heldPicks.push(reply), true);
+  const anotherClick = (trusted) => {
+    const node = overlay.querySelector('.ytc-scan-another');
+    const entry = node.listeners.find((item) => item.type === 'click');
+    entry.fn({ isTrusted: trusted, preventDefault() {}, stopPropagation() {} });
+  };
+  anotherClick(false);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  t.check(
+    'a click the page made on Import another account leaves the result up',
+    overlay.querySelector('.ytc-scan-picker').hasAttribute('hidden') && textOf(overlay, 'ytc-scan-title') === 'Added 1 channel',
+    textOf(overlay, 'ytc-scan-title'),
+  );
+  anotherClick(true);
+  await new Promise((resolve) => { setTimeout(resolve, 20); });
+  t.check(
+    'a real click opens the account picker',
+    !overlay.querySelector('.ytc-scan-picker').hasAttribute('hidden') && heldPicks.length === 0,
+    textOf(overlay, 'ytc-scan-title'),
+  );
+
+
   const picked = [];
   page.api.chooseAccounts({
     current: 1,

@@ -2018,13 +2018,15 @@
   }
 
   function onScanAnother(ev) {
-    clearAccountPickTimer();
     stopFaceEvent(ev);
     try {
       if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
     } catch (err) {
       // swallow
     }
+    // Which account gets read is the person's choice, like Add new and Replace.
+    if (!isTrustedClick(ev)) return;
+    clearAccountPickTimer();
     pickerWanted = true;
     if (!heldChoice) return;
     const send = heldChoice.send;
@@ -2601,6 +2603,7 @@
           button.textContent = messageOf(pack, 'scanAccountScan');
           button.addEventListener('click', function (ev) {
             stopFaceEvent(ev);
+            if (!isTrustedClick(ev)) return;
             if (pickerSend !== send) return;
             sendAccountChoice(send, info, account);
           });

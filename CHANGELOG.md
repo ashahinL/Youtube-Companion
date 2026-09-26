@@ -63,6 +63,8 @@ shipped yet waits under Unreleased. How a version ships:
   channels added back still never alert twice.
 - Show more in Feeds moves keyboard focus to the first new video, as it
   already did in the Watchlist.
+- On YouTube's import screen, only your own click can pick which account to
+  read or start Import another account; a script on the page cannot.
 
 **For contributors**
 - The popup tests load the real popup page in a small fake browser and
