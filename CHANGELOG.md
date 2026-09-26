@@ -41,6 +41,9 @@ shipped yet waits under Unreleased. How a version ships:
   cut off.
 - Channel pictures fill in four times faster during the first day after an
   import, so a big imported list stops looking blank sooner.
+- Every error the popup and the welcome page show is a full sentence in your
+  language. An unexpected failure says "Something went wrong" instead of
+  showing its raw English text.
 
 **Fixes**
 - A scheduled stream the channel never started no longer sits in Feeds as a

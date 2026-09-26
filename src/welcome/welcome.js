@@ -14,6 +14,7 @@ import {
   applyDirection,
 } from '../lib/i18n.js';
 import { takeoutSizeError, MAX_TAKEOUT_CHANNELS } from '../lib/takeout.js';
+import { errorText } from '../lib/view.js';
 import { applyTheme } from '../lib/theme.js';
 
 // The toolbar menu tells a page nothing when the icon is pinned, so the page
@@ -95,17 +96,23 @@ async function importFromYouTubeTab() {
     if (!res || res.ok === false) {
       const error = res && res.error;
       if (error === 'no tab' || error === 'no script') {
-        setStatus('welcomeImportFailed', [String(error)], 'error');
+        setStatus('errorNoYouTubeTab', [], 'error');
         return;
       }
     }
     setStatus('welcomeImportOpened', [], 'ok');
-  } catch (err) {
-    setStatus('welcomeImportFailed', [String(err?.message || err)], 'error');
+  } catch {
+    setStatus('errorGeneric', [], 'error');
   } finally {
     busy = false;
     render();
   }
+}
+
+// The reason inside "Could not import that file: …", in the reader's language.
+function importFailure(code) {
+  const text = errorText(String(code || ''));
+  return [translate(messages, text.key, text.subs)];
 }
 
 async function importFile(file) {
@@ -124,7 +131,7 @@ async function importFile(file) {
       if (key) {
         const subs = res.error === 'count' ? [String(MAX_TAKEOUT_CHANNELS)] : [];
         setStatus(key, subs, 'error');
-      } else setStatus('welcomeImportFailed', [String(res?.error || '')], 'error');
+      } else setStatus('welcomeImportFailed', importFailure(res?.error), 'error');
       return;
     }
     const added = Number(res.added) || 0;
@@ -150,7 +157,7 @@ async function importFile(file) {
       }
     }).catch(() => {});
   } catch (err) {
-    setStatus('welcomeImportFailed', [String(err?.message || err)], 'error');
+    setStatus('welcomeImportFailed', importFailure(err?.message), 'error');
   } finally {
     busy = false;
     render();

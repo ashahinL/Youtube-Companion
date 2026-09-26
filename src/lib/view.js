@@ -680,6 +680,32 @@ export function ytErrorMessage(error) {
   return null;
 }
 
+// Codes the worker answers with that a page may have to put into words.
+// Codes a page handles on its own (already running, full, the backup
+// codes) never reach this table.
+const ERROR_KEYS = {
+  'already added': 'watchlistAlreadyAdded',
+  'not a channel': 'watchlistNotAChannel',
+  'not a video': 'errorNotAVideo',
+  'nothing to undo': 'errorNothingToUndo',
+  'no tab': 'errorNoYouTubeTab',
+  'no script': 'errorNoYouTubeTab',
+  timeout: 'errorTimedOut',
+  'slow down': 'errorSlowDown',
+};
+
+/**
+ * The message key for a worker error code or a YouTube failure. Anything
+ * else, such as an exception's own English text, reads as a plain "Something
+ * went wrong" rather than showing the raw text.
+ */
+export function errorText(error) {
+  const yt = ytErrorMessage(error);
+  if (yt) return yt;
+  const key = Object.prototype.hasOwnProperty.call(ERROR_KEYS, error) ? ERROR_KEYS[error] : '';
+  return { key: key || 'errorGeneric', subs: [] };
+}
+
 /** Whole minutes left on a sleep timer, rounded up; 0 when none runs. */
 export function sleepMinutesLeft(sleepAt, now) {
   const left = Number(sleepAt) - Number(now);

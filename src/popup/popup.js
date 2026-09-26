@@ -59,7 +59,7 @@ import {
   followView,
   followActionState,
   backupImportMessage,
-  ytErrorMessage,
+  errorText,
   pageChannelsView,
   sleepMinutesLeft,
   menuNavIndex,
@@ -298,12 +298,9 @@ function extensionVersion() {
 
 function formatError(error) {
   const code = String(error || '');
-  if (code === 'already added') return t('watchlistAlreadyAdded');
-  if (code === 'not a channel') return t('watchlistNotAChannel');
   if (code === 'list full') return t('watchlistFull', [String(MAX_BACKUP_CHANNELS)]);
-  const yt = ytErrorMessage(code);
-  if (yt) return t(yt.key, yt.subs);
-  return t('watchlistError', [code]);
+  const text = errorText(code);
+  return t(text.key, text.subs);
 }
 
 function formatBackupNotice(error) {

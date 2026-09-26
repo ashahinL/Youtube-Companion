@@ -143,16 +143,6 @@
       }
     }
   },
-  "watchlistError": {
-    "message": "Something went wrong: $ERROR$",
-    "description": "Inline error for an unexpected worker failure. $ERROR$ is the worker's error text.",
-    "placeholders": {
-      "error": {
-        "content": "$1",
-        "example": "network error"
-      }
-    }
-  },
   "watchlistActions": {
     "message": "Channel actions",
     "description": "Accessible name of the ⋯ control that opens a Watchlist row's action menu."
@@ -214,6 +204,30 @@
   "channelProblemOther": {
     "message": "The last check of this channel failed.",
     "description": "Channel sheet, when the channel's last check failed for a reason not covered by the other messages."
+  },
+  "errorGeneric": {
+    "message": "Something went wrong. Try again.",
+    "description": "Shown when something failed for a reason the extension has no sentence for."
+  },
+  "errorNoYouTubeTab": {
+    "message": "Couldn't reach the YouTube tab. Reload it and try again.",
+    "description": "Shown when the extension could not talk to a YouTube tab, for example one opened before the extension was installed."
+  },
+  "errorTimedOut": {
+    "message": "That took too long. Try again.",
+    "description": "Shown when a YouTube tab did not answer in time."
+  },
+  "errorNothingToUndo": {
+    "message": "There is nothing to undo any more.",
+    "description": "Shown when Undo is pressed after the removed channel can no longer be restored."
+  },
+  "errorSlowDown": {
+    "message": "YouTube asked us to slow down. Try again later.",
+    "description": "Shown when YouTube pushed back and requests are paused."
+  },
+  "errorNotAVideo": {
+    "message": "That isn't a YouTube video.",
+    "description": "Shown when a video action got something that is not a YouTube video."
   },
   "errorYouTubeHttp": {
     "message": "YouTube didn't answer (error $CODE$). Try again later.",

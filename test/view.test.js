@@ -58,6 +58,7 @@ import {
   followActionState,
   backupImportMessage,
   ytErrorMessage,
+  errorText,
   pageChannelsView,
   sleepMinutesLeft,
   menuNavIndex,
@@ -1048,6 +1049,31 @@ export default async function run(t) {
     t.check(`${key} exists in English and Arabic`, !!locales.en[key]?.message && !!locales.ar[key]?.message);
   }
   t.check('other text is not a YouTube error', ytErrorMessage('already added') === null && ytErrorMessage('') === null);
+
+  t.section('worker error codes');
+
+  const codeCases = [
+    ['already added', 'watchlistAlreadyAdded'],
+    ['not a channel', 'watchlistNotAChannel'],
+    ['not a video', 'errorNotAVideo'],
+    ['nothing to undo', 'errorNothingToUndo'],
+    ['no tab', 'errorNoYouTubeTab'],
+    ['no script', 'errorNoYouTubeTab'],
+    ['timeout', 'errorTimedOut'],
+    ['slow down', 'errorSlowDown'],
+    ['failed', 'errorGeneric'],
+    ['TypeError: x is undefined', 'errorGeneric'],
+    ['toString', 'errorGeneric'],
+    ['', 'errorGeneric'],
+  ];
+  for (const [code, key] of codeCases) {
+    t.check(`"${code}" reads as ${key}`, errorText(code).key === key, JSON.stringify(errorText(code)));
+    t.check(`${key} exists in English and Arabic`, !!locales.en[key]?.message && !!locales.ar[key]?.message);
+  }
+  t.check(
+    'a YouTube failure keeps its own sentence',
+    same(errorText(new YtError('http', 'feed', 503).message), { key: 'errorYouTubeHttp', subs: ['503'] }),
+  );
   t.check('a sentence that only contains the words is not one', ytErrorMessage('the browse network error came back twice') === null);
 
   t.section('credited channels');

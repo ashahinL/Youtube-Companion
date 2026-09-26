@@ -382,6 +382,16 @@ async function scenarios(ctx) {
     'an empty Add on a non-YouTube tab says so and sends nothing',
     sentOf('addChannel').length === 0 && !$('feed-error').hidden && $('feed-error').textContent.length > 0,
   );
+  sent.length = 0;
+  mock.activeTab = { id: 3, url: 'https://www.youtube.com/@echo' };
+  replies.addChannel = () => ({ ok: false, error: 'TypeError: something broke' });
+  $('feed-add-form').requestSubmit();
+  await settle();
+  check(
+    'a failure the popup has no sentence for reads as a plain one, not raw text',
+    $('feed-error').textContent === 'Something went wrong. Try again.',
+    $('feed-error').textContent,
+  );
   delete replies.addChannel;
 
   // Watchlist

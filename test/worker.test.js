@@ -2743,6 +2743,20 @@ export default async function run(t) {
     const empty = await handleMessage({});
     t.check('missing type is unknown message', empty.error === 'unknown message', JSON.stringify(empty));
 
+    const realGet = globalThis.chrome.storage.local.get;
+    const realWarn = console.warn;
+    const warned = [];
+    console.warn = (...args) => { warned.push(args); };
+    globalThis.chrome.storage.local.get = async () => { throw new TypeError('Cannot read properties of undefined'); };
+    const broken = await handleMessage({ type: 'getState' });
+    globalThis.chrome.storage.local.get = realGet;
+    console.warn = realWarn;
+    t.check(
+      'a browser error is answered with a code, not its English text',
+      broken.ok === false && broken.error === 'failed' && warned.length === 1,
+      JSON.stringify(broken),
+    );
+
     const listener = mock.runtimeListeners.onMessage[0];
     t.check('onMessage listener is registered', typeof listener === 'function');
     const POPUP_SENDER = {

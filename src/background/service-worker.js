@@ -237,6 +237,18 @@ function errMessage(err) {
   return String(err?.message || err);
 }
 
+/**
+ * What a reply carries when something threw. A YouTube failure keeps its
+ * message, which the pages translate; anything else is a bug or a browser
+ * error whose English text means nothing to the reader, so it is logged
+ * here and answered with a code.
+ */
+function replyError(err) {
+  if (err instanceof YtError) return err.message;
+  console.warn('Companion for YouTube:', err);
+  return 'failed';
+}
+
 function watchUrl(videoId, kind) {
   if (kind === 'short') return `https://www.youtube.com/shorts/${videoId}`;
   return `https://www.youtube.com/watch?v=${videoId}`;
@@ -1572,7 +1584,7 @@ export async function importFromYouTube() {
     }
     return last || { ok: false, error: 'failed' };
   } catch (err) {
-    return { ok: false, error: errMessage(err) };
+    return { ok: false, error: replyError(err) };
   } finally {
     clearInterval(keepAlive);
   }
@@ -1899,7 +1911,7 @@ export async function handleMessage(msg, sender) {
         return { ok: false, error: 'unknown message' };
     }
   } catch (err) {
-    return { ok: false, error: errMessage(err) };
+    return { ok: false, error: replyError(err) };
   }
 }
 
@@ -2032,7 +2044,7 @@ chromeApi().runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Keep the worker alive until sendResponse runs — MV3 drops the reply
   // otherwise.
   handleMessage(message, sender).then(sendResponse, (err) => {
-    sendResponse({ ok: false, error: errMessage(err) });
+    sendResponse({ ok: false, error: replyError(err) });
   });
   return true;
 });

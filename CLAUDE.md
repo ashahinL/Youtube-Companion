@@ -358,6 +358,11 @@ Most live as comments at the line they protect. These span files or tools:
   the command with no shortcut, silently (Dark Reader had `Alt+Shift+A`).
   Anything that shows the shortcut reads `chrome.commands.getAll()` and must
   make sense when it is empty.
+- **A worker reply's `error` is a code, never a sentence.** The pages put
+  it into words through `errorText` in `src/lib/view.js`; a new code a page
+  can show gets a key there, in both locales, or it reads as "Something
+  went wrong". A thrown error other than a `YtError` is logged in the worker
+  and answered as `failed`.
 - **A new runtime message is popup-only until listed.** The worker refuses any
   message from a content script unless its type is in
   `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
