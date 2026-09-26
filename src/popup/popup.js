@@ -40,6 +40,7 @@ import {
   listedMatch,
   visibleFeedItems,
   feedItemUrl,
+  channelPageUrl,
   rowOpenModes,
   fold,
   feedsView,
@@ -1289,6 +1290,11 @@ function renderChannelSheet() {
   titleEl.textContent = title;
   handleEl.textContent = ch.handle || '';
   ltrRun(handleEl);
+
+  const youtubeBtn = document.getElementById('channel-sheet-youtube');
+  youtubeBtn.hidden = !channelPageUrl(ch);
+  youtubeBtn.setAttribute('aria-label', t('channelOpenOnYouTube', [title]));
+  youtubeBtn.title = t('channelOpenOnYouTube', [title]);
 
   if (ch.avatar) {
     avatar.src = ch.avatar;
@@ -3805,6 +3811,9 @@ function bindChannelSheet() {
   const sheet = document.getElementById('channel-sheet');
   document.getElementById('channel-sheet-close')?.addEventListener('click', () => {
     closeChannelSheet();
+  });
+  document.getElementById('channel-sheet-youtube')?.addEventListener('click', () => {
+    openUrl(channelPageUrl(view.channels.find((c) => c.id === view.sheetId)));
   });
   document.getElementById('channel-sheet-refresh')?.addEventListener('click', () => {
     if (!view.sheetId) return;

@@ -293,6 +293,16 @@
     "message": "أزل من المفضلة",
     "description": "Menu item that unmarks the channel as a favourite."
   },
+  "channelOpenOnYouTube": {
+    "message": "فتح $TITLE$ على يوتيوب",
+    "description": "Accessible name and tooltip of the channel sheet button that opens the channel's own page on youtube.com in a new tab. $TITLE$ is the channel title.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "Marques Brownlee"
+      }
+    }
+  },
   "watchlistOpenChannel": {
     "message": "فتح $TITLE$",
     "description": "Accessible name of a Watchlist row. $TITLE$ is the channel title.",

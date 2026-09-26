@@ -9,11 +9,11 @@
  * wait, how a backup merge-over-cap error is named, which ⋯ menu
  * item Arrow/Home/End would select, channel-group names, caps, and
  * the Feeds group filter, how group writes queue so two ticks cannot
- * interleave, and the listen-later queue snapshot.
+ * interleave, the listen-later queue snapshot, and a channel's page link.
  * Pure — no DOM, no chrome, no clock.
  */
 
-import { normalizeChannelInput, normalizeVideoInput } from './yt.js';
+import { normalizeChannelInput, normalizeVideoInput, isChannelId } from './yt.js';
 
 export function fold(value) {
   return String(value || '').normalize('NFKC').toLowerCase();
@@ -354,6 +354,13 @@ export function feedItemUrl(item) {
   return item.k === 'short'
     ? `https://www.youtube.com/shorts/${id}`
     : `https://www.youtube.com/watch?v=${id}`;
+}
+
+// By id, never handle: the id is what the list stores for every channel and
+// it cannot be taken over by someone else later.
+export function channelPageUrl(ch) {
+  const id = String(ch?.id || '');
+  return isChannelId(id) ? `https://www.youtube.com/channel/${id}` : '';
 }
 
 export function audioWatchUrl(item) {

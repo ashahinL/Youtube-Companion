@@ -1669,6 +1669,16 @@ body.is-opening .tabs {
   transform: scaleX(-1);
 }
 
+.sheet__youtube-icon {
+  display: inline-block;
+  line-height: 1;
+}
+
+/* The channel sheet's ↗ mirrors the same way. */
+[dir="rtl"] .sheet__youtube-icon {
+  transform: scaleX(-1);
+}
+
 .audio-player {
   display: grid;
   grid-template-columns: 56px minmax(0, 1fr) auto;

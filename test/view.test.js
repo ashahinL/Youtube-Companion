@@ -24,6 +24,7 @@ import {
   isStalePremiere,
   PREMIERE_STALE_MS,
   feedItemUrl,
+  channelPageUrl,
   audioWatchUrl,
   rowOpenModes,
   feedsView,
@@ -230,6 +231,14 @@ export default async function run(t) {
     handleFromRef({ kind: 'url', url: `https://www.youtube.com/channel/${FAV}` }) === '',
   );
   t.check('handleFromRef ignores kind id', handleFromRef({ kind: 'id', id: FAV }) === '');
+
+  t.section('channelPageUrl');
+
+  t.check(
+    'a channel opens /channel/<id>',
+    channelPageUrl({ id: FAV, handle: '@someone' }) === `https://www.youtube.com/channel/${FAV}`,
+  );
+  t.check('a missing or malformed id gives no link', channelPageUrl({ id: 'nope' }) === '' && channelPageUrl(null) === '');
 
   t.section('feedItemUrl');
 

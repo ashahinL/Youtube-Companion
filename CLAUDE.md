@@ -129,7 +129,8 @@ asks.
   says why in a translated sentence, with Retry.
 - **Clicking a video** opens a new focused tab on youtube.com and closes the
   popup. A channel name opens the in-popup channel sheet, which shows stored
-  videos and never fetches on open.
+  videos and never fetches on open; its ↗ opens the channel's own page on
+  youtube.com the same way.
 - **Alerts**: one notification per channel per check ("3 new videos"), never
   one per video. Favourites always alert while alerts are on; other channels
   only if "Notify for non-favourite channels" is on. A video alerts once. A

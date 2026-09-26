@@ -26,6 +26,7 @@ shipped yet waits under Unreleased. How a version ships:
   welcome page and the What's new page.
 - Channel groups can be renamed and deleted from the Groups sheet: renaming
   onto an existing name merges the two, and deleting asks inline first.
+- The channel sheet has a ↗ button that opens the channel on YouTube.
 
 **Changes**
 - The four statistics cards in the Player tab now sit in one row, so the

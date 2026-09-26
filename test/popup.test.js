@@ -1556,6 +1556,10 @@ export default async function run(t) {
     /\[dir="rtl"\] \.audio-picker__goto-icon\s*\{[^}]*transform:\s*scaleX\(\s*-1\s*\)/.test(css),
   );
   t.check(
+    'the channel sheet\'s YouTube glyph mirrors in Arabic',
+    /\[dir="rtl"\] \.sheet__youtube-icon\s*\{[^}]*transform:\s*scaleX\(\s*-1\s*\)/.test(css),
+  );
+  t.check(
     'audioPickerGoToTab is in both locales with $TITLE$',
     typeof en.audioPickerGoToTab?.message === 'string'
       && /\$TITLE\$/.test(en.audioPickerGoToTab.message)

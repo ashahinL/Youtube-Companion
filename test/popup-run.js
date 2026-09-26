@@ -528,6 +528,30 @@ async function scenarios(ctx) {
   await settle();
   check('closing the sheet returns focus to the row that opened it', active() === rowOf(C).querySelector('.channel-row__main'));
 
+  // Open on YouTube
+  rowOf(A).querySelector('.channel-row__main').click();
+  await settle();
+  const ytBtn = $('channel-sheet-youtube');
+  check(
+    'the sheet\'s YouTube button is named for the channel',
+    !ytBtn.hidden && ytBtn.getAttribute('aria-label') === 'Open Alpha on YouTube' && ytBtn.title === 'Open Alpha on YouTube',
+    ytBtn.getAttribute('aria-label'),
+  );
+  mock.tabsCreated.length = 0;
+  const closesBefore = ctx.closes();
+  ytBtn.click();
+  await settle();
+  check(
+    'it opens the channel page in a new focused tab and closes the popup',
+    mock.tabsCreated.length === 1
+      && mock.tabsCreated[0].url === `https://www.youtube.com/channel/${A}`
+      && mock.tabsCreated[0].active === true
+      && ctx.closes() === closesBefore + 1,
+    JSON.stringify(mock.tabsCreated),
+  );
+  press(active(), 'Escape');
+  await settle();
+
   // Tabs move with the arrow keys.
   const tabWatch = $('tab-watchlist');
   tabWatch.focus();
