@@ -9,8 +9,8 @@ words. The name and the short description come from `_locales/*/messages.json`
 
 | Store | State | Record |
 |---|---|---|
-| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **live by 2026-09-26** (submitted 2026-09-22) · 2.1.0 **not uploaded yet** | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
-| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **live 2026-09-20** · 2.1.0 **not uploaded yet** | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
+| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **live by 2026-09-26** (submitted 2026-09-22) · 2.1.0 **in review** (submitted 2026-09-27) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
+| Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **live 2026-09-20** · 2.1.0 **in review** (submitted 2026-09-27) | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
 | مرتكز (Mortakaz) | **Listed 2026-09-17** · still shows 1.0.0's text; updated only for a major version (owner, 2026-09-26) | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
 
 When a listing goes live, put its link in the README's install section.
