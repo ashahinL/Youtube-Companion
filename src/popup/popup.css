@@ -1134,7 +1134,9 @@ body.is-opening .tabs {
 }
 
 .settings-num {
-  width: 56px;
+  /* Four digits plus the spin buttons: the feed cap reaches 5000 and the
+     check intervals 1440. */
+  width: calc(4ch + 38px);
   padding-block: 4px;
   padding-inline: 7px;
   border: 1px solid var(--border);

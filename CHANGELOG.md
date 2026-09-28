@@ -6,6 +6,10 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**Fixes**
+- Settings' number boxes are wide enough for four digits, so 1000 or
+  more in Keep the newest shows whole. Its arrows move by 50 videos.
+
 ## 2.1.0 — 2026-09-26
 
 **New**
