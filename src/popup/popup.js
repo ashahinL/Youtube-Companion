@@ -70,6 +70,8 @@ import {
   isNewSince,
   queueEntryFromItem,
   queueView,
+  playerIsActive,
+  visibleQueue,
   showWhatsNew,
   WHATS_NEW_VERSION,
 } from '../lib/view.js';
@@ -78,6 +80,8 @@ import { SUPPORT_METHODS, supportRows } from '../lib/support.js';
 const Core = globalThis.AudioModeCore;
 const LAST_TAB_KEY = 'audioLastSelectedTabId';
 const AUDIO_POLL_MS = 1000;
+let queueTabSent = null;
+let queueNoted = '';
 // Give the player probe a short window; after that, open on Feeds.
 const OPENING_TAB_MS = 250;
 
@@ -2217,7 +2221,26 @@ async function followChannel(input) {
   target?.focus();
 }
 
-function queueRow(item) {
+function activePlayingId() {
+  const player = view.audioPlayer;
+  if (!playerIsActive(player)) return '';
+  return player.videoId || '';
+}
+
+function playingSnapshot() {
+  const id = activePlayingId();
+  if (!id) return null;
+  const player = view.audioPlayer;
+  const tab = (view.audioTabs || []).find((row) => row.id === view.audioTargetId);
+  const titleFromTab = tab ? Core.tabTitleToVideoTitle(tab.title) : '';
+  return {
+    v: id,
+    t: (player && player.title) || titleFromTab || '',
+    ct: (player && player.channel) || '',
+  };
+}
+
+function queueRow(item, { removable = true } = {}) {
   const row = document.createElement('div');
   row.className = 'queue-row';
   const title = item.t || '';
@@ -2252,24 +2275,28 @@ function queueRow(item) {
   if (channelName) body.appendChild(textEl('div', 'queue-row__channel', channelName));
   row.appendChild(body);
 
-  const remove = document.createElement('button');
-  remove.type = 'button';
-  remove.className = 'icon-btn queue-row__remove';
-  remove.setAttribute('aria-label', t('queueRemove'));
-  remove.title = t('queueRemove');
-  remove.textContent = '✕';
-  remove.addEventListener('click', (event) => {
-    event.stopPropagation();
-    void removeQueued(item.v);
-  });
-  row.appendChild(remove);
+  if (removable) {
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'icon-btn queue-row__remove';
+    remove.setAttribute('aria-label', t('queueRemove'));
+    remove.title = t('queueRemove');
+    remove.textContent = '✕';
+    remove.addEventListener('click', (event) => {
+      event.stopPropagation();
+      void removeQueued(item.v);
+    });
+    row.appendChild(remove);
+  }
   return row;
 }
 
 function renderQueue() {
   const root = document.getElementById('queue');
   if (!root) return;
-  const folded = queueView({ queue: view.queue, open: view.queueOpen, cap: QUEUE_CAP });
+  const playingId = activePlayingId();
+  const items = visibleQueue(view.queue, playingId);
+  const folded = queueView({ queue: items, open: view.queueOpen, cap: QUEUE_CAP });
   const toggle = document.getElementById('queue-toggle');
   const label = document.getElementById('queue-toggle-label');
   const play = document.getElementById('queue-play');
@@ -2305,7 +2332,7 @@ function renderQueue() {
   // The signature is what stops a redraw from rebuilding rows that have not
   // changed, which would drop focus mid-keyboard. Only a hidden list is
   // emptied: clearing it on an unchanged redraw would blank the open list.
-  const sig = JSON.stringify([locale, view.queue, folded.open]);
+  const sig = JSON.stringify([locale, items, folded.open, playingId]);
   if (!showList) {
     queueListSig = '';
     list?.replaceChildren();
@@ -2315,11 +2342,11 @@ function renderQueue() {
       : '';
     queueListSig = sig;
     list.replaceChildren();
-    for (const item of folded.items) {
-      const row = queueRow(item);
+    folded.items.forEach((item, i) => {
+      const row = queueRow(item, { removable: !(i === 0 && item.v === playingId) });
       row.dataset.queueV = item.v;
       list.appendChild(row);
-    }
+    });
     if (focusedV) {
       list.querySelector(`[data-queue-v="${CSS.escape(focusedV)}"]`)?.querySelector('.queue-row__open')?.focus?.();
     }
@@ -2347,7 +2374,14 @@ async function toggleQueued(item) {
       return;
     }
     const entry = queueEntryFromItem(item, Date.now()) || item;
-    const res = await send({ type: 'queue.add', item: entry });
+    const playing = playingSnapshot();
+    const res = await send({
+      type: 'queue.add',
+      item: entry,
+      playing,
+      tabId: view.audioTargetId,
+      active: !!playing,
+    });
     applyQueueResult(res, { fullNotice: true });
   } catch (err) {
     view.queueNotice = formatError(err?.message || err);
@@ -2383,7 +2417,8 @@ async function playQueue() {
   view.queueNotice = '';
   view.queueClearOpen = false;
   try {
-    const res = await send({ type: 'queue.playAll' });
+    const playing = playingSnapshot();
+    const res = await send({ type: 'queue.playAll', playingId: playing ? playing.v : '' });
     if (res && Array.isArray(res.queue)) view.queue = res.queue;
     if (res && res.ok === true) {
       window.close();
@@ -3121,6 +3156,27 @@ async function queryYoutubeTabs() {
   }
 }
 
+async function noteQueueTarget() {
+  const tabId = view.audioTargetId;
+  if (typeof tabId !== 'number') return;
+  if (queueTabSent !== tabId) {
+    queueTabSent = tabId;
+    try { await send({ type: 'player.tab', tabId }); } catch { /* the tab can close */ }
+  }
+  const playing = playingSnapshot();
+  const key = playing ? `${tabId}:${playing.v}` : '';
+  if (queueNoted === key) return;
+  queueNoted = key;
+  if (!playing) return;
+  try {
+    const res = await send({ type: 'queue.notePlaying', tabId, item: playing });
+    if (res && Array.isArray(res.queue)) {
+      view.queue = res.queue;
+      renderQueue();
+    }
+  } catch { /* the tab can close */ }
+}
+
 async function refreshAudioState() {
   const ytTabs = await queryYoutubeTabs();
   const activeId = await frontTabId();
@@ -3180,6 +3236,7 @@ async function refreshAudioState() {
     view.audioPlayer = null;
   }
   syncAudioPolling();
+  void noteQueueTarget();
   const players = [...playerById.values()];
   return {
     players,
@@ -3627,6 +3684,10 @@ function bindAudio() {
       }
       if (changes.feed && Array.isArray(changes.feed.newValue)) {
         view.feed = changes.feed.newValue;
+        touched = true;
+      }
+      if (changes.queue && Array.isArray(changes.queue.newValue)) {
+        view.queue = changes.queue.newValue;
         touched = true;
       }
       if (changes.pollState && changes.pollState.newValue && typeof changes.pollState.newValue === 'object') {

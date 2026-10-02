@@ -288,6 +288,30 @@ to it in a browser by hand. The bullets under it were measured.
   ("Auto (720p)"). That the value keeps the `720p` form on an Arabic YouTube
   is not measured yet.
 
+## Watch-page queue
+
+Measured on 2026-10-02 from a watch page (`watch?v=jNQXAC9IVRw`, 1,274,992
+bytes) and the scripts it names: player `8ab5c328` (`player_ias` base.js,
+2,987,830 bytes) and desktop app `2b888666` (`kevlar_base`, 10,836,560
+bytes). Not measured by clicking the button in a browser. The read path
+was confirmed by hand the same day: Add to queue on the watch page shows
+up in Up next, so `getPlaylist()` is that list.
+
+- `getPlaylist()` is the video ids, `getPlaylistIndex()` the current one,
+  `getPlaylistId()` the list id. An Add to queue list id starts with
+  `TLPQ`. `PL`, `RD` (a mix), `LL`, `WL` (Watch Later), `UU`, `OL` and
+  `FL` are other lists and are not written.
+- The queue panel is not the player's list. `loadPlaylist(ids, index,
+  startSeconds)` on `#movie_player` replaces the player's list and leaves
+  the panel alone. The panel is updated by the page's own command,
+  `addToPlaylistCommand`, with `listType` `PLAYLIST_EDIT_LIST_TYPE_QUEUE`.
+  The button's `onCreateListCommand` posts to `/youtubei/v1/playlist/create`.
+  Its `createPlaylistServiceEndpoint.params` was `CAQ%3D`. The page handles
+  that command as the action `yt-add-to-playlist-command`. Clearing the
+  panel is `yt-end-playlist-command` with the same list type.
+- One command is enough to find the params: it sits on the watch response
+  (`ytd-watch-flexy` `.data`, or `ytInitialData` on the first document).
+
 Not measured yet: that `#movie_player` exists at `document_idle` on a fresh
 watch page, how much video has buffered by then, and that a short plays in the
 ordinary player at `/watch?v=`.

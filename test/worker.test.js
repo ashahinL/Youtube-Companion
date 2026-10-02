@@ -4510,6 +4510,147 @@ export default async function run(t) {
       JSON.stringify({ ok: full.ok, error: full.error, n: full.queue?.length }),
     );
 
+    t.section('queue follows the playing video');
+
+    const NOW = 'aaaaaaaaaaa';
+    const NEXT = 'bbbbbbbbbbb';
+    const LATER = 'ccccccccccc';
+    const FROM_PAGE = 'ddddddddddd';
+    await globalThis.chrome.storage.session.remove(['queuePlay', 'playerTab', 'queuePushed']);
+    mock.onTabMessage = () => ({ ok: true, applied: true });
+
+    await wipe();
+    await handleMessage({ type: 'player.tab', tabId: 7 });
+    mock.resetCalls();
+    const lined = await handleMessage({
+      type: 'queue.add',
+      item: { v: NEXT, t: 'Next' },
+      playing: { v: NOW, t: 'Now' },
+      tabId: 7,
+      active: true,
+    });
+    t.check(
+      'adding while a video plays puts that video first',
+      lined.ok === true && lined.queue.map((row) => row.v).join() === `${NOW},${NEXT}`,
+      JSON.stringify(lined.queue),
+    );
+    const armed = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check(
+      'adding while a video plays arms autoplay',
+      armed.queuePlay?.tabId === 7 && armed.queuePlay?.v === NOW,
+      JSON.stringify(armed),
+    );
+    t.check(
+      'adding while a video plays tells the page queue',
+      mock.messagesSent.some((row) => row.tabId === 7
+        && row.message?.type === 'queue.apply'
+        && row.message.ids.join() === `${NOW},${NEXT}`),
+      JSON.stringify(mock.messagesSent),
+    );
+
+    await wipe();
+    await globalThis.chrome.storage.session.remove(['queuePlay', 'queuePushed']);
+    await handleMessage({ type: 'player.tab', tabId: 7 });
+    const alone = await handleMessage({
+      type: 'queue.add',
+      item: { v: NOW, t: 'Now' },
+      playing: { v: NOW, t: 'Now' },
+      tabId: 7,
+      active: true,
+    });
+    const alonePlay = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check(
+      'adding only the playing video stores that one row',
+      alone.ok === true && alone.queue.length === 1 && alone.queue[0].v === NOW,
+      JSON.stringify(alone.queue),
+    );
+    t.check('a lone playing video does not arm autoplay', alonePlay.queuePlay == null, JSON.stringify(alonePlay));
+
+    await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: NEXT, t: 'Next' } });
+    await handleMessage({ type: 'queue.add', item: { v: LATER, t: 'Later' } });
+    await handleMessage({ type: 'player.tab', tabId: 7 });
+    const jumped = await handleMessage({
+      type: 'queue.notePlaying',
+      tabId: 7,
+      item: { v: NOW, t: 'Now' },
+    });
+    t.check(
+      'the playing video jumps ahead of what was already queued',
+      jumped.ok === true && jumped.queue.map((row) => row.v).join() === `${NOW},${NEXT},${LATER}`,
+      JSON.stringify(jumped.queue),
+    );
+    const wrongNote = await handleMessage({
+      type: 'queue.notePlaying',
+      tabId: 8,
+      item: { v: FROM_PAGE, t: 'Nope' },
+    });
+    t.check('notePlaying from another tab is ignored', wrongNote.ok === false, JSON.stringify(wrongNote));
+
+    const beforeForeign = (await readQueue()).map((row) => row.v).join();
+    const foreign = await handleMessage({
+      type: 'queue.page',
+      playlistId: 'TLPQqueue',
+      index: 0,
+      videoId: NOW,
+      items: [{ v: NOW, t: 'Now' }, { v: FROM_PAGE, t: 'From page' }],
+    }, { tab: { id: 99, url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' }, url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' });
+    t.check(
+      'another YouTube tab cannot rewrite the queue',
+      foreign.ok === false && (await readQueue()).map((row) => row.v).join() === beforeForeign,
+      JSON.stringify(foreign),
+    );
+
+    const adopted = await handleMessage({
+      type: 'queue.page',
+      playlistId: 'TLPQqueue',
+      index: 0,
+      videoId: NOW,
+      title: 'Now',
+      items: [{ v: NOW, t: 'Now' }, { v: FROM_PAGE, t: 'From page' }],
+    }, { tab: { id: 7, url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' }, url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa' });
+    t.check(
+      'the player tab adopts Add to queue',
+      adopted.ok === true && adopted.queue.map((row) => row.v).join() === `${NOW},${FROM_PAGE}`,
+      JSON.stringify(adopted.queue),
+    );
+
+    mock.resetCalls();
+    await handleMessage({ type: 'player.tab', tabId: 7 });
+    const savedList = await handleMessage({
+      type: 'queue.page',
+      playlistId: 'PLsavedlist01',
+      index: 0,
+      videoId: 'zzzzzzzzzzz',
+      title: 'In a playlist',
+      items: [{ v: 'zzzzzzzzzzz', t: 'In a playlist' }, { v: 'yyyyyyyyyyy', t: 'Second' }],
+    }, { tab: { id: 7, url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz' }, url: 'https://www.youtube.com/watch?v=zzzzzzzzzzz' });
+    t.check(
+      'a saved playlist is not copied into Up next',
+      savedList.queue.map((row) => row.v).join() === `zzzzzzzzzzz,${NOW},${FROM_PAGE}`,
+      JSON.stringify(savedList.queue),
+    );
+    t.check(
+      'a saved playlist is not written back to the page',
+      !mock.messagesSent.some((row) => row.message?.type === 'queue.apply'),
+      JSON.stringify(mock.messagesSent),
+    );
+
+    await wipe();
+    await handleMessage({ type: 'player.tab', tabId: 7 });
+    await handleMessage({ type: 'queue.add', item: { v: NOW, t: 'Now' } });
+    await handleMessage({ type: 'queue.add', item: { v: NEXT, t: 'Next' } });
+    mock.resetCalls();
+    await handleMessage({ type: 'player.tab', tabId: 7 });
+    const stayed = await handleMessage({ type: 'queue.playAll', playingId: NOW });
+    t.check(
+      'play all leaves a video that is already playing',
+      stayed.ok === true && mock.tabsCreated.length === 0,
+      JSON.stringify({ ok: stayed.ok, opened: mock.tabsCreated.length }),
+    );
+
+    mock.onTabMessage = null;
+
     t.section('renaming and deleting a group');
 
     await wipe();
@@ -4620,6 +4761,7 @@ export default async function run(t) {
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
       'importBackup', 'importTakeout', 'importFromYouTube', 'undoRemove', 'renameGroup', 'deleteGroup',
       'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen',
+      'player.tab', 'queue.notePlaying',
       'whatsNew.seen', 'subscriptions.scan']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
@@ -4629,6 +4771,9 @@ export default async function run(t) {
     t.check('deleteGroup is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('deleteGroup'));
 
     t.check('queue.ended is in CONTENT_SCRIPT_MESSAGES', CONTENT_SCRIPT_MESSAGES.has('queue.ended'));
+    t.check('queue.page is in CONTENT_SCRIPT_MESSAGES', CONTENT_SCRIPT_MESSAGES.has('queue.page'));
+    t.check('player.tab is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('player.tab'));
+    t.check('queue.notePlaying is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.notePlaying'));
     t.check('queue.add is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.add'));
     t.check('queue.remove is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.remove'));
     t.check('queue.clear is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.clear'));

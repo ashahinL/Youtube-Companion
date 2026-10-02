@@ -32,6 +32,9 @@
     collaborators: 0,
     subscribedChannels: 0,
     sessionIndex: 0,
+    watchQueue: 0,
+    setWatchQueue: 1,
+    clearWatchQueue: 0,
   };
 
   const MAX_COLLABORATORS = 10;
@@ -91,6 +94,16 @@
       && Math.floor(value) === value;
   }
 
+  const VIDEO_ID_RE = /^[\w-]{11}$/;
+
+  function isVideoIdList(value) {
+    if (!Array.isArray(value) || value.length < 2 || value.length > 100) return false;
+    for (let i = 0; i < value.length; i++) {
+      if (typeof value[i] !== 'string' || !VIDEO_ID_RE.test(value[i])) return false;
+    }
+    return true;
+  }
+
   function isAllowedCall(method, args) {
     if (typeof method !== 'string' || !Object.prototype.hasOwnProperty.call(ARITY, method)) {
       return false;
@@ -103,6 +116,7 @@
     if (method === 'seekTo') return isSeekTime(args[0]);
     if (method === 'setPlaybackRate') return isPlaybackRate(args[0]);
     if (method === 'setVolume') return isVolumeLevel(args[0]);
+    if (method === 'setWatchQueue') return isVideoIdList(args[0]);
     return true;
   }
 
@@ -305,6 +319,268 @@
     return null;
   }
 
+  function clipText(value) {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    return trimmed.length > 200 ? trimmed.slice(0, 200) : trimmed;
+  }
+
+  function videoIdFromHref(href) {
+    if (typeof href !== 'string') return '';
+    const watch = href.match(/[?&]v=([\w-]{11})/);
+    if (watch) return watch[1];
+    const shorts = href.match(/\/shorts\/([\w-]{11})/);
+    return shorts ? shorts[1] : '';
+  }
+
+  function readWatchQueue() {
+    const player = getPlayer();
+    let playlistId = '';
+    let index = 0;
+    const ids = [];
+    let videoId = '';
+    let title = '';
+    let channel = '';
+    try {
+      if (player && typeof player.getPlaylistId === 'function') {
+        const id = player.getPlaylistId();
+        if (typeof id === 'string') playlistId = id;
+      }
+      if (player && typeof player.getPlaylistIndex === 'function') {
+        const n = player.getPlaylistIndex();
+        if (typeof n === 'number' && isFinite(n) && n >= 0) index = Math.floor(n);
+      }
+      if (player && typeof player.getPlaylist === 'function') {
+        const list = player.getPlaylist();
+        if (Array.isArray(list)) {
+          for (let i = 0; i < list.length && ids.length < 100; i++) {
+            if (typeof list[i] === 'string' && VIDEO_ID_RE.test(list[i])) ids.push(list[i]);
+          }
+        }
+      }
+      if (player && typeof player.getVideoData === 'function') {
+        const data = player.getVideoData();
+        if (data && typeof data === 'object') {
+          if (typeof data.video_id === 'string' && VIDEO_ID_RE.test(data.video_id)) videoId = data.video_id;
+          title = clipText(data.title);
+          channel = clipText(data.author);
+          if (!playlistId && typeof data.list === 'string') playlistId = data.list;
+        }
+      }
+    } catch (err) {
+      // The player throws when it is mid-navigation.
+    }
+    const titles = Object.create(null);
+    const channels = Object.create(null);
+    try {
+      const doc = root.document;
+      const rows = doc && typeof doc.querySelectorAll === 'function'
+        ? doc.querySelectorAll('ytd-playlist-panel-video-renderer')
+        : [];
+      for (let i = 0; i < rows.length && i < 100; i++) {
+        const row = rows[i];
+        const link = row.querySelector && row.querySelector('a#wc-endpoint, a[href*="watch?v="]');
+        const id = videoIdFromHref(link && link.getAttribute('href'));
+        if (!id) continue;
+        const titleEl = row.querySelector('#video-title');
+        const byline = row.querySelector('#byline');
+        if (titleEl && titleEl.textContent) titles[id] = clipText(titleEl.textContent);
+        if (byline && byline.textContent) channels[id] = clipText(byline.textContent);
+      }
+    } catch (err) {
+      // The panel is optional. Ids from the player are enough.
+    }
+    const items = [];
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      items.push({
+        v: id,
+        t: titles[id] || (id === videoId ? title : ''),
+        ct: channels[id] || (id === videoId ? channel : ''),
+      });
+    }
+    return { playlistId: playlistId, index: index, videoId: videoId, title: title, channel: channel, items: items };
+  }
+
+  // loadPlaylist updates #movie_player and leaves the queue panel as it
+  // was. The panel is the page's own temporary list (id prefix TLPQ),
+  // created by the same addToPlaylistCommand the Add to queue button sends.
+  // Measured 2026-10-02: player 8ab5c328, watch HTML params "CAQ%3D".
+  const QUEUE_LIST_TYPE = 'PLAYLIST_EDIT_LIST_TYPE_QUEUE';
+  const QUEUE_WALK_BUDGET = 20000;
+  const QUEUE_WALK_DEPTH = 30;
+  const QUEUE_ADD_HOLD_MS = 8000;
+  let queueAddKey = '';
+  let queueAddAt = 0;
+
+  function watchRoot() {
+    try {
+      const doc = root.document;
+      if (!doc || typeof doc.querySelector !== 'function') return null;
+      return doc.querySelector('ytd-watch-flexy')
+        || doc.querySelector('ytd-app')
+        || doc.documentElement
+        || null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function firePageAction(name, arg) {
+    const target = watchRoot();
+    if (!target || typeof target.dispatchEvent !== 'function') return false;
+    if (typeof root.CustomEvent !== 'function') return false;
+    const action = {
+      actionName: name,
+      optionalAction: false,
+      args: [arg, target],
+      returnValue: [],
+    };
+    try {
+      target.dispatchEvent(new root.CustomEvent('yt-action', {
+        detail: action,
+        bubbles: true,
+        composed: true,
+      }));
+    } catch (err) {
+      return false;
+    }
+    return true;
+  }
+
+  function isQueueAddCommand(cmd) {
+    if (!cmd || cmd.listType !== QUEUE_LIST_TYPE) return false;
+    const create = cmd.onCreateListCommand;
+    const endpoint = create && create.createPlaylistServiceEndpoint;
+    return !!(endpoint && typeof endpoint.params === 'string' && endpoint.params);
+  }
+
+  function findQueueAddCommand() {
+    const starts = [];
+    try {
+      const doc = root.document;
+      const flexy = doc && doc.querySelector && doc.querySelector('ytd-watch-flexy');
+      if (flexy && flexy.data) starts.push(flexy.data);
+      const app = doc && doc.querySelector && doc.querySelector('ytd-app');
+      if (app && app.data && app.data !== (flexy && flexy.data)) starts.push(app.data);
+    } catch (err) {
+      // The page can throw while it is swapping documents.
+    }
+    if (root.ytInitialData) starts.push(root.ytInitialData);
+    for (let s = 0; s < starts.length; s++) {
+      const found = walkForQueueCommand(starts[s]);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function walkForQueueCommand(start) {
+    const stack = [{ node: start, depth: 0 }];
+    const seen = new Set();
+    let budget = QUEUE_WALK_BUDGET;
+    while (stack.length && budget > 0) {
+      const cur = stack.pop();
+      const obj = cur.node;
+      if (!obj || typeof obj !== 'object') continue;
+      if (seen.has(obj)) continue;
+      seen.add(obj);
+      budget--;
+      if (isQueueAddCommand(obj.addToPlaylistCommand)) return obj.addToPlaylistCommand;
+      if (cur.depth >= QUEUE_WALK_DEPTH) continue;
+      if (Array.isArray(obj)) {
+        for (let i = obj.length - 1; i >= 0; i--) {
+          const child = obj[i];
+          if (child && typeof child === 'object') stack.push({ node: child, depth: cur.depth + 1 });
+        }
+        continue;
+      }
+      const later = [];
+      let keys;
+      try { keys = Object.keys(obj); } catch (err) { keys = []; }
+      for (let i = keys.length - 1; i >= 0; i--) {
+        const key = keys[i];
+        if (key === 'html5PlaybackOnesieConfig' || key === 'streamingData' || key === 'captionTracks') continue;
+        const child = obj[key];
+        if (!child || typeof child !== 'object') continue;
+        if (key === 'addToPlaylistCommand' || key === 'contents' || key === 'items' || key === 'results' || key === 'actions') {
+          later.push(child);
+          continue;
+        }
+        stack.push({ node: child, depth: cur.depth + 1 });
+      }
+      for (let i = 0; i < later.length; i++) {
+        stack.push({ node: later[i], depth: cur.depth + 1 });
+      }
+    }
+    return null;
+  }
+
+  function queueAddCommand(template, videoIds) {
+    const first = videoIds[0];
+    const create = template.onCreateListCommand;
+    const endpoint = create.createPlaylistServiceEndpoint;
+    return {
+      addToPlaylistCommand: {
+        // true matches the watch-page button. false makes the page insert
+        // the playing video on its own, and then again from videoIds.
+        openMiniplayer: true,
+        videoId: first,
+        listType: QUEUE_LIST_TYPE,
+        onCreateListCommand: {
+          clickTrackingParams: create.clickTrackingParams,
+          commandMetadata: create.commandMetadata,
+          createPlaylistServiceEndpoint: {
+            videoIds: videoIds.slice(),
+            params: endpoint.params,
+          },
+        },
+        videoIds: videoIds.slice(),
+        videoCommand: {
+          commandMetadata: {
+            webCommandMetadata: {
+              url: '/watch?v=' + first,
+              webPageType: 'WEB_PAGE_TYPE_WATCH',
+              rootVe: 3832,
+            },
+          },
+          watchEndpoint: { videoId: first },
+        },
+      },
+    };
+  }
+
+  function setWatchQueue(ids) {
+    if (!isVideoIdList(ids)) return false;
+    const snap = readWatchQueue();
+    const have = Object.create(null);
+    const items = snap && Array.isArray(snap.items) ? snap.items : [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i] && typeof items[i].v === 'string') have[items[i].v] = true;
+    }
+    const missing = [];
+    for (let i = 0; i < ids.length; i++) {
+      if (!have[ids[i]]) missing.push(ids[i]);
+    }
+    if (!missing.length) return true;
+    const key = missing.join(',');
+    const now = Date.now();
+    // The create call is a network round trip. Sending the same ids again
+    // before it lands puts the video on the queue twice.
+    if (key === queueAddKey && now - queueAddAt < QUEUE_ADD_HOLD_MS) return true;
+    const template = findQueueAddCommand();
+    if (!template) return false;
+    if (!firePageAction('yt-add-to-playlist-command', queueAddCommand(template, missing))) return false;
+    queueAddKey = key;
+    queueAddAt = now;
+    return true;
+  }
+
+  function clearWatchQueue() {
+    return firePageAction('yt-end-playlist-command', {
+      endPlaylistCommand: { listType: QUEUE_LIST_TYPE },
+    });
+  }
+
   function postToPage(msg) {
     try {
       win.postMessage(msg, PAGE_ORIGIN);
@@ -386,6 +662,18 @@
       }
       if (req.method === 'sessionIndex') {
         reply(req.token, req.id, { ok: true, result: readSessionIndex() });
+        return;
+      }
+      if (req.method === 'watchQueue') {
+        reply(req.token, req.id, { ok: true, result: readWatchQueue() });
+        return;
+      }
+      if (req.method === 'setWatchQueue') {
+        reply(req.token, req.id, { ok: true, result: setWatchQueue(req.args[0]) === true });
+        return;
+      }
+      if (req.method === 'clearWatchQueue') {
+        reply(req.token, req.id, { ok: true, result: clearWatchQueue() === true });
         return;
       }
       const player = getPlayer();

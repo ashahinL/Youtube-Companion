@@ -53,6 +53,7 @@ import {
   addToQueue,
   removeFromQueue,
   clearQueue,
+  updateQueue,
   takeFromQueue,
   withListLock,
   readQueueOpen,
@@ -60,12 +61,17 @@ import {
   readWhatsNewSeen,
   writeWhatsNewSeen,
   MAX_CHANNELS,
+  QUEUE_CAP,
 } from '../lib/store.js';
 import {
   feedChannelIds,
   fold,
   normalizeGroupName,
   queueEntryFromItem,
+  playlistKind,
+  shapeQueue,
+  sameQueueIds,
+  queueFromPage,
   resolvedFeedGroup,
   WHATS_NEW_VERSION,
 } from '../lib/view.js';
@@ -185,10 +191,13 @@ export const CONTENT_SCRIPT_MESSAGES = new Set([
   'audioMode.boot',
   'audioMode.shortcut',
   'queue.ended',
+  'queue.page',
   'subscriptions.close',
 ]);
 
 const QUEUE_PLAY_KEY = 'queuePlay';
+const PLAYER_TAB_KEY = 'playerTab';
+const QUEUE_PUSHED_KEY = 'queuePushed';
 
 // In-memory latch so two overlapping calls in the same worker cannot both
 // pass the storage read. The durable twin is pollState.running.
@@ -304,6 +313,82 @@ async function writeQueuePlay(rec) {
     return;
   }
   await chromeApi().storage.session.set({ [QUEUE_PLAY_KEY]: rec });
+}
+
+async function readPlayerTab() {
+  const got = await chromeApi().storage.session.get(PLAYER_TAB_KEY);
+  const id = got && got[PLAYER_TAB_KEY];
+  return typeof id === 'number' && Number.isFinite(id) ? id : null;
+}
+
+async function writePlayerTab(tabId) {
+  if (typeof tabId !== 'number' || !Number.isFinite(tabId)) {
+    await chromeApi().storage.session.remove(PLAYER_TAB_KEY);
+    return;
+  }
+  await chromeApi().storage.session.set({ [PLAYER_TAB_KEY]: tabId });
+}
+
+function asPushed(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.tabId !== 'number' || !Number.isFinite(raw.tabId)) return null;
+  if (!Array.isArray(raw.ids)) return null;
+  return { tabId: raw.tabId, ids: raw.ids.filter((id) => typeof id === 'string') };
+}
+
+async function readPushed() {
+  const got = await chromeApi().storage.session.get(QUEUE_PUSHED_KEY);
+  return asPushed(got && got[QUEUE_PUSHED_KEY]);
+}
+
+async function writePushed(rec) {
+  await chromeApi().storage.session.set({ [QUEUE_PUSHED_KEY]: rec });
+}
+
+function playingFrom(item) {
+  return queueEntryFromItem(item, Date.now());
+}
+
+function desiredPageIds(queue) {
+  return queue.length >= 2 ? queue.map((row) => row.v) : [];
+}
+
+async function armQueue(tabId, queue, playingId) {
+  if (tabId == null || !playingId) return;
+  if (queue.length >= 2 && queue[0] && queue[0].v === playingId) {
+    const play = await readQueuePlay();
+    if (!play || play.tabId !== tabId || play.v !== playingId) {
+      await writeQueuePlay({ tabId, v: playingId });
+    }
+  }
+}
+
+/**
+ * Tell the Player tab's queue to match. A list shorter than two means
+ * "nothing after the video that is playing", so the page queue is cleared.
+ * The same ids are not sent twice: loadPlaylist reloads the current video.
+ */
+async function syncPage(tabId, queue, { force = false } = {}) {
+  if (tabId == null) return;
+  const ids = desiredPageIds(queue);
+  const prev = await readPushed();
+  const prevIds = prev && prev.tabId === tabId ? prev.ids : null;
+  if (!force && prevIds && sameQueueIds(prevIds, ids)) return;
+  if (!force && ids.length < 2 && !(prevIds && prevIds.length >= 2)) return;
+  let res = null;
+  try {
+    res = await chromeApi().tabs.sendMessage(tabId, { type: 'queue.apply', ids });
+  } catch {
+    return;
+  }
+  if (res && res.applied === true) await writePushed({ tabId, ids });
+}
+
+async function shapeAndFollow(tabId, playing, { sync = true } = {}) {
+  const queue = await updateQueue((q) => shapeQueue(q, playing));
+  if (playing) await armQueue(tabId, queue, playing.v);
+  if (sync) await syncPage(tabId, queue);
+  return queue;
 }
 
 async function queueOpensInAudioMode() {
@@ -1815,20 +1900,91 @@ export async function handleMessage(msg, sender) {
         await openVideoTab(parsed.id, 'video', { audio: true });
         return { ok: true };
       }
+      case 'player.tab': {
+        const tabId = msg && msg.tabId;
+        if (typeof tabId !== 'number' || !Number.isFinite(tabId)) return { ok: false, error: 'no tab' };
+        await writePlayerTab(tabId);
+        return { ok: true };
+      }
+      case 'queue.notePlaying': {
+        const tabId = typeof msg.tabId === 'number' ? msg.tabId : null;
+        const playerTab = await readPlayerTab();
+        if (tabId == null || playerTab == null || tabId !== playerTab) return { ok: false };
+        const playing = playingFrom(msg.item);
+        if (!playing) return { ok: false, error: 'invalid' };
+        const queue = await shapeAndFollow(tabId, playing);
+        return { ok: true, queue };
+      }
+      case 'queue.page': {
+        const tabId = sender?.tab?.id;
+        const url = (sender?.tab?.url) || (sender?.url) || '';
+        if (typeof tabId !== 'number' || !url.startsWith('https://www.youtube.com/')) {
+          return { ok: false, error: 'not allowed' };
+        }
+        // Only the tab the Player controls. Any other YouTube tab is ignored,
+        // so a page cannot pick a tab or rewrite Up next.
+        const playerTab = await readPlayerTab();
+        if (playerTab == null || tabId !== playerTab) return { ok: false };
+        const playing = playingFrom({ v: msg.videoId, t: msg.title, ct: msg.channel });
+        const kind = playlistKind(msg.playlistId);
+        if (kind === 'saved' || kind === 'other') {
+          const queue = playing
+            ? await shapeAndFollow(tabId, playing, { sync: false })
+            : await readQueue();
+          return { ok: true, queue };
+        }
+        if (msg.echo === true) {
+          const queue = playing ? await shapeAndFollow(tabId, playing) : await readQueue();
+          return { ok: true, queue };
+        }
+        const index = Number(msg.index);
+        const from = Number.isFinite(index) && index > 0 ? Math.floor(index) : 0;
+        const pageItems = Array.isArray(msg.items) ? msg.items.slice(from) : [];
+        const pageIds = queueFromPage([], pageItems, QUEUE_CAP).map((row) => row.v);
+        const adopt = kind === 'queue' || pageIds.length >= 2;
+        if (!adopt) {
+          const queue = playing ? await shapeAndFollow(tabId, playing) : await readQueue();
+          return { ok: true, queue };
+        }
+        const queue = await updateQueue((q) => shapeQueue(queueFromPage(q, pageItems, QUEUE_CAP), playing));
+        if (playing) await armQueue(tabId, queue, playing.v);
+        const desired = desiredPageIds(queue);
+        if (desired.length < 2 && kind === 'queue') {
+          // A queue of only the video that is playing is not shown.
+          await syncPage(tabId, queue, { force: true });
+        } else if (sameQueueIds(pageIds, desired)) {
+          await writePushed({ tabId, ids: desired });
+        } else {
+          await syncPage(tabId, queue);
+        }
+        return { ok: true, queue };
+      }
       case 'queue.add': {
         const built = queueEntryFromItem(msg && msg.item, Date.now());
         if (!built) return { ok: false, error: 'invalid' };
         const result = await addToQueue(built);
-        if (result.added) return { ok: true, queue: result.queue };
         if (result.full) return { ok: false, error: 'full', queue: result.queue };
+        const playing = msg.active ? playingFrom(msg.playing) : null;
+        const tabId = typeof msg.tabId === 'number' && Number.isFinite(msg.tabId)
+          ? msg.tabId
+          : await readPlayerTab();
+        if (playing && tabId != null) {
+          const queue = await shapeAndFollow(tabId, playing);
+          return { ok: true, queue };
+        }
         return { ok: true, queue: result.queue };
       }
       case 'queue.remove': {
         const result = await removeFromQueue(msg && msg.v);
+        const tabId = await readPlayerTab();
+        if (tabId != null) await syncPage(tabId, result.queue);
         return { ok: true, queue: result.queue };
       }
       case 'queue.clear': {
         const result = await clearQueue();
+        await writeQueuePlay(null);
+        const tabId = await readPlayerTab();
+        if (tabId != null) await syncPage(tabId, result.queue);
         return { ok: true, queue: result.queue };
       }
       case 'queue.setOpen':
@@ -1841,10 +1997,19 @@ export async function handleMessage(msg, sender) {
         const queue = await readQueue();
         const first = queue[0];
         if (!first) return { ok: false, error: 'empty' };
+        const playingId = typeof msg.playingId === 'string' ? msg.playingId : '';
+        const playerTab = await readPlayerTab();
+        // The video already playing is first. Opening it again would restart it.
+        if (playingId && first.v === playingId && playerTab != null && queue.length >= 2) {
+          await writeQueuePlay({ tabId: playerTab, v: first.v });
+          await syncPage(playerTab, queue);
+          return { ok: true, queue };
+        }
         const audio = await queueOpensInAudioMode();
         const tab = await openVideoTab(first.v, first.k, { audio });
         const tabId = tab && tab.id;
         if (tabId == null) return { ok: false, error: 'no tab' };
+        await writePlayerTab(tabId);
         await writeQueuePlay({ tabId, v: first.v });
         return { ok: true, queue };
       }
