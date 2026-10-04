@@ -20,6 +20,12 @@
   const SAMPLE_MS = 5000;
   const FLUSH_MS = 30000;
   const CALL_TIMEOUT_MS = 1500;
+  // One queue edit can wait on the page for several seconds, and a batch
+  // runs them one after another.
+  const QUEUE_OPS_TIMEOUT_MS = 60000;
+  const QUEUE_LIST_RE = /^TLPQ[A-Za-z0-9_-]{0,60}$/;
+  const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+  const QUEUE_MAX_IDS = 100;
   const BRIDGE_READY_MS = 1500;
   const BRIDGE_RETRY_MS = 50;
   // 32 random bytes, hex. A page can still watch postMessage; there is no
@@ -101,6 +107,10 @@
   let sleepAt = 0;
   let nextCallId = 1;
   const pending = new Map();
+  // A reload starts a new world. The clock keeps a snapshot from the
+  // previous one below anything this page sends, so a late message loses.
+  let queueSeq = Date.now();
+  let queueWatching = false;
 
   function normalizeLevels(levels) {
     if (Array.isArray(levels)) {
@@ -443,15 +453,16 @@
     });
   }
 
-  function callPlayer(method, args) {
+  function callPlayer(method, args, timeoutMs) {
     const win = root.window || root;
     if (!win || typeof win.postMessage !== 'function') return Promise.resolve(undefined);
     const id = nextCallId++;
+    const waitMs = timeoutMs == null ? CALL_TIMEOUT_MS : timeoutMs;
     return new Promise(function (resolve) {
       const timer = setTimeout(function () {
         pending.delete(id);
         resolve(undefined);
-      }, CALL_TIMEOUT_MS);
+      }, waitMs);
       pending.set(id, { resolve: resolve, timer: timer });
       try {
         if (!bridgeToken) {
@@ -493,6 +504,24 @@
       }
       if (data.dir === 'event' && data.event === 'onPlaybackQualityChange') {
         onQualityChange(data.quality);
+        return;
+      }
+      if (data.dir === 'event' && data.event === 'queueChanged') {
+        if (!queueWatching) return;
+        try {
+          const ch = root.chrome;
+          if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
+          const snap = cleanQueueSnapshot(data.snapshot, ++queueSeq);
+          Promise.resolve(ch.runtime.sendMessage({
+            type: 'queue.snapshot',
+            seq: snap.seq,
+            listId: snap.listId,
+            ids: snap.ids,
+            playing: snap.playing,
+          })).then(function () {}, function () {});
+        } catch (err) {
+          // ignore
+        }
       }
     } catch (err) {
       // swallow
@@ -701,6 +730,26 @@
       out.push({ id: id, handle: handle, name: name });
     }
     return out.length > 1 ? out : [];
+  }
+
+  // The bridge answer is the page's own data, so it is checked here: a
+  // playlist id of the shape YouTube uses, and video ids only.
+  function cleanQueueSnapshot(raw, seq) {
+    const empty = { seq: seq, listId: '', ids: [], playing: '' };
+    if (!raw || typeof raw !== 'object') return empty;
+    const listId = typeof raw.listId === 'string' && QUEUE_LIST_RE.test(raw.listId) ? raw.listId : '';
+    const ids = [];
+    if (listId && Array.isArray(raw.ids)) {
+      const seen = Object.create(null);
+      for (let i = 0; i < raw.ids.length && ids.length < QUEUE_MAX_IDS; i++) {
+        const id = raw.ids[i];
+        if (typeof id !== 'string' || !VIDEO_ID_RE.test(id) || seen[id]) continue;
+        seen[id] = true;
+        ids.push(id);
+      }
+    }
+    const playing = typeof raw.playing === 'string' && VIDEO_ID_RE.test(raw.playing) ? raw.playing : '';
+    return { seq: seq, listId: listId, ids: ids, playing: playing };
   }
 
   async function readCollaborators(owner, videoId) {
@@ -3642,6 +3691,41 @@
           try { sendResponse({ ok: ok }); } catch (err) { /* swallow */ }
           return;
         }
+        if (msg.type === 'queue.watch') {
+          if (typeof msg.on !== 'boolean') {
+            sendResponse({ ok: false, error: 'invalid' });
+            return true;
+          }
+          const on = msg.on;
+          ensureBridge().then(function () {
+            queueWatching = on;
+            return callPlayer('queueWatch', [on]);
+          }).then(function (result) {
+            if (!on) {
+              sendResponse({ ok: true });
+              return;
+            }
+            sendResponse({ ok: true, snapshot: cleanQueueSnapshot(result, ++queueSeq) });
+          }).catch(function () {});
+          return true;
+        }
+        if (msg.type === 'queue.ops') {
+          const ops = msg.ops;
+          if (!Array.isArray(ops) || ops.length < 1 || ops.length > 100) {
+            sendResponse({ ok: false, error: 'invalid' });
+            return true;
+          }
+          ensureBridge().then(function () {
+            return callPlayer('queueOps', [ops], QUEUE_OPS_TIMEOUT_MS);
+          }).then(function (result) {
+            if (result === undefined) {
+              sendResponse({ ok: false, error: 'failed' });
+              return;
+            }
+            sendResponse({ ok: true, snapshot: cleanQueueSnapshot(result, ++queueSeq) });
+          }).catch(function () {});
+          return true;
+        }
         if (msg.type !== 'audioMode.toggle') return;
         toggle().then(
           function () { sendResponse({ ok: true, on: !!session }); },
@@ -3694,6 +3778,7 @@
     readPlayer,
     readPlayerWithChannels,
     cleanCollaborators,
+    cleanQueueSnapshot,
     parseControl,
     controlPlayer,
     enable,
