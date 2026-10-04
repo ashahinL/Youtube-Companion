@@ -168,7 +168,8 @@ PLAYER, WITH AUDIO MODE
 • Keyboard shortcuts: Alt+Shift+A for audio mode, Alt+Shift+Y to open the popup
 
 UP NEXT
-• A listen-later queue in the Player tab: add a video from your feed, or the one playing now
+• A listen-later queue in the Player tab: add a video from your feed or an alert, and drag to reorder
+• It stays in step with YouTube's own queue on the Player tab: add, remove or reorder on either side
 • Press Play all and the list plays itself in one tab, moving on as each video ends
 • Works with audio mode on or off, and keeps going with the popup closed
 • Up to 100 videos, and the list stays until you clear it
@@ -231,7 +232,8 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • اختصارات لوحة المفاتيح: Alt+Shift+A لوضع الصوت، وAlt+Shift+Y لفتح النافذة
 
 التالي
-• قائمة «استمع لاحقًا» في تبويب المشغّل: أضف فيديو من موجزك، أو الفيديو الذي يعمل الآن
+• قائمة «استمع لاحقًا» في تبويب المشغّل: أضف فيديو من موجزك أو من التنبيه، واسحب لتغيير الترتيب
+• تبقى متطابقة مع قائمة انتظار يوتيوب في تبويب المشغّل: أضف أو احذف أو رتّب من أي جهة
 • اضغط «تشغيل الكل» فتعمل القائمة وحدها في تبويب واحد، وتنتقل للتالي عند انتهاء كل فيديو
 • تعمل مع وضع الصوت أو بدونه، وتستمر والنافذة مغلقة
 • حتى 100 فيديو، وتبقى القائمة حتى تحذفها
@@ -312,7 +314,7 @@ A lighter way to use YouTube: follow channels without an account, get a merged f
 | `notifications` | Shows a desktop notification when a channel the user follows uploads a video. |
 | `activeTab` | When the user presses Add with the box empty, reads the URL of the tab they are on so the channel of that page can be added. Used only on that click. |
 | `declarativeNetRequestWithHostAccess` | YouTube's public endpoints reject requests whose Origin is chrome-extension://. One dynamic rule, limited to www.youtube.com requests initiated by this extension itself (initiatorDomains is the extension's own id), sets their Origin and Referer to https://www.youtube.com. It does not modify any request the user's browsing makes. |
-| Host permission `https://www.youtube.com/*` | Reads public channel feeds and public video details from https://www.youtube.com/* (no cookies are sent), and runs content scripts on YouTube pages: audio mode (lower quality, cover the video, control playback); Import from YouTube, which reads the user's own subscription list in their signed-in tab only when they press it, keeping each channel's id, name and handle on the device; and the user's group chips on YouTube's Subscriptions page. |
+| Host permission `https://www.youtube.com/*` | Reads public channel feeds and public video details from https://www.youtube.com/* (no cookies are sent), and runs content scripts on YouTube pages: audio mode (lower quality, cover the video, control playback); Import from YouTube, which reads the user's own subscription list in their signed-in tab only when they press it, keeping each channel's id, name and handle on the device; the user's group chips on YouTube's Subscriptions page; and keeping the Up next list in step with YouTube's own queue in the one tab the popup's player drives, using the page's own queue actions. |
 
 **Remote code:** No, I am not using remote code. All JavaScript is in the package.
 

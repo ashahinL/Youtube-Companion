@@ -20,10 +20,11 @@ Sibling of `../poppo-companion` and `../bigo-companion`. Same house shape:
 Chrome loads.
 
 Nothing is authenticated by us. No API key, no OAuth, and the feed only reads
-public `youtube.com` endpoints, without cookies. The one use of the person's
-own YouTube session is Import from YouTube, which reads `/feed/channels`
-(and the account switcher, for the accounts' names) inside their signed-in
-tab, only when they press it. Audio mode injects an isolated
+public `youtube.com` endpoints, without cookies. The person's own YouTube
+session is used only in their own tab, for two things: Import from YouTube, which reads
+`/feed/channels` (and the account switcher, for the accounts' names) only
+when they press it, and the Up next mirror, which asks the Player tab's page
+to edit its own queue with the page's own actions. Audio mode injects an isolated
 content script on youtube.com to pin the player to 144p; `#movie_player`
 methods are reached through a MAIN-world bridge.
 
@@ -182,6 +183,13 @@ asks.
   button. Rows can be reordered by dragging their handle or with the arrow
   keys on it. The video playing in the Player tab is never shown in Up next;
   the player card already shows it, and Play all starts after it. Cap 100.
+  On the Player tab, Up next and YouTube's own queue mirror each other
+  live, both ways: the page holds Up next minus the playing video, and a
+  video leaves Up next once it starts playing. Only that one tab is read;
+  the popup tells the worker which it is, and Play all's tab becomes it.
+  Joining a tab (or a reload) merges the two lists and never removes;
+  only a normal page change, or the person pressing Clear on YouTube's
+  queue, removes rows. While the page has a queue, YouTube advances it.
   Not in backups. Live streams and premieres cannot be queued from a feed row.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
   popup header and a Support group at the bottom of Settings open one sheet
@@ -391,6 +399,20 @@ Most live as comments at the line they protect. These span files or tools:
   without tracking which `<video>` is current. Guard it: `event.target`
   must be `findVideo()`, and the id sent is `readVideoId()`, not
   anything from the event. Ads and preview players fire `ended` too.
+- **YouTube's queue is the `TLPQ…` playlist panel, and its rows are the
+  truth.** `#movie_player.getPlaylist()` goes stale (it kept four ids after
+  Clear) and `getPlaylistId()` is null where the queue was made. The
+  playing row has no `playlistSetVideoId`; edits need that set id, so it
+  stays inside `inject.js` and never reaches the worker. A scripted move or
+  remove reaches the server but the panel shows it only after
+  `yt-refresh-playlist-command`. Measured in `docs/youtube.md`.
+- **The mirror syncs by ops, never by copying lists.** Copying let a stale
+  page snapshot that arrived during our own edit wipe adds and bring back
+  removes. `src/lib/queue-sync.js` keeps a shadow and the ops in flight;
+  a snapshot with an older `seq` loses, one from a non-watch page changes
+  nothing, and one with no queue (`listId ''` without `cleared`) can only
+  add. Only
+  `queue.snapshot` from the mirrored tab id is honoured.
 - **`render()` draws only the open tab.** A hidden tab's DOM is whatever it
   was when it was last open, and `activate()` draws a tab as it opens. Code
   that reads a hidden tab's elements after `render()` reads stale ones, and

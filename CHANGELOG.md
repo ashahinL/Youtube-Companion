@@ -7,6 +7,10 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **New**
+- Up next and YouTube's own queue stay in step on the Player tab. Add,
+  remove, reorder or clear on either side and the other follows; a video
+  leaves both once it starts playing. Add to queue on a video in that tab
+  lands in Up next too.
 - Up next can be put in any order: drag a row by its handle, or use the
   arrow keys on it.
 - Up next no longer lists the video that is playing; the player card
