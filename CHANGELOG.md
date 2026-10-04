@@ -6,6 +6,12 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**New**
+- Up next can be put in any order: drag a row by its handle, or use the
+  arrow keys on it.
+- Up next no longer lists the video that is playing; the player card
+  already shows it. The player card's Add to Up next button is gone.
+
 **Fixes**
 - Settings' number boxes are wide enough for four digits, so 1000 or
   more in Keep the newest shows whole. Its arrows move by 50 videos.

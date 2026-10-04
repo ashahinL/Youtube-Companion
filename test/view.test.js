@@ -200,6 +200,43 @@ function queueChecks(t) {
   t.check('count and open', shown.count === 1 && shown.open === true && shown.empty === false && shown.full === false && shown.items === rows);
   t.check('full at cap', queueView({ queue: new Array(100).fill(0).map((_, i) => ({ v: i })), open: false, cap: 100 }).full === true);
   t.check('missing queue is empty', queueView({ open: true, cap: 100 }).empty === true && queueView({ open: true, cap: 100 }).open === true);
+
+  const three = [
+    { v: 'aaaaaaaaaaa', t: 'A' },
+    { v: 'bbbbbbbbbbb', t: 'B' },
+    { v: 'ccccccccccc', t: 'C' },
+  ];
+  const drawnIds = (playingV) => queueView({ queue: three, open: true, cap: 100, playingV })
+    .items.map((row) => row.v).join();
+  t.check(
+    'an empty playing id keeps the stored rows',
+    queueView({ queue: three, open: true, cap: 100, playingV: '' }).items === three,
+  );
+  const first = drawnIds('aaaaaaaaaaa');
+  const middle = drawnIds('bbbbbbbbbbb');
+  const last = drawnIds('ccccccccccc');
+  t.check(
+    'a playing row is left out wherever it sits',
+    first === 'bbbbbbbbbbb,ccccccccccc'
+      && middle === 'aaaaaaaaaaa,ccccccccccc'
+      && last === 'aaaaaaaaaaa,bbbbbbbbbbb'
+      && queueView({ queue: three, open: true, cap: 100, playingV: 'bbbbbbbbbbb' }).count === 2,
+    JSON.stringify({ first, middle, last }),
+  );
+  const onlyPlaying = queueView({
+    queue: [three[0]], open: true, cap: 1, playingV: 'aaaaaaaaaaa',
+  });
+  t.check(
+    'only the playing row reads as empty and still fills the cap',
+    onlyPlaying.empty === true && onlyPlaying.count === 0 && onlyPlaying.items.length === 0
+      && onlyPlaying.full === true,
+  );
+  const unknown = queueView({ queue: three, open: true, cap: 100, playingV: 'zzzzzzzzzzz' });
+  t.check(
+    'an unknown playing id shows every row',
+    unknown.items.map((row) => row.v).join() === 'aaaaaaaaaaa,bbbbbbbbbbb,ccccccccccc'
+      && unknown.count === 3 && unknown.empty === false,
+  );
 }
 
 export default async function run(t) {

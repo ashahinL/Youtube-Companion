@@ -178,9 +178,11 @@ asks.
 - **Up next** is a listen-later queue in the Player tab, under the player
   card and above the stats, collapsible, with the open/closed choice
   remembered. Auto-advance plays the list in one YouTube tab, audio mode
-  on or off. Add from a feed row (and so the channel sheet), or from the
-  player card for what is playing now. Cap 100. Not in backups. Live
-  streams and premieres cannot be queued from a feed row.
+  on or off. Add from a feed row (and so the channel sheet) or an alert's
+  button. Rows can be reordered by dragging their handle or with the arrow
+  keys on it. The video playing in the Player tab is never shown in Up next;
+  the player card already shows it, and Play all starts after it. Cap 100.
+  Not in backups. Live streams and premieres cannot be queued from a feed row.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
   popup header and a Support group at the bottom of Settings open one sheet
   (PayPal, InstaPay with address, Copy and QR); the README and store text
@@ -194,7 +196,7 @@ skill, one job per dispatch, and reviewed and committed here. The pattern:
 1. Write a brief that assumes **zero** shared context — Grok sees only the text
    and the working tree. Point it at this file and the files in scope, name the
    exact scope, and list what to leave alone.
-2. Dispatch with `relay.mjs --brief … --cd <repo> --timeout 1h`, backgrounded.
+2. Dispatch with `relay.mjs --brief … --cd <repo> --lane feature --timeout 1h`, backgrounded (Grok 4.7, medium effort, 500k window; see the global rules on delegating).
 3. **Re-run the gates here.** Never accept "gates passed" from the report.
 4. Read the diff against the brief — scope creep in both directions.
 5. Commit it here. Grok never commits.

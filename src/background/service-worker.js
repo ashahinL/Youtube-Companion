@@ -54,6 +54,7 @@ import {
   removeFromQueue,
   clearQueue,
   takeFromQueue,
+  moveInQueue,
   withListLock,
   readQueueOpen,
   writeQueueOpen,
@@ -1831,6 +1832,16 @@ export async function handleMessage(msg, sender) {
         const result = await clearQueue();
         return { ok: true, queue: result.queue };
       }
+      case 'queue.move': {
+        const v = msg && msg.v;
+        const to = msg && msg.to;
+        const parsed = normalizeVideoInput(v);
+        if (!parsed || parsed.kind !== 'video' || parsed.id !== v || !Number.isInteger(to)) {
+          return { ok: false, error: 'invalid' };
+        }
+        const moved = await moveInQueue(v, to);
+        return { ok: true, queue: moved.queue };
+      }
       case 'queue.setOpen':
         await writeQueueOpen(msg && msg.on);
         return { ok: true };
@@ -1839,7 +1850,16 @@ export async function handleMessage(msg, sender) {
         return { ok: true };
       case 'queue.playAll': {
         const queue = await readQueue();
-        const first = queue[0];
+        const skip = msg && msg.skip;
+        const parsedSkip = normalizeVideoInput(skip);
+        const skipping = parsedSkip && parsedSkip.kind === 'video' && parsedSkip.id === skip
+          ? skip
+          : '';
+        // The popup sends the video the player card is showing. Start on the
+        // next stored row; the skipped one stays, the card already has it.
+        const first = skipping
+          ? queue.find((row) => row && row.v !== skipping)
+          : queue[0];
         if (!first) return { ok: false, error: 'empty' };
         const audio = await queueOpensInAudioMode();
         const tab = await openVideoTab(first.v, first.k, { audio });

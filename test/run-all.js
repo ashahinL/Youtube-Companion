@@ -35,6 +35,7 @@ const SUITES = [
   ['store package',      './pack.test.js'],
   ['icon',               './icon.test.js'],
   ['support',            './support.test.js'],
+  ['queue sync',         './queue-sync.test.js'],
 ];
 
 const results = [];

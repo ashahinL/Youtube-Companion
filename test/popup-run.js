@@ -697,6 +697,475 @@ async function scenarios(ctx) {
     active().id,
   );
   layout.direction = 'ltr';
+
+  await reorderQueue(ctx);
+  await playingRowHidden(ctx);
+}
+
+function pointer(target, type, clientY) {
+  target.dispatchEvent(new FakeEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    pointerId: 1,
+    button: 0,
+    clientX: 12,
+    clientY,
+  }));
+}
+
+function stackQueueRows(list, pitch, height) {
+  [...list.children].forEach((row, i) => {
+    row._bounds = { top: i * pitch, left: 0, width: 352, height };
+  });
+}
+
+function rowTranslate(row) {
+  const raw = row.style.getPropertyValue('transform');
+  const match = /translateY\((-?\d+(?:\.\d+)?)px\)/.exec(raw || '');
+  return match ? Number(match[1]) : null;
+}
+
+async function reorderQueue(ctx) {
+  const { $, document, mock } = ctx;
+  const active = () => document.activeElement;
+
+  $('tab-feeds').click();
+  await settle();
+  state.queue = [];
+  replies['queue.add'] = (msg) => {
+    const entry = msg.item;
+    if (entry && !state.queue.some((row) => row.v === entry.v)) state.queue.push(structuredClone(entry));
+    return { ok: true, queue: structuredClone(state.queue) };
+  };
+  replies['queue.move'] = (msg) => {
+    const list = state.queue.slice();
+    const from = list.findIndex((row) => row.v === msg.v);
+    if (from >= 0 && Number.isInteger(msg.to) && msg.to !== from) {
+      const [row] = list.splice(from, 1);
+      list.splice(Math.max(0, Math.min(msg.to, list.length)), 0, row);
+      state.queue = list;
+    }
+    return { ok: true, queue: structuredClone(state.queue) };
+  };
+  replies['queue.remove'] = (msg) => {
+    state.queue = state.queue.filter((row) => row.v !== msg.v);
+    return { ok: true, queue: structuredClone(state.queue) };
+  };
+
+  const addButtons = [...$('feed-list').querySelectorAll('.feed-row__queue')].slice(0, 3);
+  check('three feed rows can be queued', addButtons.length === 3, String(addButtons.length));
+  for (const btn of addButtons) {
+    btn.click();
+    await settle();
+  }
+  const [v1, v2, v3] = state.queue.map((row) => row.v);
+  const title = state.queue[0].t;
+
+  $('tab-audio').click();
+  await settle();
+  $('queue-toggle').click();
+  await settle();
+
+  const qList = $('queue-list');
+  const qOrder = () => [...qList.children].map((row) => row.dataset.queueV);
+  const qHandles = () => [...qList.querySelectorAll('.queue-row__handle')];
+  const joined = (ids) => ids.join();
+
+  check(
+    'Up next draws the queued videos with a handle before the thumbnail',
+    qOrder().join() === joined([v1, v2, v3])
+      && qHandles().length === 3
+      && qList.children[0].querySelector('.queue-row__thumb')
+      && [...qList.children[0].children].indexOf(qHandles()[0])
+        < [...qList.children[0].children].indexOf(qList.children[0].querySelector('.queue-row__thumb')),
+    qOrder().join(),
+  );
+  check(
+    'the handle is named for its video',
+    qHandles()[0].getAttribute('aria-label') === `Move ${title} — use the arrow keys`
+      && qHandles()[0].title === `Move ${title} — use the arrow keys`
+      && qHandles()[0].querySelectorAll('circle').length === 6,
+    qHandles()[0].getAttribute('aria-label'),
+  );
+
+  qHandles()[0].focus();
+  press(active(), 'ArrowDown');
+  await settle();
+  check(
+    'ArrowDown moves that video down one and keeps focus on its handle',
+    sentOf('queue.move').at(-1)?.v === v1
+      && sentOf('queue.move').at(-1)?.to === 1
+      && qOrder().join() === joined([v2, v1, v3])
+      && active() === qHandles()[1]
+      && active().dataset.queueV === v1,
+    `${qOrder().join()} focus=${active().className} ${active().dataset.queueV}`,
+  );
+
+  press(active(), 'ArrowUp');
+  await settle();
+  check(
+    'ArrowUp moves that video back up and keeps focus on its handle',
+    sentOf('queue.move').at(-1)?.v === v1
+      && sentOf('queue.move').at(-1)?.to === 0
+      && qOrder().join() === joined([v1, v2, v3])
+      && active() === qHandles()[0]
+      && active().dataset.queueV === v1,
+    `${qOrder().join()} focus=${active().dataset.queueV}`,
+  );
+
+  qHandles()[2].focus();
+  press(active(), 'Home');
+  await settle();
+  check(
+    'Home moves that video to the top and keeps focus on its handle',
+    sentOf('queue.move').at(-1)?.v === v3
+      && sentOf('queue.move').at(-1)?.to === 0
+      && qOrder().join() === joined([v3, v1, v2])
+      && active() === qHandles()[0]
+      && active().dataset.queueV === v3,
+    `${qOrder().join()} focus=${active().dataset.queueV}`,
+  );
+
+  press(active(), 'End');
+  await settle();
+  check(
+    'End moves that video to the bottom and keeps focus on its handle',
+    sentOf('queue.move').at(-1)?.v === v3
+      && sentOf('queue.move').at(-1)?.to === 2
+      && qOrder().join() === joined([v1, v2, v3])
+      && active() === qHandles()[2]
+      && active().dataset.queueV === v3,
+    `${qOrder().join()} focus=${active().dataset.queueV}`,
+  );
+
+  const savedQueue = state.queue.map((row) => structuredClone(row));
+  const moveReply = replies['queue.move'];
+  replies['queue.move'] = () => ({
+    ok: false,
+    error: 'invalid',
+    queue: [structuredClone(savedQueue[1]), structuredClone(savedQueue[0])],
+  });
+  qHandles()[0].focus();
+  press(active(), 'ArrowDown');
+  await settle();
+  check(
+    'a refused move shows the queue the worker sent back',
+    qOrder().join() === joined([v2, v1]),
+    qOrder().join(),
+  );
+  replies['queue.move'] = () => ({ ok: true, queue: structuredClone(savedQueue) });
+  qHandles()[0].focus();
+  press(active(), 'ArrowDown');
+  await settle();
+  replies['queue.move'] = moveReply;
+  check(
+    'the worker queue replaces a refused list',
+    qOrder().join() === joined([v1, v2, v3]),
+    qOrder().join(),
+  );
+
+  const moreButtons = [...$('feed-list').querySelectorAll('.feed-row__queue')];
+  check('a fourth video can be queued', moreButtons.length >= 4, String(moreButtons.length));
+  moreButtons[3].click();
+  await settle();
+  const v4 = state.queue[3]?.v;
+  check(
+    'the fourth video is at the end of Up next',
+    qOrder().join() === joined([v1, v2, v3, v4]),
+    qOrder().join(),
+  );
+
+  // 8px between the recorded boxes, so a shift of "height" would be wrong.
+  const rowHeight = 40;
+  const rowPitch = 48;
+  const shift = rowHeight + (rowPitch - rowHeight);
+  const noShift = () => [...qList.children].every((row) => rowTranslate(row) == null);
+
+  stackQueueRows(qList, rowPitch, rowHeight);
+  const stillHandle = qHandles()[0];
+  const orderBeforeNudge = qOrder().join();
+  const movesBeforeNudge = sentOf('queue.move').length;
+  pointer(stillHandle, 'pointerdown', 16);
+  pointer(stillHandle, 'pointermove', 19);
+  pointer(stillHandle, 'pointerup', 19);
+  await settle(250);
+  check(
+    'a move under 4px sends nothing and changes nothing',
+    sentOf('queue.move').length === movesBeforeNudge
+      && qOrder().join() === orderBeforeNudge
+      && !qList.querySelector('.queue-row--dragging')
+      && noShift(),
+    qOrder().join(),
+  );
+
+  stackQueueRows(qList, rowPitch, rowHeight);
+  const dragHandle = qHandles()[0];
+  const orderBeforeDrag = qOrder().join();
+  const movesBeforeDrag = sentOf('queue.move').length;
+  const downStart = 16;
+  const downDelta = rowPitch * 2;
+  pointer(dragHandle, 'pointerdown', downStart);
+  pointer(dragHandle, 'pointermove', downStart + downDelta);
+  check(
+    'dragging past the next two rows slides them and leaves the list order',
+    qOrder().join() === orderBeforeDrag
+      && qList.querySelector('.queue-row--dragging')?.dataset.queueV === v1
+      && rowTranslate(qList.children[0]) === downDelta
+      && rowTranslate(qList.children[1]) === -shift
+      && rowTranslate(qList.children[2]) === -shift
+      && rowTranslate(qList.children[3]) == null,
+    qList.children.map((row) => rowTranslate(row)).join(),
+  );
+  pointer(dragHandle, 'pointerup', downStart + downDelta);
+  await settle(250);
+  check(
+    'releasing the drag sends one queue.move and clears the transforms',
+    sentOf('queue.move').length === movesBeforeDrag + 1
+      && sentOf('queue.move').at(-1)?.v === v1
+      && sentOf('queue.move').at(-1)?.to === 2
+      && qOrder().join() === joined([v2, v3, v1, v4])
+      && noShift(),
+    `${qOrder().join()} ${JSON.stringify(sentOf('queue.move').at(-1))}`,
+  );
+
+  stackQueueRows(qList, rowPitch, rowHeight);
+  const cancelHandle = qHandles()[0];
+  const orderBeforeCancel = qOrder().join();
+  const movesBeforeCancel = sentOf('queue.move').length;
+  pointer(cancelHandle, 'pointerdown', downStart);
+  pointer(cancelHandle, 'pointermove', downStart + downDelta);
+  document.dispatchEvent(keyEvent('Escape'));
+  pointer(cancelHandle, 'pointerup', downStart + downDelta);
+  await settle(250);
+  check(
+    'Escape mid-drag sends nothing and clears the transforms',
+    sentOf('queue.move').length === movesBeforeCancel
+      && qOrder().join() === orderBeforeCancel
+      && !qList.querySelector('.queue-row--dragging')
+      && noShift(),
+    qOrder().join(),
+  );
+
+  stackQueueRows(qList, rowPitch, rowHeight);
+  const upHandle = qHandles()[2];
+  const upId = upHandle.dataset.queueV;
+  const orderBeforeUp = qOrder().join();
+  const movesBeforeUp = sentOf('queue.move').length;
+  const upStart = rowPitch * 2 + 10;
+  const upDelta = -(rowPitch * 2);
+  pointer(upHandle, 'pointerdown', upStart);
+  pointer(upHandle, 'pointermove', upStart + upDelta);
+  check(
+    'dragging up slides the passed rows the other way',
+    qOrder().join() === orderBeforeUp
+      && qList.querySelector('.queue-row--dragging')?.dataset.queueV === upId
+      && rowTranslate(qList.children[2]) === upDelta
+      && rowTranslate(qList.children[0]) === shift
+      && rowTranslate(qList.children[1]) === shift
+      && rowTranslate(qList.children[3]) == null,
+    qList.children.map((row) => rowTranslate(row)).join(),
+  );
+  pointer(upHandle, 'pointerup', upStart + upDelta);
+  await settle(250);
+  check(
+    'releasing an upward drag sends queue.move to the top',
+    sentOf('queue.move').length === movesBeforeUp + 1
+      && sentOf('queue.move').at(-1)?.v === upId
+      && sentOf('queue.move').at(-1)?.to === 0
+      && qOrder().join() === joined([v1, v2, v3, v4])
+      && noShift(),
+    `${qOrder().join()} ${JSON.stringify(sentOf('queue.move').at(-1))}`,
+  );
+
+  const tabsBeforeHandle = mock.tabsCreated.length;
+  qHandles()[0].click();
+  await settle();
+  check(
+    'clicking the handle does not play the video',
+    mock.tabsCreated.length === tabsBeforeHandle,
+    String(mock.tabsCreated.length),
+  );
+
+  const removeId = qOrder()[3];
+  qList.children[3].querySelector('.queue-row__remove').click();
+  await settle();
+  check(
+    'the remove button still drops that video',
+    sentOf('queue.remove').at(-1)?.v === removeId
+      && qOrder().join() === joined([v1, v2, v3]),
+    qOrder().join(),
+  );
+
+  const playId = qOrder()[0];
+  const tabsBeforePlay = mock.tabsCreated.length;
+  qList.children[0].querySelector('.queue-row__open').click();
+  await settle();
+  check(
+    'clicking the rest of a row plays that video',
+    mock.tabsCreated.length === tabsBeforePlay + 1
+      && mock.tabsCreated.at(-1).url === `https://www.youtube.com/watch?v=${playId}`
+      && sentOf('queue.remove').at(-1)?.v === playId,
+    mock.tabsCreated.at(-1)?.url,
+  );
+}
+
+async function showPlaying(mock, videoId) {
+  mock.urlTabs = [{
+    id: 9,
+    windowId: 1,
+    url: `https://www.youtube.com/watch?v=${videoId}`,
+    title: 'Playing - YouTube',
+  }];
+  mock.onTabMessage = async () => ({
+    ok: true,
+    videoId,
+    title: 'Playing',
+    paused: false,
+    currentTime: 1,
+    duration: 10,
+  });
+  for (const fn of mock.tabUpdatedListeners) fn(9, { status: 'complete' });
+  await settle(200);
+}
+
+async function clearPlaying(mock) {
+  mock.urlTabs = [];
+  mock.onTabMessage = async () => ({ ok: false });
+  for (const fn of mock.tabUpdatedListeners) fn(9, { status: 'complete' });
+  await settle(200);
+}
+
+async function setQueue($, ids) {
+  if (!$('queue-clear').hidden) {
+    $('queue-clear').click();
+    await settle();
+    $('queue-clear-yes').click();
+    await settle();
+  }
+  for (const id of ids) {
+    const row = [...$('feed-list').children].find((el) => el.dataset.rowKey === id);
+    row.querySelector('.feed-row__queue').click();
+    await settle();
+  }
+}
+
+async function playingRowHidden(ctx) {
+  const { $, document, mock } = ctx;
+  const playingId = 'cccccccccc1';
+  const nextId = 'aaaaaaaaaa1';
+  const laterId = 'bbbbbbbbbb1';
+
+  replies['queue.clear'] = () => {
+    state.queue = [];
+    return { ok: true, queue: [] };
+  };
+
+  $('tab-audio').click();
+  await settle();
+  if ($('queue-toggle').getAttribute('aria-expanded') !== 'true') {
+    $('queue-toggle').click();
+    await settle();
+  }
+
+  const qList = $('queue-list');
+  const qOrder = () => [...qList.children].map((row) => row.dataset.queueV);
+  const qHandles = () => [...qList.querySelectorAll('.queue-row__handle')];
+  const joined = (ids) => ids.join();
+
+  await setQueue($, [playingId, nextId, laterId]);
+  await showPlaying(mock, playingId);
+
+  check(
+    'the playing video is left out of Up next and the title counts the rest',
+    qOrder().join() === joined([nextId, laterId])
+      && $('queue-toggle-label').textContent === 'Up next (2)'
+      && !$('queue-play').hidden
+      && !$('queue-clear').hidden,
+    `${qOrder().join()} ${$('queue-toggle-label').textContent}`,
+  );
+  check('the player card has no queue button', $('audio-queue') == null);
+
+  $('queue-play').click();
+  await settle();
+  check(
+    'Play all skips the video that is playing',
+    sentOf('queue.playAll').at(-1)?.skip === playingId,
+    JSON.stringify(sentOf('queue.playAll').at(-1)),
+  );
+
+  qHandles()[1].focus();
+  press(document.activeElement, 'Home');
+  await settle();
+  check(
+    'moving the last drawn row to the top uses the full-list index when the playing row is first',
+    sentOf('queue.move').at(-1)?.v === laterId
+      && sentOf('queue.move').at(-1)?.to === 1
+      && qOrder().join() === joined([laterId, nextId]),
+    `${qOrder().join()} ${JSON.stringify(sentOf('queue.move').at(-1))}`,
+  );
+
+  const rowPitch = 48;
+  stackQueueRows(qList, rowPitch, 40);
+  const movesBeforeDrag = sentOf('queue.move').length;
+  const dragHandle = qHandles()[1];
+  pointer(dragHandle, 'pointerdown', rowPitch + 10);
+  pointer(dragHandle, 'pointermove', 10);
+  pointer(dragHandle, 'pointerup', 10);
+  await settle(250);
+  check(
+    'dragging a drawn row to the top uses the full-list index when the playing row is first',
+    sentOf('queue.move').length === movesBeforeDrag + 1
+      && sentOf('queue.move').at(-1)?.v === nextId
+      && sentOf('queue.move').at(-1)?.to === 1
+      && qOrder().join() === joined([nextId, laterId]),
+    `${qOrder().join()} ${JSON.stringify(sentOf('queue.move').at(-1))}`,
+  );
+
+  await setQueue($, [nextId, playingId, laterId]);
+  qHandles()[1].focus();
+  press(document.activeElement, 'ArrowUp');
+  await settle();
+  check(
+    'ArrowUp past a hidden playing row in the middle uses the drawn row above it',
+    sentOf('queue.move').at(-1)?.v === laterId
+      && sentOf('queue.move').at(-1)?.to === 0
+      && qOrder().join() === joined([laterId, nextId]),
+    `${qOrder().join()} ${JSON.stringify(sentOf('queue.move').at(-1))}`,
+  );
+
+  await setQueue($, [nextId, laterId, playingId]);
+  const movesBeforeDown = sentOf('queue.move').length;
+  qHandles()[1].focus();
+  press(document.activeElement, 'ArrowDown');
+  await settle();
+  check(
+    'ArrowDown on the last drawn row does not move into a hidden playing row',
+    sentOf('queue.move').length === movesBeforeDown
+      && qOrder().join() === joined([nextId, laterId]),
+    qOrder().join(),
+  );
+
+  await setQueue($, [playingId]);
+  check(
+    'a queue of only the playing video reads as empty',
+    qList.hidden
+      && qOrder().join() === ''
+      && !$('queue-empty').hidden
+      && $('queue-play').hidden
+      && $('queue-clear').hidden
+      && $('queue-toggle-label').textContent === 'Up next',
+    `title=${$('queue-toggle-label').textContent} play=${$('queue-play').hidden} empty=${$('queue-empty').hidden}`,
+  );
+
+  await clearPlaying(mock);
+  check(
+    'the row comes back when that video stops',
+    qOrder().join() === playingId
+      && $('queue-toggle-label').textContent === 'Up next (1)'
+      && !$('queue-play').hidden
+      && !$('queue-clear').hidden,
+    `${qOrder().join()} ${$('queue-toggle-label').textContent}`,
+  );
 }
 
 main().catch((err) => {

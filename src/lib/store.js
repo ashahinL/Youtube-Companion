@@ -526,6 +526,27 @@ export async function takeFromQueue(v) {
   });
 }
 
+/**
+ * `toIndex` is the slot after this row is taken out, so one place down is
+ * `from + 1` and the last slot is `length - 1`. A non-integer, an unknown
+ * id, or the slot it already occupies does not write.
+ */
+export async function moveInQueue(v, toIndex) {
+  return withQueueLock(async () => {
+    const queue = await readQueue();
+    if (!Number.isInteger(toIndex)) return { moved: false, queue };
+    const from = queue.findIndex((row) => row.v === v);
+    if (from < 0) return { moved: false, queue };
+    const to = Math.max(0, Math.min(toIndex, queue.length - 1));
+    if (to === from) return { moved: false, queue };
+    const next = queue.slice();
+    const [row] = next.splice(from, 1);
+    next.splice(to, 0, row);
+    const saved = await saveQueue(next);
+    return { moved: true, queue: saved };
+  });
+}
+
 export async function readQueueOpen() {
   return (await getKey('queueOpen')) === true;
 }

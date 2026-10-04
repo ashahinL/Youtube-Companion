@@ -4379,6 +4379,49 @@ export default async function run(t) {
     const clearedQueue = await handleMessage({ type: 'queue.clear' });
     t.check('queue.clear empties', clearedQueue.ok === true && clearedQueue.queue.length === 0 && (await readQueue()).length === 0);
 
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q3, t: 'Three' } });
+    const movedDown = await handleMessage({ type: 'queue.move', v: Q1, to: 2 });
+    t.check(
+      'queue.move places that video at the index',
+      movedDown.ok === true && movedDown.queue.map((row) => row.v).join() === `${Q2},${Q3},${Q1}`,
+      JSON.stringify(movedDown.queue?.map((row) => row.v)),
+    );
+    t.check(
+      'queue.move stores the new order',
+      (await readQueue()).map((row) => row.v).join() === `${Q2},${Q3},${Q1}`,
+    );
+    const movedUp = await handleMessage({ type: 'queue.move', v: Q1, to: 0 });
+    t.check(
+      'queue.move can move a video up',
+      movedUp.ok === true && movedUp.queue.map((row) => row.v).join() === `${Q1},${Q2},${Q3}`,
+      JSON.stringify(movedUp),
+    );
+    const badMoveId = await handleMessage({ type: 'queue.move', v: 'nope', to: 0 });
+    t.check(
+      'queue.move of a bad id is invalid',
+      badMoveId.ok === false && badMoveId.error === 'invalid',
+      JSON.stringify(badMoveId),
+    );
+    const badMoveTo = await handleMessage({ type: 'queue.move', v: Q1, to: 1.5 });
+    t.check(
+      'queue.move with a fractional index is invalid',
+      badMoveTo.ok === false && badMoveTo.error === 'invalid',
+      JSON.stringify(badMoveTo),
+    );
+    const badMoveStr = await handleMessage({ type: 'queue.move', v: Q1, to: '1' });
+    t.check(
+      'queue.move with a string index is invalid',
+      badMoveStr.ok === false && badMoveStr.error === 'invalid',
+      JSON.stringify(badMoveStr),
+    );
+    t.check(
+      'invalid queue.move leaves the order',
+      (await readQueue()).map((row) => row.v).join() === `${Q1},${Q2},${Q3}`,
+    );
+    await handleMessage({ type: 'queue.clear' });
+
     const emptyPlay = await handleMessage({ type: 'queue.playAll' });
     t.check(
       'queue.playAll on empty is empty',
@@ -4500,6 +4543,60 @@ export default async function run(t) {
     t.check('audio advance sets audioOpen again', nextFlag[`audioOpen:${audioTabId}`] === true, JSON.stringify(nextFlag));
 
     await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q3, t: 'Three' } });
+    mock.resetCalls();
+    const skippedFirst = await handleMessage({ type: 'queue.playAll', skip: Q1 });
+    t.check(
+      'queue.playAll with skip starts the next row',
+      skippedFirst.ok === true && skippedFirst.queue?.length === 3 && skippedFirst.queue[0]?.v === Q1,
+      JSON.stringify(skippedFirst.queue?.map((row) => row.v)),
+    );
+    t.check(
+      'skip opens the first other row and leaves the skipped one stored',
+      mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q2}`
+        && (await readQueue()).map((row) => row.v).join() === `${Q1},${Q2},${Q3}`,
+      mock.tabsCreated[0]?.url,
+    );
+    const skipRec = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check('skip writes queuePlay for the row it opened', skipRec.queuePlay?.v === Q2, JSON.stringify(skipRec));
+    mock.resetCalls();
+    const skipLater = await handleMessage({ type: 'queue.playAll', skip: Q3 });
+    t.check(
+      'skipping a later row still starts at the first other row',
+      skipLater.ok === true && mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q1}`,
+      mock.tabsCreated[0]?.url,
+    );
+
+    await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    mock.resetCalls();
+    const onlySkipped = await handleMessage({ type: 'queue.playAll', skip: Q1 });
+    t.check(
+      'queue.playAll that skips the only row is empty',
+      onlySkipped.ok === false && onlySkipped.error === 'empty' && mock.tabsCreated.length === 0,
+      JSON.stringify(onlySkipped),
+    );
+    t.check('the skipped row stays stored', (await readQueue())[0]?.v === Q1);
+
+    await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    for (const [kind, skip] of [
+      ['a word', 'nope'],
+      ['a watch URL', `https://www.youtube.com/watch?v=${Q1}`],
+    ]) {
+      mock.resetCalls();
+      const ignored = await handleMessage({ type: 'queue.playAll', skip });
+      t.check(
+        `a skip that is ${kind} is ignored`,
+        ignored.ok === true && mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q1}`,
+        mock.tabsCreated[0]?.url,
+      );
+    }
+
+    await wipe();
     for (let i = 0; i < QUEUE_CAP; i++) {
       await addToQueue({ v: `f${String(i).padStart(10, '0')}`, t: 'x' });
     }
@@ -4619,7 +4716,7 @@ export default async function run(t) {
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
       'importBackup', 'importTakeout', 'importFromYouTube', 'undoRemove', 'renameGroup', 'deleteGroup',
-      'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen',
+      'queue.add', 'queue.remove', 'queue.clear', 'queue.move', 'queue.playAll', 'queue.setOpen',
       'whatsNew.seen', 'subscriptions.scan']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
@@ -4632,6 +4729,7 @@ export default async function run(t) {
     t.check('queue.add is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.add'));
     t.check('queue.remove is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.remove'));
     t.check('queue.clear is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.clear'));
+    t.check('queue.move is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.move'));
     t.check('queue.playAll is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.playAll'));
     t.check('queue.setOpen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.setOpen'));
     t.check('whatsNew.seen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('whatsNew.seen'));
