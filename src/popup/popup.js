@@ -151,6 +151,8 @@ const view = {
 };
 
 let audioPollTimer = null;
+// undefined so the first time the Player tab settles, the worker hears it.
+let reportedQueueTabId;
 let audioDiscoverTimer = null;
 let audioSeeking = false;
 let audioSpeedPending = false;
@@ -174,6 +176,8 @@ let groupWrite = Promise.resolve();
 let groupRenameDraft = { name: '', value: '' };
 let audioPickerKey = '';
 let queueListSig = '';
+// One drag at a time. Pointer capture keeps move and up on the handle.
+let queueDrag = null;
 let supportOpenerId = null;
 const supportCopiedTimers = new WeakMap();
 
@@ -251,6 +255,12 @@ async function applyI18n(setting) {
 // message to the worker, which is the only place that fetches.
 function send(message) {
   return chrome.runtime.sendMessage(message);
+}
+
+function reportQueuePlayer() {
+  if (view.audioTargetId === reportedQueueTabId) return;
+  reportedQueueTabId = view.audioTargetId;
+  void send({ type: 'queue.player', tabId: view.audioTargetId }).catch(() => {});
 }
 
 function applySnapshot(snap) {
@@ -1922,15 +1932,21 @@ function renderAudioPicker(reachable) {
   }
 }
 
+function playerVideoId() {
+  const player = view.audioPlayer;
+  const tab = (view.audioTabs || []).find((row) => row.id === view.audioTargetId);
+  return (player && player.videoId)
+    || (tab ? Core.videoIdFromUrl(tab.url) : '')
+    || '';
+}
+
 function renderAudioPlayer(reachable) {
   const player = view.audioPlayer;
   const tab = (view.audioTabs || []).find((row) => row.id === view.audioTargetId);
   const titleFromPlayer = player && player.title ? player.title : '';
   const titleFromTab = tab ? Core.tabTitleToVideoTitle(tab.title) : '';
   const title = titleFromPlayer || titleFromTab || t('audioPlayerNoTitle');
-  const videoId = (player && player.videoId)
-    || (tab ? Core.videoIdFromUrl(tab.url) : '')
-    || '';
+  const videoId = playerVideoId();
 
   updateTitleScroll(document.getElementById('audio-title'), title);
 
@@ -2017,24 +2033,6 @@ function renderAudioPlayer(reachable) {
       }
       const next = left ? 'left' : '0';
       if (sleep.value !== next) sleep.value = next;
-    }
-  }
-
-  const queueBtn = document.getElementById('audio-queue');
-  if (queueBtn) {
-    const show = reachable && !!videoId;
-    queueBtn.hidden = !show;
-    if (show) {
-      const queued = videoIsQueued(videoId);
-      const qLabel = t(queued ? 'queueRemove' : 'queueAdd');
-      queueBtn.setAttribute('aria-label', qLabel);
-      queueBtn.title = qLabel;
-      queueBtn.setAttribute('aria-pressed', queued ? 'true' : 'false');
-      const pressed = queued ? '1' : '0';
-      if (queueBtn.dataset.icon !== pressed) {
-        queueBtn.replaceChildren(queueIcon(queued));
-        queueBtn.dataset.icon = pressed;
-      }
     }
   }
 }
@@ -2217,6 +2215,379 @@ async function followChannel(input) {
   target?.focus();
 }
 
+function queueGripIcon() {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 12 18');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  for (const cy of [3, 9, 15]) {
+    for (const cx of [3, 9]) {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', String(cx));
+      dot.setAttribute('cy', String(cy));
+      dot.setAttribute('r', '1.4');
+      dot.setAttribute('fill', 'currentColor');
+      svg.appendChild(dot);
+    }
+  }
+  return svg;
+}
+
+const QUEUE_DRAG_SLOP_PX = 4;
+const QUEUE_DRAG_MS = 150;
+const QUEUE_DRAG_EDGE_PX = 24;
+
+// The card follows the pointer. Reordering the nodes on each crossing made
+// the others jump, so they stay put and slide until the pointer is released.
+function queueListGap(list, slots) {
+  if (slots.length >= 2) {
+    const gap = slots[1].top - slots[0].top - slots[0].height;
+    if (Number.isFinite(gap)) return Math.max(0, gap);
+  }
+  const parsed = parseFloat(getComputedStyle(list).rowGap);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function queueDragSlots(list) {
+  return [...list.children].map((row) => {
+    const box = row.getBoundingClientRect();
+    return { row, top: box.top, height: box.height };
+  });
+}
+
+function cssPx(n) {
+  return String(Math.round(n * 100) / 100);
+}
+
+function setQueueShift(row, translateY) {
+  row.style.setProperty('transform', `translateY(${cssPx(translateY)}px)`);
+}
+
+function setQueueLift(row, translateY) {
+  row.style.setProperty('transform', `translateY(${cssPx(translateY)}px) scale(1.02)`);
+}
+
+function queueMotionReduced() {
+  if (typeof matchMedia !== 'function') return false;
+  return matchMedia('(prefers-reduced-motion: reduce)').matches === true;
+}
+
+// The list moving under a still finger has to count, or the card slips
+// off the pointer while the box auto-scrolls.
+function queueDragTranslate(drag) {
+  const scrollDelta = drag.list.scrollTop - drag.startScroll;
+  const raw = drag.pointerY - drag.startY + scrollDelta;
+  const origin = drag.slots[drag.from].top;
+  const min = drag.slots[0].top - origin;
+  const max = drag.slots[drag.slots.length - 1].top - origin;
+  return Math.min(max, Math.max(min, raw));
+}
+
+function queueDragSlot(drag, translate) {
+  const scrollDelta = drag.list.scrollTop - drag.startScroll;
+  const from = drag.slots[drag.from];
+  const centre = from.top - scrollDelta + translate + from.height / 2;
+  let target = drag.from;
+  for (let i = 0; i < drag.slots.length; i += 1) {
+    if (i === drag.from) continue;
+    const slot = drag.slots[i];
+    const mid = slot.top - scrollDelta + slot.height / 2;
+    if (i > drag.from && centre >= mid && i > target) target = i;
+    if (i < drag.from && centre <= mid && i < target) target = i;
+  }
+  return target;
+}
+
+function paintQueueDrag(drag) {
+  const translate = queueDragTranslate(drag);
+  const target = queueDragSlot(drag, translate);
+  const shift = drag.slots[drag.from].height + drag.gap;
+  drag.slots.forEach((slot, i) => {
+    if (i === drag.from) {
+      setQueueLift(slot.row, translate);
+      return;
+    }
+    const openingDown = target > drag.from && i > drag.from && i <= target;
+    const openingUp = target < drag.from && i < drag.from && i >= target;
+    if (openingDown) setQueueShift(slot.row, -shift);
+    else if (openingUp) setQueueShift(slot.row, shift);
+    else slot.row.style.removeProperty('transform');
+  });
+  drag.target = target;
+}
+
+function queueScrollSpeed(drag) {
+  const box = drag.list.getBoundingClientRect();
+  if (!(box.height > 0)) return 0;
+  const y = drag.pointerY;
+  let toward = 0;
+  let depth = 0;
+  if (y < box.top + QUEUE_DRAG_EDGE_PX) {
+    toward = -1;
+    depth = box.top + QUEUE_DRAG_EDGE_PX - y;
+  } else if (y > box.bottom - QUEUE_DRAG_EDGE_PX) {
+    toward = 1;
+    depth = y - (box.bottom - QUEUE_DRAG_EDGE_PX);
+  }
+  if (!toward) return 0;
+  return toward * Math.min(12, Math.max(2, Math.round(depth / 2)));
+}
+
+function queueFrame(fn) {
+  if (typeof requestAnimationFrame === 'function') {
+    const id = requestAnimationFrame(fn);
+    return () => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(id);
+      else clearTimeout(id);
+    };
+  }
+  const id = setTimeout(() => fn(Date.now()), 16);
+  return () => clearTimeout(id);
+}
+
+function stopQueueAutoScroll(drag) {
+  if (!drag.stopFrame) return;
+  drag.stopFrame();
+  drag.stopFrame = null;
+}
+
+function kickQueueAutoScroll(drag) {
+  if (drag.stopFrame || queueScrollSpeed(drag) === 0) return;
+  const frame = () => {
+    drag.stopFrame = null;
+    if (queueDrag !== drag || drag.phase !== 'move') return;
+    const room = drag.list.scrollHeight - drag.list.clientHeight;
+    const speed = queueScrollSpeed(drag);
+    if (!speed || !(room > 0)) return;
+    const next = Math.min(room, Math.max(0, drag.list.scrollTop + speed));
+    if (next === drag.list.scrollTop) return;
+    drag.list.scrollTop = next;
+    paintQueueDrag(drag);
+    drag.stopFrame = queueFrame(frame);
+  };
+  drag.stopFrame = queueFrame(frame);
+}
+
+function releaseQueuePointer(drag) {
+  if (drag.handle.hasPointerCapture(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+}
+
+function clearQueueDrag(drag) {
+  if (drag.ended) return;
+  drag.ended = true;
+  if (drag.timer) clearTimeout(drag.timer);
+  drag.timer = 0;
+  stopQueueAutoScroll(drag);
+  releaseQueuePointer(drag);
+  drag.list.classList.remove('queue__list--dragging');
+  for (const slot of drag.slots) {
+    slot.row.classList.remove('queue-row--dragging', 'queue-row--dropping');
+    slot.row.style.removeProperty('transform');
+  }
+  if (queueDrag === drag) queueDrag = null;
+}
+
+// The follow rule turns transitions off. A layout read lets the next
+// transform change slide instead of snapping.
+function unlockQueueDragTransition(drag) {
+  for (const slot of drag.slots) {
+    slot.row.classList.remove('queue-row--dragging');
+  }
+  void drag.list.offsetWidth;
+}
+
+function releaseQueueTransforms(drag) {
+  unlockQueueDragTransition(drag);
+  for (const slot of drag.slots) {
+    slot.row.classList.remove('queue-row--dropping');
+    slot.row.style.removeProperty('transform');
+  }
+}
+
+function queueDropTranslate(drag) {
+  const from = drag.slots[drag.from];
+  const to = drag.slots[drag.target];
+  // Moving down, the card ends under the target row, which has slid up.
+  // Equal heights make that the target's old top; a taller neighbour does not.
+  if (drag.target > drag.from) return (to.top + to.height) - (from.top + from.height);
+  return to.top - from.top;
+}
+
+function settleDraggedRow(drag) {
+  drag.row.classList.remove('queue-row--dragging');
+  drag.row.classList.add('queue-row--dropping');
+  void drag.row.offsetWidth;
+  setQueueShift(drag.row, queueDropTranslate(drag));
+}
+
+// Drag and the arrow keys count the rows on screen. The playing video is
+// hidden, so the slot they pick is not its stored index.
+function queueFullIndex(drawnIndex) {
+  const playing = playerVideoId();
+  const list = view.queue || [];
+  if (!playing) return drawnIndex;
+  const row = queueView({
+    queue: list,
+    open: true,
+    cap: QUEUE_CAP,
+    playingV: playing,
+  }).items[drawnIndex];
+  if (!row) return drawnIndex;
+  return list.indexOf(row);
+}
+
+function finishQueueDrag() {
+  const drag = queueDrag;
+  if (!drag) return;
+  const commit = drag.phase === 'drop' && drag.target !== drag.from;
+  const videoId = drag.videoId;
+  const to = queueFullIndex(drag.target);
+  clearQueueDrag(drag);
+  if (commit) void moveQueued(videoId, to);
+}
+
+function scheduleQueueFinish(drag) {
+  if (drag.timer) clearTimeout(drag.timer);
+  drag.timer = 0;
+  if (queueMotionReduced()) {
+    finishQueueDrag();
+    return;
+  }
+  drag.timer = setTimeout(() => {
+    if (queueDrag === drag) finishQueueDrag();
+  }, QUEUE_DRAG_MS);
+}
+
+function dropQueueDrag(drag) {
+  drag.phase = 'drop';
+  stopQueueAutoScroll(drag);
+  if (drag.target === drag.from) releaseQueueTransforms(drag);
+  else settleDraggedRow(drag);
+  scheduleQueueFinish(drag);
+}
+
+function cancelQueueDrag() {
+  const drag = queueDrag;
+  if (!drag || drag.phase === 'cancel' || drag.ended) return;
+  if (drag.phase === 'pending') {
+    clearQueueDrag(drag);
+    return;
+  }
+  drag.phase = 'cancel';
+  stopQueueAutoScroll(drag);
+  releaseQueueTransforms(drag);
+  scheduleQueueFinish(drag);
+}
+
+function discardQueueDrag() {
+  if (queueDrag) clearQueueDrag(queueDrag);
+}
+
+// Pointer events, not draggable: mouse, touch and pen all have to work,
+// and the fake DOM the popup tests run in has no HTML5 drag-and-drop.
+function onQueueDragStart(event, handle, videoId) {
+  if (queueDrag) return;
+  if (event.button != null && event.button !== 0) return;
+  const row = handle.closest('.queue-row');
+  const list = row && row.parentElement;
+  if (!row || !list) return;
+  const slots = queueDragSlots(list);
+  const from = slots.findIndex((slot) => slot.row === row);
+  if (from < 0) return;
+  handle.setPointerCapture(event.pointerId);
+  event.preventDefault();
+  queueDrag = {
+    pointerId: event.pointerId,
+    videoId,
+    row,
+    list,
+    handle,
+    from,
+    slots,
+    gap: queueListGap(list, slots),
+    startY: event.clientY,
+    pointerY: event.clientY,
+    startScroll: list.scrollTop,
+    phase: 'pending',
+    target: from,
+    timer: 0,
+    stopFrame: null,
+    ended: false,
+  };
+}
+
+function onQueueDragMove(event) {
+  const drag = queueDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  if (drag.phase !== 'pending' && drag.phase !== 'move') return;
+  drag.pointerY = event.clientY;
+  if (drag.phase === 'pending') {
+    if (Math.abs(event.clientY - drag.startY) < QUEUE_DRAG_SLOP_PX) return;
+    drag.phase = 'move';
+    drag.list.classList.add('queue__list--dragging');
+    drag.row.classList.add('queue-row--dragging');
+  }
+  event.preventDefault();
+  paintQueueDrag(drag);
+  kickQueueAutoScroll(drag);
+}
+
+function onQueueDragEnd(event) {
+  const drag = queueDrag;
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  if (drag.phase === 'pending') {
+    clearQueueDrag(drag);
+    return;
+  }
+  if (drag.phase !== 'move') return;
+  drag.pointerY = event.clientY;
+  paintQueueDrag(drag);
+  dropQueueDrag(drag);
+}
+
+function onQueueDragCancel(event) {
+  if (!queueDrag || event.pointerId !== queueDrag.pointerId) return;
+  cancelQueueDrag();
+}
+
+function onQueueMoveKey(event, videoId) {
+  if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+  const drawn = queueView({
+    queue: view.queue,
+    open: true,
+    cap: QUEUE_CAP,
+    playingV: playerVideoId(),
+  }).items;
+  const from = drawn.findIndex((row) => row && row.v === videoId);
+  if (from < 0) return;
+  let to = from;
+  if (event.key === 'ArrowUp') to = from - 1;
+  else if (event.key === 'ArrowDown') to = from + 1;
+  else if (event.key === 'Home') to = 0;
+  else if (event.key === 'End') to = drawn.length - 1;
+  else return;
+  event.preventDefault();
+  if (to < 0 || to >= drawn.length || to === from) return;
+  void moveQueued(videoId, queueFullIndex(to));
+}
+
+function queueMoveHandle(item, title) {
+  const handle = document.createElement('button');
+  handle.type = 'button';
+  handle.className = 'icon-btn queue-row__handle';
+  handle.dataset.queueV = item.v;
+  const label = t('queueMove', [title]);
+  handle.setAttribute('aria-label', label);
+  handle.title = label;
+  handle.appendChild(queueGripIcon());
+  handle.addEventListener('keydown', (event) => onQueueMoveKey(event, item.v));
+  handle.addEventListener('pointerdown', (event) => onQueueDragStart(event, handle, item.v));
+  handle.addEventListener('pointermove', onQueueDragMove);
+  handle.addEventListener('pointerup', onQueueDragEnd);
+  handle.addEventListener('pointercancel', onQueueDragCancel);
+  return handle;
+}
+
 function queueRow(item) {
   const row = document.createElement('div');
   row.className = 'queue-row';
@@ -2234,6 +2605,7 @@ function queueRow(item) {
     void playQueueItem(item);
   });
   row.appendChild(openBtn);
+  row.appendChild(queueMoveHandle(item, title));
 
   const thumb = document.createElement('div');
   thumb.className = 'queue-row__thumb';
@@ -2269,7 +2641,13 @@ function queueRow(item) {
 function renderQueue() {
   const root = document.getElementById('queue');
   if (!root) return;
-  const folded = queueView({ queue: view.queue, open: view.queueOpen, cap: QUEUE_CAP });
+  const playingV = playerVideoId();
+  const folded = queueView({
+    queue: view.queue,
+    open: view.queueOpen,
+    cap: QUEUE_CAP,
+    playingV,
+  });
   const toggle = document.getElementById('queue-toggle');
   const label = document.getElementById('queue-toggle-label');
   const play = document.getElementById('queue-play');
@@ -2303,16 +2681,23 @@ function renderQueue() {
   if (empty) empty.hidden = !showEmpty;
 
   // The signature is what stops a redraw from rebuilding rows that have not
-  // changed, which would drop focus mid-keyboard. Only a hidden list is
-  // emptied: clearing it on an unchanged redraw would blank the open list.
-  const sig = JSON.stringify([locale, view.queue, folded.open]);
+  // changed, which would drop focus mid-keyboard. The playing id is part of
+  // it, so a new video on the player card drops or restores its row even
+  // when the stored queue did not change. Only a hidden list is emptied:
+  // clearing it on an unchanged redraw would blank the open list.
+  const sig = JSON.stringify([locale, view.queue, folded.open, playingV]);
+  // A rebuild throws these nodes away. End the gesture first so a drop
+  // timer cannot send a move for a list that has already changed.
+  if (!showList || (list && sig !== queueListSig)) discardQueueDrag();
   if (!showList) {
     queueListSig = '';
     list?.replaceChildren();
   } else if (list && sig !== queueListSig) {
-    const focusedV = document.activeElement instanceof HTMLElement
-      ? document.activeElement.dataset.queueV
-      : '';
+    const active = document.activeElement;
+    const focusedV = active instanceof HTMLElement ? active.dataset.queueV : '';
+    // The handle and the play control are different buttons. Put focus
+    // back on the one that had it, or a keyboard move lands on Play.
+    const focusHandle = active instanceof HTMLElement && active.classList.contains('queue-row__handle');
     queueListSig = sig;
     list.replaceChildren();
     for (const item of folded.items) {
@@ -2321,7 +2706,11 @@ function renderQueue() {
       list.appendChild(row);
     }
     if (focusedV) {
-      list.querySelector(`[data-queue-v="${CSS.escape(focusedV)}"]`)?.querySelector('.queue-row__open')?.focus?.();
+      const row = list.querySelector(`[data-queue-v="${CSS.escape(focusedV)}"]`);
+      const target = focusHandle
+        ? row?.querySelector('.queue-row__handle')
+        : row?.querySelector('.queue-row__open');
+      target?.focus?.();
     }
   }
 }
@@ -2367,6 +2756,40 @@ async function removeQueued(v) {
   }
 }
 
+async function moveQueued(videoId, to) {
+  const list = view.queue || [];
+  const from = list.findIndex((row) => row && row.v === videoId);
+  if (from < 0 || !Number.isInteger(to)) return;
+  const next = list.slice();
+  const [row] = next.splice(from, 1);
+  const dest = Math.max(0, Math.min(to, next.length));
+  if (dest === from) return;
+  next.splice(dest, 0, row);
+  view.queueNotice = '';
+  view.queueClearOpen = false;
+  view.queue = next;
+  render();
+  try {
+    const res = await send({ type: 'queue.move', v: videoId, to: dest });
+    if (res && Array.isArray(res.queue)) {
+      applyQueueResult(res);
+      return;
+    }
+    if (!res || res.ok === false) await refreshState();
+    render();
+  } catch (err) {
+    // The drawn order was a guess. Read the stored queue back. If that
+    // read fails too, still draw the notice instead of losing it.
+    view.queueNotice = formatError(err?.message || err);
+    try {
+      await refreshState();
+    } catch {
+      // Leave the notice in place for render below.
+    }
+    render();
+  }
+}
+
 async function playQueueItem(item) {
   view.queueNotice = '';
   try {
@@ -2379,11 +2802,15 @@ async function playQueueItem(item) {
 }
 
 async function playQueue() {
-  if (!(view.queue || []).length) return;
+  const playing = playerVideoId();
+  const rows = view.queue || [];
+  if (!rows.some((row) => row && row.v !== playing)) return;
   view.queueNotice = '';
   view.queueClearOpen = false;
   try {
-    const res = await send({ type: 'queue.playAll' });
+    const message = { type: 'queue.playAll' };
+    if (playing) message.skip = playing;
+    const res = await send(message);
     if (res && Array.isArray(res.queue)) view.queue = res.queue;
     if (res && res.ok === true) {
       window.close();
@@ -3180,6 +3607,7 @@ async function refreshAudioState() {
     view.audioPlayer = null;
   }
   syncAudioPolling();
+  reportQueuePlayer();
   const players = [...playerById.values()];
   return {
     players,
@@ -3224,6 +3652,7 @@ async function selectAudioTab(id) {
     view.audioReachable = true;
   }
   renderAudio();
+  reportQueuePlayer();
 }
 
 async function controlTarget(action, extra = {}) {
@@ -3563,20 +3992,10 @@ function bindAudio() {
     void dismissRateNote().then(() => renderAudio());
   });
 
-  document.getElementById('audio-queue')?.addEventListener('click', () => {
-    const player = view.audioPlayer;
-    const tab = (view.audioTabs || []).find((row) => row.id === view.audioTargetId);
-    const videoId = (player && player.videoId)
-      || (tab ? Core.videoIdFromUrl(tab.url) : '')
-      || '';
-    if (!videoId) return;
-    const titleFromPlayer = player && player.title ? player.title : '';
-    const titleFromTab = tab ? Core.tabTitleToVideoTitle(tab.title) : '';
-    void toggleQueued({
-      v: videoId,
-      t: titleFromPlayer || titleFromTab || '',
-      ct: (player && player.channel) || '',
-    });
+  document.addEventListener('keydown', (event) => {
+    if (!queueDrag || event.key !== 'Escape') return;
+    event.preventDefault();
+    cancelQueueDrag();
   });
   document.getElementById('queue-toggle')?.addEventListener('click', () => {
     toggleQueueOpen();

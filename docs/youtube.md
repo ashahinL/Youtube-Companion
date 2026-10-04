@@ -292,6 +292,82 @@ Not measured yet: that `#movie_player` exists at `document_idle` on a fresh
 watch page, how much video has buffered by then, and that a short plays in the
 ordinary player at `/watch?v=`.
 
+## The watch-page queue (Add to queue)
+
+Measured 2026-10-04 in Chrome, signed in, on `watch?v=jNQXAC9IVRw`
+(client `2_20261002`), with the store build of this extension, so none of
+our queue code was on the page. A `yt-action` listener and a fetch hook
+that un-gzips request bodies recorded everything below.
+
+- **The queue is a playlist whose id starts with `TLPQ`.** Any other list
+  (a saved playlist, a mix, Watch Later) is not the queue.
+- **The panel's data is the truth, not the player.**
+  `ytd-playlist-panel-renderer.data` holds `playlistId`, `currentIndex`,
+  `totalVideos` and `contents`. Each panel row,
+  `ytd-playlist-panel-video-renderer.data`, has `videoId` and, for queued
+  rows, `playlistSetVideoId` (16 characters). `#movie_player.getPlaylist()`
+  goes stale: after Clear it still returned all four ids while the panel
+  had no `playlistId` and no rows, and after a scripted move or remove it
+  kept the old order until a refresh. `getPlaylistId()` is `null` on the
+  page where the queue was first made.
+- **The playing video is not in the server's list.** Its panel row has no
+  `playlistSetVideoId`, and the server's list after an edit held only the
+  queued videos. The queue on screen is [playing, ...queued].
+- **Add, no queue yet:** page action `yt-add-to-playlist-command` with
+  `addToPlaylistCommand {openMiniplayer, videoId,
+  listType: 'PLAYLIST_EDIT_LIST_TYPE_QUEUE', onCreateListCommand
+  {commandMetadata.webCommandMetadata {sendPost: true,
+  apiUrl: '/youtubei/v1/playlist/create'}, createPlaylistServiceEndpoint
+  {videoIds: [id], params: 'CAQ%3D'}}, videoIds: [id], videoCommand}`. The
+  page sends `POST /youtubei/v1/playlist/create` `{title: 'Queue',
+  videoIds: [id], params: 'CAQ%3D'}`, then `/next` with the new `TLPQ…`
+  id, and fires `yt-playlist-data-updated`. The address does not change.
+- **Add, queue exists:** the same command. The page sends
+  `/youtubei/v1/browse/edit_playlist` `{playlistId, actions: [{action:
+  'ACTION_ADD_VIDEO', addedVideoId}]}`, then runs
+  `yt-refresh-playlist-command` (two `/next` calls) and fires
+  `yt-playlist-data-updated`. The video goes to the end.
+- **Our code can add.** Dispatching `yt-action` on `ytd-app` with
+  `{actionName: 'yt-add-to-playlist-command', args: [command, ytdApp],
+  optionalAction: false, returnValue: []}`, where the command is the one
+  above without `videoCommand` and with `openMiniplayer: false`, did the
+  same requests and the same panel update.
+- **Move:** `edit_playlist` `{playlistId, actions: [{action:
+  'ACTION_MOVE_VIDEO_AFTER', setVideoId, movedSetVideoIdPredecessor}]}`;
+  `ACTION_MOVE_VIDEO_BEFORE` with `movedSetVideoIdSuccessor` also works.
+  Our code sends it by dispatching `yt-action` on the panel with
+  `{actionName: 'yt-service-request', args: [panelEl, {commandMetadata:
+  {webCommandMetadata: {sendPost: true, apiUrl:
+  '/youtubei/v1/browse/edit_playlist'}}, playlistEditEndpoint:
+  {playlistId, actions}}]}`. The page sends it with its own auth and the
+  answer is `STATUS_SUCCEEDED` with the new order, but **neither the panel
+  nor `getPlaylist()` changes** until a refresh (below). The page's own
+  drag reorders its rows itself, so it does not need one.
+- **Remove:** `edit_playlist` `{actions: [{action: 'ACTION_REMOVE_VIDEO',
+  setVideoId}], params: 'CAE%3D'}` (the row menu's own endpoint carries
+  that `params`). From our code it behaves like a move: the server
+  removes it, and the page shows it only after a refresh.
+- **Refresh:** dispatching `yt-action` on `ytd-app` with
+  `{actionName: 'yt-refresh-playlist-command', args:
+  [{refreshPlaylistCommand: {listId}}, ytdApp]}` makes the page fetch the
+  list again (`/next`) and redraw the panel in the server's order, then
+  fire `yt-playlist-data-updated`. YouTube runs the same refresh after
+  every add while a video plays, so it does not restart playback. That
+  could not be timed here: the test tab never started playing.
+- **Clear** (the panel's Clear button): `signalServiceEndpoint` with
+  `endPlaylistCommand {closeListPanel: true, listId, listType}` and an
+  Undo toast. **No network request**: it only ends the list in the page.
+  Page action `yt-end-playlist-command`, then `yt-playlist-data-updated`;
+  the panel's `data` loses `playlistId` and its rows. Our code can run
+  the same by dispatching `yt-end-playlist-command` with that command.
+- **When a queued video ends,** YouTube plays the next one itself
+  (`watch?v=…&list=TLPQ…&index=N`), and the finished one is gone from the
+  queue (measured 2026-10-04 by hand, earlier in the day).
+- **What to listen to:** `yt-playlist-data-updated` (document event) fired
+  for add, refresh and Clear; the page's own drag and row Remove fire page
+  action `yt-update-playlist-action`; moving to another video fires
+  `yt-navigate-finish`. Read the panel's `data` shortly after any of them.
+
 ## The subscriptions page and the All subscriptions page
 
 Measured in a signed-in browser on 2026-09-22, on an account with 40

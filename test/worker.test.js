@@ -22,6 +22,7 @@ import {
   readWhatsNewSeen,
 } from '../src/lib/store.js';
 import { WHATS_NEW_VERSION } from '../src/lib/view.js';
+import { applyOps } from '../src/lib/queue-sync.js';
 import { parseBackup, MAX_BACKUP_BYTES } from '../src/lib/backup.js';
 
 const MKBHD = 'UCBJycsmduvYEL83R_U4JriQ';
@@ -329,6 +330,7 @@ export default async function run(t) {
     ready,
     runSweep,
     handleMessage,
+    senderMayCall,
     CONTENT_SCRIPT_MESSAGES,
     syncAlarms,
     reconcileRunning,
@@ -4379,6 +4381,49 @@ export default async function run(t) {
     const clearedQueue = await handleMessage({ type: 'queue.clear' });
     t.check('queue.clear empties', clearedQueue.ok === true && clearedQueue.queue.length === 0 && (await readQueue()).length === 0);
 
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q3, t: 'Three' } });
+    const movedDown = await handleMessage({ type: 'queue.move', v: Q1, to: 2 });
+    t.check(
+      'queue.move places that video at the index',
+      movedDown.ok === true && movedDown.queue.map((row) => row.v).join() === `${Q2},${Q3},${Q1}`,
+      JSON.stringify(movedDown.queue?.map((row) => row.v)),
+    );
+    t.check(
+      'queue.move stores the new order',
+      (await readQueue()).map((row) => row.v).join() === `${Q2},${Q3},${Q1}`,
+    );
+    const movedUp = await handleMessage({ type: 'queue.move', v: Q1, to: 0 });
+    t.check(
+      'queue.move can move a video up',
+      movedUp.ok === true && movedUp.queue.map((row) => row.v).join() === `${Q1},${Q2},${Q3}`,
+      JSON.stringify(movedUp),
+    );
+    const badMoveId = await handleMessage({ type: 'queue.move', v: 'nope', to: 0 });
+    t.check(
+      'queue.move of a bad id is invalid',
+      badMoveId.ok === false && badMoveId.error === 'invalid',
+      JSON.stringify(badMoveId),
+    );
+    const badMoveTo = await handleMessage({ type: 'queue.move', v: Q1, to: 1.5 });
+    t.check(
+      'queue.move with a fractional index is invalid',
+      badMoveTo.ok === false && badMoveTo.error === 'invalid',
+      JSON.stringify(badMoveTo),
+    );
+    const badMoveStr = await handleMessage({ type: 'queue.move', v: Q1, to: '1' });
+    t.check(
+      'queue.move with a string index is invalid',
+      badMoveStr.ok === false && badMoveStr.error === 'invalid',
+      JSON.stringify(badMoveStr),
+    );
+    t.check(
+      'invalid queue.move leaves the order',
+      (await readQueue()).map((row) => row.v).join() === `${Q1},${Q2},${Q3}`,
+    );
+    await handleMessage({ type: 'queue.clear' });
+
     const emptyPlay = await handleMessage({ type: 'queue.playAll' });
     t.check(
       'queue.playAll on empty is empty',
@@ -4500,6 +4545,60 @@ export default async function run(t) {
     t.check('audio advance sets audioOpen again', nextFlag[`audioOpen:${audioTabId}`] === true, JSON.stringify(nextFlag));
 
     await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q3, t: 'Three' } });
+    mock.resetCalls();
+    const skippedFirst = await handleMessage({ type: 'queue.playAll', skip: Q1 });
+    t.check(
+      'queue.playAll with skip starts the next row',
+      skippedFirst.ok === true && skippedFirst.queue?.length === 3 && skippedFirst.queue[0]?.v === Q1,
+      JSON.stringify(skippedFirst.queue?.map((row) => row.v)),
+    );
+    t.check(
+      'skip opens the first other row and leaves the skipped one stored',
+      mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q2}`
+        && (await readQueue()).map((row) => row.v).join() === `${Q1},${Q2},${Q3}`,
+      mock.tabsCreated[0]?.url,
+    );
+    const skipRec = await globalThis.chrome.storage.session.get('queuePlay');
+    t.check('skip writes queuePlay for the row it opened', skipRec.queuePlay?.v === Q2, JSON.stringify(skipRec));
+    mock.resetCalls();
+    const skipLater = await handleMessage({ type: 'queue.playAll', skip: Q3 });
+    t.check(
+      'skipping a later row still starts at the first other row',
+      skipLater.ok === true && mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q1}`,
+      mock.tabsCreated[0]?.url,
+    );
+
+    await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    mock.resetCalls();
+    const onlySkipped = await handleMessage({ type: 'queue.playAll', skip: Q1 });
+    t.check(
+      'queue.playAll that skips the only row is empty',
+      onlySkipped.ok === false && onlySkipped.error === 'empty' && mock.tabsCreated.length === 0,
+      JSON.stringify(onlySkipped),
+    );
+    t.check('the skipped row stays stored', (await readQueue())[0]?.v === Q1);
+
+    await wipe();
+    await handleMessage({ type: 'queue.add', item: { v: Q1, t: 'One' } });
+    await handleMessage({ type: 'queue.add', item: { v: Q2, t: 'Two' } });
+    for (const [kind, skip] of [
+      ['a word', 'nope'],
+      ['a watch URL', `https://www.youtube.com/watch?v=${Q1}`],
+    ]) {
+      mock.resetCalls();
+      const ignored = await handleMessage({ type: 'queue.playAll', skip });
+      t.check(
+        `a skip that is ${kind} is ignored`,
+        ignored.ok === true && mock.tabsCreated[0]?.url === `https://www.youtube.com/watch?v=${Q1}`,
+        mock.tabsCreated[0]?.url,
+      );
+    }
+
+    await wipe();
     for (let i = 0; i < QUEUE_CAP; i++) {
       await addToQueue({ v: `f${String(i).padStart(10, '0')}`, t: 'x' });
     }
@@ -4509,6 +4608,366 @@ export default async function run(t) {
       full.ok === false && full.error === 'full' && full.queue.length === QUEUE_CAP,
       JSON.stringify({ ok: full.ok, error: full.error, n: full.queue?.length }),
     );
+
+    t.section('queue sync');
+
+    const SA = 'aaaaaaaaaaa';
+    const SB = 'bbbbbbbbbbb';
+    const SC = 'ccccccccccc';
+    const SD = 'ddddddddddd';
+    const SX = 'xxxxxxxxxxx';
+    const PLAYER = 7;
+
+    function makeQueuePage(initialIds) {
+      const page = {
+        ids: initialIds.slice(),
+        playing: '',
+        listId: 'TLPQtest',
+        onWatch: true,
+        seq: 0,
+        titles: {},
+        delayOps: false,
+        releaseOps: null,
+      };
+      for (const id of initialIds) page.titles[id] = { t: `T ${id}`, ct: `C ${id}` };
+      page.snapshot = (extra = {}) => {
+        const seq = extra.seq != null ? extra.seq : ++page.seq;
+        if (seq > page.seq) page.seq = seq;
+        const ids = extra.ids ? extra.ids.slice() : page.ids.slice();
+        const listId = extra.listId !== undefined ? extra.listId : page.listId;
+        const titles = {};
+        for (const id of ids) titles[id] = page.titles[id] || { t: '', ct: '' };
+        if (extra.titles) Object.assign(titles, extra.titles);
+        return {
+          seq,
+          onWatch: extra.onWatch !== undefined ? extra.onWatch : page.onWatch,
+          listId,
+          ids: listId === '' ? [] : ids,
+          playing: extra.playing !== undefined ? extra.playing : page.playing,
+          titles,
+          cleared: extra.cleared === true,
+        };
+      };
+      page.answer = (_tabId, message) => {
+        if (message?.type === 'queue.watch') {
+          if (message.on === false) return { ok: true };
+          return { ok: true, snapshot: page.snapshot() };
+        }
+        if (message?.type === 'queue.ops') {
+          const run = () => {
+            page.ids = applyOps(page.ids, message.ops);
+            return { ok: true, snapshot: page.snapshot() };
+          };
+          if (page.delayOps) {
+            return new Promise((resolve) => {
+              page.releaseOps = () => {
+                page.delayOps = false;
+                resolve(run());
+              };
+            });
+          }
+          return run();
+        }
+        return { ok: true };
+      };
+      return page;
+    }
+
+    function usePage(page) {
+      mock.onTabMessage = (tabId, message) => page.answer(tabId, message);
+    }
+
+    async function queueIds() {
+      return (await readQueue()).map((row) => row.v);
+    }
+
+    async function syncRecord() {
+      const got = await globalThis.chrome.storage.session.get('queueSync');
+      return got.queueSync || null;
+    }
+
+    const playerSender = { tab: { id: PLAYER } };
+
+    async function resetMirror() {
+      await globalThis.chrome.storage.local.set({ queue: [] });
+      await globalThis.chrome.storage.session.remove(['queueSync', 'queuePlay']);
+      mock.messagesSent.length = 0;
+      mock.tabsUpdated.length = 0;
+      mock.tabsCreated.length = 0;
+    }
+
+    async function untilMatch(page) {
+      return waitUntil(async () => {
+        const ids = await queueIds();
+        const shown = page.playing ? ids.filter((id) => id !== page.playing) : ids;
+        return shown.join() === page.ids.join();
+      });
+    }
+
+    await wipe();
+    await resetMirror();
+    let page = makeQueuePage([SA, SB]);
+    page.titles[SA] = { t: 'Ay', ct: 'Page Chan' };
+    usePage(page);
+    await handleMessage({ type: 'queue.add', item: { v: SB, t: 'Bee', ct: 'Kept' } });
+    await handleMessage({ type: 'queue.add', item: { v: SC, t: 'Cee', ct: 'Kept C' } });
+    const joined = await handleMessage({ type: 'queue.player', tabId: PLAYER });
+    t.check('queue.player reports ok', joined.ok === true, JSON.stringify(joined));
+    t.check('first contact unions and pushes', await untilMatch(page), page.ids.join());
+    const united = await readQueue();
+    t.check(
+      'union keeps Up next and appends the page-only row with the page title',
+      united.map((row) => row.v).join() === `${SB},${SC},${SA}`
+        && united.find((row) => row.v === SA)?.t === 'Ay'
+        && united.find((row) => row.v === SA)?.ct === 'Page Chan'
+        && united.find((row) => row.v === SB)?.t === 'Bee'
+        && page.ids.join() === `${SB},${SC},${SA}`,
+      `${united.map((row) => `${row.v}:${row.t}`).join()} page=${page.ids.join()}`,
+    );
+
+    const opsFor = () => mock.messagesSent.filter((row) => row.message?.type === 'queue.ops');
+    mock.messagesSent.length = 0;
+    await handleMessage({ type: 'queue.add', item: { v: SX, t: 'Ex' } });
+    t.check('an add reaches the page', await untilMatch(page) && opsFor().some((row) => row.message.ops.some((op) => op.op === 'add' && op.v === SX)), page.ids.join());
+    mock.messagesSent.length = 0;
+    await handleMessage({ type: 'queue.remove', v: SC });
+    t.check('a remove reaches the page', await untilMatch(page) && opsFor().some((row) => row.message.ops.some((op) => op.op === 'remove' && op.v === SC)), page.ids.join());
+    mock.messagesSent.length = 0;
+    await handleMessage({ type: 'queue.move', v: SX, to: 0 });
+    t.check(
+      'a move reaches the page',
+      await untilMatch(page) && opsFor().some((row) => row.message.ops.some((op) => op.op === 'move' && op.v === SX)),
+      `${(await queueIds()).join()} page=${page.ids.join()}`,
+    );
+    mock.messagesSent.length = 0;
+    await handleMessage({ type: 'queue.clear' });
+    t.check(
+      'a clear reaches the page',
+      await untilMatch(page) && opsFor().some((row) => row.message.ops.some((op) => op.op === 'clear')) && page.ids.length === 0,
+      page.ids.join(),
+    );
+
+    await resetMirror();
+    page = makeQueuePage([SA, SB, SC]);
+    usePage(page);
+    await handleMessage({ type: 'queue.add', item: { v: SA, t: 'A' } });
+    await handleMessage({ type: 'queue.add', item: { v: SB, t: 'B' } });
+    await handleMessage({ type: 'queue.add', item: { v: SC, t: 'C' } });
+    await handleMessage({ type: 'queue.player', tabId: PLAYER });
+    t.check('page edit starts from a shared list', await untilMatch(page), `${(await queueIds()).join()} ${page.ids.join()}`);
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await saveFeed([{ v: SD, c: MKBHD, t: 'From feed', at: 50, d: 12, vw: 1, k: 'video', st: 0 }]);
+    page.titles[SD] = { t: 'From page', ct: 'From page ch' };
+    const edited = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ ids: [SB, SD, SC], titles: { [SD]: { t: 'From page', ct: 'From page ch' } } }),
+    }, playerSender);
+    t.check('a page snapshot is accepted', edited.ok === true, JSON.stringify(edited));
+    const afterEdit = await readQueue();
+    const addedD = afterEdit.find((row) => row.v === SD);
+    t.check(
+      'a page edit changes Up next, and a feed row keeps the feed data',
+      afterEdit.map((row) => row.v).join() === `${SB},${SD},${SC}`
+        && addedD?.t === 'From feed'
+        && addedD?.ct === 'Marques Brownlee'
+        && addedD?.c === MKBHD
+        && addedD?.at === 50,
+      JSON.stringify(afterEdit),
+    );
+
+    const beforeOther = (await queueIds()).join();
+    const other = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ ids: [] }),
+    }, { tab: { id: PLAYER + 50 } });
+    t.check(
+      'a snapshot from another tab is refused and changes nothing',
+      other.ok === false && (await queueIds()).join() === beforeOther,
+      JSON.stringify(other),
+    );
+    const badSnap = await handleMessage({ type: 'queue.snapshot', onWatch: true, ids: [SA] }, playerSender);
+    t.check('a snapshot with no seq is invalid', badSnap.ok === false && badSnap.error === 'invalid', JSON.stringify(badSnap));
+    t.check('an invalid snapshot changes nothing', (await queueIds()).join() === beforeOther);
+
+    const low = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ seq: 1, ids: [] }),
+    }, playerSender);
+    t.check('a lower seq is accepted as a message but ignored', low.ok === true, JSON.stringify(low));
+    t.check('a lower seq leaves Up next', (await queueIds()).join() === beforeOther, await queueIds());
+
+    const quiet = (await queueIds()).join();
+    mock.messagesSent.length = 0;
+    const offWatch = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ onWatch: false, ids: [], cleared: true }),
+    }, playerSender);
+    t.check('onWatch false is stored and changes nothing', offWatch.ok === true && (await queueIds()).join() === quiet && opsFor().length === 0, `${await queueIds()} ops=${opsFor().length}`);
+
+    page.ids = [];
+    mock.messagesSent.length = 0;
+    const noList = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ listId: '', ids: [SX], cleared: false }),
+    }, playerSender);
+    t.check('an empty list id is accepted', noList.ok === true, JSON.stringify(noList));
+    t.check(
+      'an empty list id without Clear does not remove Up next and pushes it back',
+      (await queueIds()).join() === quiet && await untilMatch(page),
+      `queue=${await queueIds()} page=${page.ids.join()}`,
+    );
+
+    const pageClear = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ listId: '', ids: [], cleared: true }),
+    }, playerSender);
+    t.check('Clear on the page is accepted', pageClear.ok === true, JSON.stringify(pageClear));
+    await waitUntil(async () => (await queueIds()).length === 0);
+    t.check('Clear on the page clears Up next', (await queueIds()).length === 0, (await queueIds()).join());
+
+    await resetMirror();
+    page = makeQueuePage([SA, SB, SC]);
+    usePage(page);
+    await handleMessage({ type: 'queue.add', item: { v: SA, t: 'A' } });
+    await handleMessage({ type: 'queue.add', item: { v: SB, t: 'B' } });
+    await handleMessage({ type: 'queue.add', item: { v: SC, t: 'C' } });
+    await handleMessage({ type: 'queue.player', tabId: PLAYER });
+    t.check('playing case starts mirrored', await untilMatch(page), page.ids.join());
+    page.ids = [SA, SC];
+    page.playing = SB;
+    mock.messagesSent.length = 0;
+    const playingSnap = await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ playing: SB, ids: [SA, SC] }),
+    }, playerSender);
+    t.check('the playing snapshot is accepted', playingSnap.ok === true, JSON.stringify(playingSnap));
+    await waitUntil(async () => (await queueIds()).join() === `${SA},${SC}`);
+    const sentPlaying = mock.messagesSent.slice().filter((row) => row.message?.type === 'queue.ops');
+    t.check(
+      'the playing video leaves Up next and is not sent to the page',
+      (await queueIds()).join() === `${SA},${SC}`
+        && !page.ids.includes(SB)
+        && sentPlaying.every((row) => !JSON.stringify(row.message.ops).includes(SB)),
+      `queue=${await queueIds()} page=${page.ids.join()} ops=${JSON.stringify(sentPlaying.map((row) => row.message.ops))}`,
+    );
+
+    page.playing = '';
+    page.ids = [SA, SC];
+    await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ playing: '', ids: [SA, SC] }),
+    }, playerSender);
+    t.check('the race starts from a shared list', await untilMatch(page), `${await queueIds()} ${page.ids.join()}`);
+    page.delayOps = true;
+    const addLate = await handleMessage({ type: 'queue.add', item: { v: SX, t: 'Ex' } });
+    t.check('the late add is stored before the page answers', addLate.ok === true && (await queueIds()).includes(SX), await queueIds());
+    t.check('the page is holding the add', await waitUntil(() => page.releaseOps != null));
+    const stale = handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ ids: [SA, SC] }),
+    }, playerSender);
+    const staleDone = await Promise.race([
+      stale.then((value) => ({ value })),
+      wait(800).then(() => ({ timeout: true })),
+    ]);
+    t.check('the stale snapshot is applied before the reply', staleDone.timeout !== true, JSON.stringify(staleDone));
+    t.check('the in-flight add stays in Up next', (await queueIds()).includes(SX), await queueIds());
+    if (page.releaseOps) page.releaseOps();
+    await stale;
+    t.check('the reply leaves the add on both sides', await untilMatch(page) && page.ids.includes(SX) && (await queueIds()).includes(SX), `queue=${await queueIds()} page=${page.ids.join()}`);
+
+    await resetMirror();
+    await handleMessage({ type: 'queue.add', item: { v: SA, t: 'A' } });
+    await handleMessage({ type: 'queue.add', item: { v: SB, t: 'B' } });
+    mock.onTabMessage = () => { throw new Error('no content script'); };
+    mock.tabsCreated.length = 0;
+    const latePlay = await handleMessage({ type: 'queue.playAll' });
+    const lateTab = mock.tabsCreated.at(-1)?.id;
+    t.check('playAll into a tab with no content script still opens', latePlay.ok === true && lateTab != null, JSON.stringify(latePlay));
+    t.check(
+      'playAll still asks that tab to watch',
+      mock.messagesSent.some((row) => row.tabId === lateTab && row.message?.type === 'queue.watch' && row.message.on === true),
+      JSON.stringify(mock.messagesSent.map((row) => row.message)),
+    );
+    const lateBoot = await handleMessage({ type: 'audioMode.boot' }, { tab: { id: lateTab } });
+    t.check('boot from the Player tab asks the page to watch', lateBoot.ok === true && lateBoot.queueWatch === true, JSON.stringify(lateBoot));
+    const otherBoot = await handleMessage({ type: 'audioMode.boot' }, { tab: { id: lateTab + 4 } });
+    t.check('boot from any other tab has no queueWatch key', otherBoot.ok === true && !Object.prototype.hasOwnProperty.call(otherBoot, 'queueWatch'), JSON.stringify(otherBoot));
+    page = makeQueuePage([]);
+    page.playing = SA;
+    usePage(page);
+    await handleMessage({
+      type: 'queue.snapshot',
+      ...page.snapshot({ playing: SA, ids: [], listId: 'TLPQtest' }),
+    }, { tab: { id: lateTab } });
+    t.check(
+      'the first snapshot consumes the playing row and pushes the rest',
+      await waitUntil(async () => (await queueIds()).join() === SB && page.ids.join() === SB),
+      `queue=${await queueIds()} page=${page.ids.join()}`,
+    );
+
+    await globalThis.chrome.storage.session.set({ queuePlay: { tabId: lateTab, v: SB } });
+    mock.tabsUpdated.length = 0;
+    const syncedEnd = await handleMessage({ type: 'queue.ended', v: SB }, { tab: { id: lateTab } });
+    t.check(
+      'queue.ended on a tab with a YouTube queue does not navigate',
+      syncedEnd.ok === true && syncedEnd.synced === true && mock.tabsUpdated.length === 0,
+      JSON.stringify({ syncedEnd, tabs: mock.tabsUpdated }),
+    );
+
+    await resetMirror();
+    await handleMessage({ type: 'queue.add', item: { v: SA, t: 'A' } });
+    await handleMessage({ type: 'queue.add', item: { v: SB, t: 'B' } });
+    await globalThis.chrome.storage.session.set({ queuePlay: { tabId: PLAYER, v: SA } });
+    mock.tabsUpdated.length = 0;
+    const plainEnd = await handleMessage({ type: 'queue.ended', v: SA }, playerSender);
+    t.check(
+      'queue.ended with no mirror record still navigates',
+      plainEnd.ok === true && plainEnd.synced !== true && mock.tabsUpdated.length === 1
+        && mock.tabsUpdated[0].url === `https://www.youtube.com/watch?v=${SB}`,
+      JSON.stringify({ plainEnd, tabs: mock.tabsUpdated }),
+    );
+
+    await resetMirror();
+    page = makeQueuePage([]);
+    usePage(page);
+    await handleMessage({ type: 'queue.player', tabId: 1 });
+    mock.messagesSent.length = 0;
+    await handleMessage({ type: 'queue.player', tabId: 2 });
+    const watches = mock.messagesSent.filter((row) => row.message?.type === 'queue.watch');
+    t.check(
+      'switching Player tabs stops the old watch and starts the new one',
+      watches[0]?.tabId === 1 && watches[0]?.message?.on === false
+        && watches[1]?.tabId === 2 && watches[1]?.message?.on === true,
+      JSON.stringify(watches),
+    );
+    await handleMessage({ type: 'queue.player', tabId: null });
+    t.check('queue.player null removes the record', (await syncRecord()) == null, JSON.stringify(await syncRecord()));
+    await handleMessage({ type: 'queue.player', tabId: 2 });
+    const beforeBad = JSON.stringify(await syncRecord());
+    const badPlayer = await handleMessage({ type: 'queue.player', tabId: 'x' });
+    t.check('queue.player with a bad tab id is invalid', badPlayer.ok === false && badPlayer.error === 'invalid', JSON.stringify(badPlayer));
+    t.check('a bad tab id leaves the record', JSON.stringify(await syncRecord()) === beforeBad);
+
+    t.check('queue.snapshot is a content-script message', CONTENT_SCRIPT_MESSAGES.has('queue.snapshot'));
+    t.check('queue.player is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.player'));
+    t.check('senderMayCall accepts queue.snapshot from a content script', senderMayCall('queue.snapshot', PAGE_SENDER) === true);
+    t.check('senderMayCall refuses queue.player from a content script', senderMayCall('queue.player', PAGE_SENDER) === false);
+    const snapFromPage = await viaListenerAs({ type: 'queue.snapshot', seq: 1, onWatch: true }, PAGE_SENDER);
+    t.check(
+      'the listener accepts queue.snapshot from a content script',
+      snapFromPage.res.error !== 'not allowed',
+      JSON.stringify(snapFromPage.res),
+    );
+    const playerFromPage = await viaListenerAs({ type: 'queue.player', tabId: 1 }, PAGE_SENDER);
+    t.check(
+      'the listener refuses queue.player from a content script',
+      playerFromPage.res.error === 'not allowed',
+      JSON.stringify(playerFromPage.res),
+    );
+
+    mock.onTabMessage = null;
+    await globalThis.chrome.storage.session.remove('queueSync');
 
     t.section('renaming and deleting a group');
 
@@ -4619,7 +5078,7 @@ export default async function run(t) {
     for (const type of ['getState', 'popupOpened', 'sweep', 'addChannel', 'removeChannel',
       'clearChannels', 'setFavorite', 'setMuted', 'updateSettings', 'openInAudioMode',
       'importBackup', 'importTakeout', 'importFromYouTube', 'undoRemove', 'renameGroup', 'deleteGroup',
-      'queue.add', 'queue.remove', 'queue.clear', 'queue.playAll', 'queue.setOpen',
+      'queue.add', 'queue.remove', 'queue.clear', 'queue.move', 'queue.playAll', 'queue.setOpen',
       'whatsNew.seen', 'subscriptions.scan']) {
       const res = await viaListenerAs({ type }, PAGE_SENDER);
       t.check(`a YouTube page cannot send ${type}`, res.res.error === 'not allowed', JSON.stringify(res.res));
@@ -4632,6 +5091,7 @@ export default async function run(t) {
     t.check('queue.add is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.add'));
     t.check('queue.remove is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.remove'));
     t.check('queue.clear is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.clear'));
+    t.check('queue.move is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.move'));
     t.check('queue.playAll is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.playAll'));
     t.check('queue.setOpen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('queue.setOpen'));
     t.check('whatsNew.seen is not a content-script message', !CONTENT_SCRIPT_MESSAGES.has('whatsNew.seen'));

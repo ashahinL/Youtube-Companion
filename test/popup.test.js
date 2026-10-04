@@ -843,11 +843,18 @@ export default async function run(t) {
   const queueKeys = [
     'queueTitle', 'queueTitleCount', 'queuePlayAll', 'queueClear',
     'queueClearConfirm', 'queueClearConfirmYes', 'queueClearConfirmNo', 'queueEmpty',
-    'queueAdd', 'queueRemove', 'queueFull', 'queueShow', 'queueHide',
+    'queueAdd', 'queueRemove', 'queueMove', 'queueFull', 'queueShow', 'queueHide',
   ];
   for (const key of queueKeys) {
     t.check(`queue key ${key} exists in en and ar`, key in en && key in ar);
   }
+  t.check(
+    'queueMove names the video in both locales',
+    en.queueMove.message.includes('$TITLE$')
+      && ar.queueMove.message.includes('$TITLE$')
+      && en.queueMove.placeholders.title.content === '$1'
+      && ar.queueMove.placeholders.title.content === '$1',
+  );
   t.check('popup.js imports i18n.js', /from ['"]\.\.\/lib\/i18n\.js['"]/.test(js));
   t.check('popup.js imports view.js', /from ['"]\.\.\/lib\/view\.js['"]/.test(js));
   t.check(
@@ -1399,10 +1406,10 @@ export default async function run(t) {
       && /\.feed-row__open\s*\{[^}]*z-index:\s*1/.test(css),
   );
   t.check(
-    'the player card has a queue button',
-    /class="icon-btn audio-player__queue"/.test(a)
-      && a.indexOf('id="audio-queue"') > a.indexOf('id="audio-player"')
-      && /getElementById\('audio-queue'\)/.test(js),
+    'the player card has no queue button',
+    !/id="audio-queue"/.test(html)
+      && !/audio-player__queue/.test(css)
+      && !/getElementById\('audio-queue'\)/.test(js),
   );
   t.check(
     'only a hidden queue list is emptied, so a redraw cannot blank it',

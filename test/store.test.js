@@ -36,8 +36,10 @@ import {
   removeFromQueue,
   takeFromQueue,
   clearQueue,
+  moveInQueue,
   readQueueOpen,
   writeQueueOpen,
+  updateQueue,
 } from '../src/lib/store.js';
 
 function same(a, b) {
@@ -120,6 +122,121 @@ async function queueChecks(t) {
   );
   await saveQueue([{ v: 'nope' }, { v: 'cdefghijklm', t: 'Saved' }]);
   t.check('saveQueue sanitizes', same((await readQueue()).map((row) => row.v), ['cdefghijklm']));
+
+  const A = 'aaaaaaaaaaa';
+  const B = 'bbbbbbbbbbb';
+  const C = 'ccccccccccc';
+  async function seedThree() {
+    await clearQueue();
+    await addToQueue({ v: A, t: 'A' });
+    await addToQueue({ v: B, t: 'B' });
+    await addToQueue({ v: C, t: 'C' });
+  }
+  const order = async () => (await readQueue()).map((row) => row.v).join();
+  let queueWrites = 0;
+  const onQueueWrite = (changes, area) => {
+    if (area === 'local' && changes.queue) queueWrites += 1;
+  };
+  globalThis.chrome.storage.onChanged.addListener(onQueueWrite);
+
+  await seedThree();
+  const movedDown = await moveInQueue(A, 1);
+  t.check(
+    'moveInQueue moves a video down one',
+    movedDown.moved === true && movedDown.queue.map((row) => row.v).join() === `${B},${A},${C}`,
+    movedDown.queue.map((row) => row.v).join(),
+  );
+  t.check('moveInQueue down is stored', (await order()) === `${B},${A},${C}`);
+
+  await seedThree();
+  const movedUp = await moveInQueue(C, 1);
+  t.check(
+    'moveInQueue moves a video up one',
+    movedUp.moved === true && (await order()) === `${A},${C},${B}`,
+    await order(),
+  );
+
+  await seedThree();
+  const movedTop = await moveInQueue(C, 0);
+  t.check('moveInQueue moves a video to the top', movedTop.moved === true && (await order()) === `${C},${A},${B}`);
+
+  await seedThree();
+  const movedBottom = await moveInQueue(A, 2);
+  t.check('moveInQueue moves a video to the bottom', movedBottom.moved === true && (await order()) === `${B},${C},${A}`);
+
+  await seedThree();
+  const clampedHigh = await moveInQueue(A, 50);
+  t.check('moveInQueue clamps a high index to the bottom', clampedHigh.moved === true && (await order()) === `${B},${C},${A}`);
+
+  await seedThree();
+  const clampedLow = await moveInQueue(C, -4);
+  t.check('moveInQueue clamps a low index to the top', clampedLow.moved === true && (await order()) === `${C},${A},${B}`);
+
+  await seedThree();
+  queueWrites = 0;
+  const missing = await moveInQueue('zzzzzzzzzzz', 0);
+  t.check(
+    'moveInQueue of an unknown id does not write',
+    missing.moved === false && queueWrites === 0 && (await order()) === `${A},${B},${C}`,
+    await order(),
+  );
+
+  queueWrites = 0;
+  const samePlace = await moveInQueue(A, 0);
+  t.check(
+    'moveInQueue onto the same slot does not write',
+    samePlace.moved === false && queueWrites === 0 && (await order()) === `${A},${B},${C}`,
+  );
+
+  queueWrites = 0;
+  const fractional = await moveInQueue(A, 1.5);
+  const textIndex = await moveInQueue(A, '1');
+  const missingIndex = await moveInQueue(A, null);
+  t.check(
+    'moveInQueue of a non-integer index does not write',
+    fractional.moved === false && textIndex.moved === false && missingIndex.moved === false
+      && queueWrites === 0 && (await order()) === `${A},${B},${C}`,
+  );
+
+  await seedThree();
+  await Promise.all([
+    moveInQueue(A, 2),
+    moveInQueue(C, 0),
+  ]);
+  t.check(
+    'two moves at once both land',
+    (await order()) === `${C},${B},${A}`,
+    await order(),
+  );
+
+  await seedThree();
+  const updated = await updateQueue(async (queue) => queue.filter((row) => row.v !== B));
+  t.check(
+    'updateQueue saves an array result',
+    updated.queue.map((row) => row.v).join() === `${A},${C}` && (await order()) === `${A},${C}`,
+    await order(),
+  );
+  queueWrites = 0;
+  const left = await updateQueue(async () => null);
+  t.check(
+    'updateQueue leaves the list when the result is not an array',
+    left.queue.map((row) => row.v).join() === `${A},${C}`
+      && queueWrites === 0
+      && (await order()) === `${A},${C}`,
+    await order(),
+  );
+  await seedThree();
+  await Promise.all([
+    updateQueue(async (queue) => queue.filter((row) => row.v !== A)),
+    updateQueue(async (queue) => queue.filter((row) => row.v !== C)),
+  ]);
+  t.check(
+    'two updateQueue calls at once both land',
+    (await order()) === B,
+    await order(),
+  );
+  globalThis.chrome.storage.onChanged.removeListener(onQueueWrite);
+  await clearQueue();
 }
 
 export default async function run(t) {

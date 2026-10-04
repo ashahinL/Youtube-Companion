@@ -7,6 +7,9 @@ _Changes for 2.0 take effect when 2.0 is published._
 _Import from your signed-in YouTube tab, and your groups on YouTube's
 Subscriptions page, take effect when the next version is published._
 
+_Keeping Up next in step with YouTube's queue takes effect when 2.2.0 is
+published._
+
 Companion for YouTube is a browser extension for Chrome and Edge. It has no
 server, no account and no analytics. This page says exactly what it touches.
 
@@ -19,6 +22,8 @@ Everything stays in your browser's extension storage, on your device:
 - the recent videos from those channels (title, publish time, length, view
   count), capped at the number you choose in Settings;
 - your settings;
+- your Up next list (each video's id, title, channel name and length; not
+  in backups);
 - audio-mode listening totals (seconds listened, by day, kept for 90 days,
   plus running totals);
 - the audio-mode cover picture you choose (it stays on this device and is
@@ -53,9 +58,11 @@ reads it on your device and keeps only each channel's id and name.
   thumbnails and channel pictures, loaded as images, including the channel
   picture on an alert.
 
-The one request made with your YouTube session is **Import from YouTube**
-(above): it reads your own subscriptions page from inside your YouTube tab,
-the way YouTube loads that page for you.
+Two things use your YouTube session, both inside your own YouTube tab:
+**Import from YouTube** (above) reads your subscriptions page the way
+YouTube loads it for you, and **Up next** (below) asks the YouTube page to
+add, move or remove videos in its own queue, the same requests the page
+sends when you use its Add to queue.
 
 It sends nothing to any other server, and it never sends your channel list,
 settings, listening totals or cover picture anywhere.
@@ -72,6 +79,13 @@ Audio mode runs a script on `www.youtube.com` pages so it can lower the video
 quality, cover the video and control playback. It reads the title and channel
 of the video you are playing to show them in the popup. That information stays
 on your device.
+
+**Up next** stays in step with YouTube's own queue in one tab: the one the
+popup's player controls. There, a script reads the queue's video ids,
+titles and channel names, and asks the page to add, move, remove or clear
+videos when you change Up next. A video added to YouTube's queue in that tab
+is added to Up next, on your device. No other tab is read, and nothing is
+sent anywhere but to YouTube, by YouTube's own page.
 
 When you press **Import from YouTube**, a script on your All subscriptions
 page reads the channels listed there, as described above.
@@ -104,7 +118,7 @@ happens on PayPal's or your bank's own service, under their privacy policies.
 | `notifications` | Telling you when a channel uploads. |
 | `activeTab` | Adding the channel of the tab you are on, only when you press **Add**. |
 | `declarativeNetRequestWithHostAccess` | YouTube rejects requests that come from an extension address. One rule sets the origin and referrer of this extension's own `www.youtube.com` requests to YouTube's, and touches no other request. |
-| `https://www.youtube.com/*` | Reading public channel data, running audio mode on YouTube pages, reading your All subscriptions page when you import, and showing your groups on YouTube's Subscriptions page. |
+| `https://www.youtube.com/*` | Reading public channel data, running audio mode on YouTube pages, reading your All subscriptions page when you import, showing your groups on YouTube's Subscriptions page, and keeping Up next in step with YouTube's queue in the Player tab. |
 
 ## Changes and contact
 

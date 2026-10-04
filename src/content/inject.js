@@ -2,9 +2,10 @@
  * MAIN-world bridge. Isolated content scripts can see the element but
  * not its methods or the page's own data, which is the only reason this
  * file exists. It receives a request, calls the player, reads a collab
- * video's channel list, or reads the All subscriptions rows, and posts
- * the result back. Never throws into the page. Loaded as a MAIN-world
- * content script, so it is not a web-accessible file.
+ * video's channel list, reads the All subscriptions rows, or reads and
+ * edits the watch-page queue, and posts the result back. Never throws
+ * into the page. Loaded as a MAIN-world content script, so it is not a
+ * web-accessible file.
  */
 
 (function (root) {
@@ -28,10 +29,13 @@
     setVolume: 1,
     mute: 0,
     unMute: 0,
-    // Not player methods: read-only page data, answered without the player.
+    // Not player methods: page data, answered without the player.
     collaborators: 0,
     subscribedChannels: 0,
     sessionIndex: 0,
+    queueSnapshot: 0,
+    queueOps: 1,
+    queueWatch: 1,
   };
 
   const MAX_COLLABORATORS = 10;
@@ -42,6 +46,16 @@
   // The worker stores only the exact 24-character form. Anything shorter
   // is dropped here only when it cannot be a channel id at all.
   const CHANNEL_ID_RE = /^UC[\w-]{20,}$/;
+  // Same shape as a watch id. Queue ops reject anything else.
+  const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+  // The panel can be longer; the snapshot the popup stores is capped.
+  const MAX_QUEUE_IDS = 100;
+  const MAX_QUEUE_OPS = 100;
+  // A quiet edit still has to finish the batch. Five seconds is the give-up,
+  // not a failure the popup has to show.
+  const QUEUE_WAIT_MS = 5000;
+  // The page fires several signals for one redraw.
+  const QUEUE_DEBOUNCE_MS = 150;
 
   const QUALITIES = {
     tiny: true,
@@ -91,6 +105,48 @@
       && Math.floor(value) === value;
   }
 
+  function isVideoId(value) {
+    return typeof value === 'string' && VIDEO_ID_RE.test(value);
+  }
+
+  function hasExactKeys(obj, names) {
+    const keys = Object.keys(obj);
+    if (keys.length !== names.length) return false;
+    for (let i = 0; i < names.length; i++) {
+      if (!Object.prototype.hasOwnProperty.call(obj, names[i])) return false;
+    }
+    return true;
+  }
+
+  // after is omitted, an id, or null (the top of the queue). Any other
+  // shape is a different operation and is refused whole.
+  function isAfterValue(value) {
+    return value === null || isVideoId(value);
+  }
+
+  function isQueueOp(op) {
+    if (!op || typeof op !== 'object' || Array.isArray(op)) return false;
+    if (op.op === 'clear') return hasExactKeys(op, ['op']);
+    if (op.op === 'remove') return hasExactKeys(op, ['op', 'v']) && isVideoId(op.v);
+    if (op.op === 'move') {
+      return hasExactKeys(op, ['op', 'v', 'after']) && isVideoId(op.v) && isAfterValue(op.after);
+    }
+    if (op.op === 'add') {
+      if (!isVideoId(op.v)) return false;
+      if (hasExactKeys(op, ['op', 'v'])) return true;
+      return hasExactKeys(op, ['op', 'v', 'after']) && isAfterValue(op.after);
+    }
+    return false;
+  }
+
+  function isQueueOps(value) {
+    if (!Array.isArray(value) || value.length < 1 || value.length > MAX_QUEUE_OPS) return false;
+    for (let i = 0; i < value.length; i++) {
+      if (!isQueueOp(value[i])) return false;
+    }
+    return true;
+  }
+
   function isAllowedCall(method, args) {
     if (typeof method !== 'string' || !Object.prototype.hasOwnProperty.call(ARITY, method)) {
       return false;
@@ -103,6 +159,8 @@
     if (method === 'seekTo') return isSeekTime(args[0]);
     if (method === 'setPlaybackRate') return isPlaybackRate(args[0]);
     if (method === 'setVolume') return isVolumeLevel(args[0]);
+    if (method === 'queueWatch') return typeof args[0] === 'boolean';
+    if (method === 'queueOps') return isQueueOps(args[0]);
     return true;
   }
 
@@ -367,6 +425,486 @@
     }
   }
 
+  // Titles ride along so a video added on YouTube's own queue can be named
+  // in Up next. The set id stays here: it is how this page's edit endpoint
+  // names a row, and a refresh replaces it. It never leaves the bridge.
+  function clipQueueLabel(value) {
+    if (typeof value !== 'string') return '';
+    const text = value.trim();
+    return text.length > 200 ? text.slice(0, 200) : text;
+  }
+
+  function readQueueTitle(data) {
+    const title = data && data.title;
+    if (!title || typeof title !== 'object') return '';
+    if (typeof title.simpleText === 'string') return clipQueueLabel(title.simpleText);
+    if (!Array.isArray(title.runs)) return '';
+    let text = '';
+    for (let i = 0; i < title.runs.length; i++) {
+      const part = title.runs[i];
+      if (part && typeof part.text === 'string') text += part.text;
+    }
+    return clipQueueLabel(text);
+  }
+
+  function readQueueChannel(data) {
+    const shortRuns = data && data.shortBylineText && data.shortBylineText.runs;
+    const longRuns = data && data.longBylineText && data.longBylineText.runs;
+    let text = '';
+    if (Array.isArray(shortRuns) && shortRuns[0] && typeof shortRuns[0].text === 'string') {
+      text = shortRuns[0].text;
+    } else if (Array.isArray(longRuns) && longRuns[0] && typeof longRuns[0].text === 'string') {
+      text = longRuns[0].text;
+    }
+    return clipQueueLabel(text);
+  }
+
+  // #movie_player.getPlaylist() stays on the old order until a refresh, and
+  // after Clear it still lists videos the panel has dropped. The panel is
+  // the list (docs/youtube.md).
+  function readQueueState() {
+    const empty = { panel: null, listId: '', queued: [], playing: '' };
+    const doc = root.document;
+    if (!doc || typeof doc.querySelectorAll !== 'function') return empty;
+    const panels = doc.querySelectorAll('ytd-playlist-panel-renderer');
+    if (!panels || typeof panels.length !== 'number') return empty;
+    let panel = null;
+    for (let i = 0; i < panels.length; i++) {
+      const data = panels[i] && panels[i].data;
+      const id = data && data.playlistId;
+      if (typeof id === 'string' && id.indexOf('TLPQ') === 0) {
+        panel = panels[i];
+        break;
+      }
+    }
+    if (!panel) return empty;
+    const queued = [];
+    let playing = '';
+    if (typeof panel.querySelectorAll === 'function') {
+      const rows = panel.querySelectorAll('ytd-playlist-panel-video-renderer');
+      if (rows && typeof rows.length === 'number') {
+        for (let i = 0; i < rows.length; i++) {
+          const data = rows[i] && rows[i].data;
+          if (!data || typeof data !== 'object') continue;
+          const v = data.videoId;
+          if (!isVideoId(v)) continue;
+          const set = data.playlistSetVideoId;
+          if (typeof set === 'string' && set) {
+            queued.push({
+              v: v,
+              set: set,
+              t: readQueueTitle(data),
+              ct: readQueueChannel(data),
+            });
+          } else if (!playing) playing = v;
+        }
+      }
+    }
+    return { panel: panel, listId: panel.data.playlistId, queued: queued, playing: playing };
+  }
+
+  function emptyQueueSnapshot() {
+    return { listId: '', ids: [], playing: '', titles: {} };
+  }
+
+  function readQueueSnapshot() {
+    try {
+      const state = readQueueState();
+      if (!state.listId) return emptyQueueSnapshot();
+      const ids = [];
+      const titles = {};
+      for (let i = 0; i < state.queued.length && ids.length < MAX_QUEUE_IDS; i++) {
+        const row = state.queued[i];
+        ids.push(row.v);
+        titles[row.v] = {
+          t: typeof row.t === 'string' ? row.t : '',
+          ct: typeof row.ct === 'string' ? row.ct : '',
+        };
+      }
+      return { listId: state.listId, ids: ids, playing: state.playing, titles: titles };
+    } catch (err) {
+      return emptyQueueSnapshot();
+    }
+  }
+
+  function queueApp() {
+    const doc = root.document;
+    if (!doc || typeof doc.querySelector !== 'function') return null;
+    return doc.querySelector('ytd-app');
+  }
+
+  function dispatchYtAction(target, detail) {
+    if (!target || typeof target.dispatchEvent !== 'function') return;
+    const Ctor = root.CustomEvent;
+    if (typeof Ctor !== 'function') return;
+    let ev;
+    try {
+      ev = new Ctor('yt-action', { bubbles: true, composed: true, detail: detail });
+    } catch (err) {
+      return;
+    }
+    try {
+      target.dispatchEvent(ev);
+    } catch (err) {
+      // The page's own handler owns a failure of the action.
+    }
+  }
+
+  function dispatchAdd(v) {
+    const app = queueApp();
+    if (!app) return;
+    dispatchYtAction(app, {
+      actionName: 'yt-add-to-playlist-command',
+      args: [{
+        addToPlaylistCommand: {
+          openMiniplayer: false,
+          videoId: v,
+          listType: 'PLAYLIST_EDIT_LIST_TYPE_QUEUE',
+          onCreateListCommand: {
+            commandMetadata: {
+              webCommandMetadata: {
+                sendPost: true,
+                apiUrl: '/youtubei/v1/playlist/create',
+              },
+            },
+            createPlaylistServiceEndpoint: {
+              videoIds: [v],
+              params: 'CAQ%3D',
+            },
+          },
+          videoIds: [v],
+        },
+      }, app],
+      optionalAction: false,
+      returnValue: [],
+    });
+  }
+
+  function dispatchEdit(panel, playlistId, actions, params) {
+    const endpoint = { playlistId: playlistId, actions: actions };
+    if (params) endpoint.params = params;
+    dispatchYtAction(panel, {
+      actionName: 'yt-service-request',
+      args: [panel, {
+        commandMetadata: {
+          webCommandMetadata: {
+            sendPost: true,
+            apiUrl: '/youtubei/v1/browse/edit_playlist',
+          },
+        },
+        playlistEditEndpoint: endpoint,
+      }],
+      optionalAction: false,
+      returnValue: [],
+    });
+  }
+
+  function dispatchRefresh(playlistId) {
+    const app = queueApp();
+    if (!app) return;
+    dispatchYtAction(app, {
+      actionName: 'yt-refresh-playlist-command',
+      args: [{ refreshPlaylistCommand: { listId: playlistId } }, app],
+      optionalAction: false,
+      returnValue: [],
+    });
+  }
+
+  function dispatchClear(playlistId) {
+    const app = queueApp();
+    if (!app) return;
+    dispatchYtAction(app, {
+      actionName: 'yt-end-playlist-command',
+      args: [{
+        endPlaylistCommand: {
+          closeListPanel: true,
+          listId: playlistId,
+          listType: 'PLAYLIST_EDIT_LIST_TYPE_QUEUE',
+        },
+      }, app],
+      optionalAction: false,
+      returnValue: [],
+    });
+  }
+
+  const queueWaiters = [];
+  let queueListening = false;
+  let queueWatching = false;
+  let queueDebounce = null;
+  let queueLastPosted = null;
+  // YouTube's own Clear is yt-end-playlist-command. The list afterwards can
+  // look like any other empty queue, so the next post says the person cleared it.
+  let queueEndSeen = false;
+  // Two queueOps messages can be in flight before either batch has read the
+  // panel. One chain keeps the second from editing a list the first is
+  // still waiting on.
+  let queueChain = null;
+
+  function queueSignalName(event) {
+    if (!event || typeof event.type !== 'string') return '';
+    if (event.type === 'yt-playlist-data-updated' || event.type === 'yt-navigate-finish') {
+      return event.type;
+    }
+    if (event.type !== 'yt-action') return '';
+    const detail = event.detail;
+    const name = detail && detail.actionName;
+    if (name === 'yt-update-playlist-action' || name === 'yt-end-playlist-command') return name;
+    return '';
+  }
+
+  function snapshotsEqual(a, b) {
+    if (!a || !b) return false;
+    if (a.listId !== b.listId || a.playing !== b.playing) return false;
+    if (!Array.isArray(a.ids) || !Array.isArray(b.ids) || a.ids.length !== b.ids.length) return false;
+    for (let i = 0; i < a.ids.length; i++) {
+      if (a.ids[i] !== b.ids[i]) return false;
+    }
+    return true;
+  }
+
+  function postQueueChanged() {
+    if (!queueWatching) return;
+    let snap;
+    try {
+      snap = readQueueSnapshot();
+    } catch (err) {
+      return;
+    }
+    if (queueLastPosted && snapshotsEqual(queueLastPosted, snap)) return;
+    snap.cleared = queueEndSeen === true;
+    queueEndSeen = false;
+    queueLastPosted = snap;
+    adopted.forEach(function (token) {
+      postToPage({
+        type: token,
+        dir: 'event',
+        event: 'queueChanged',
+        snapshot: snap,
+      });
+    });
+  }
+
+  function scheduleQueuePost() {
+    if (!queueWatching) return;
+    if (queueDebounce != null) clearTimeout(queueDebounce);
+    queueDebounce = setTimeout(function () {
+      queueDebounce = null;
+      postQueueChanged();
+    }, QUEUE_DEBOUNCE_MS);
+  }
+
+  function onQueueSignal(event) {
+    let name = '';
+    try {
+      name = queueSignalName(event);
+    } catch (err) {
+      return;
+    }
+    if (!name) return;
+    if (name === 'yt-end-playlist-command') queueEndSeen = true;
+    const pending = queueWaiters.slice();
+    for (let i = 0; i < pending.length; i++) {
+      try {
+        pending[i].match(name);
+      } catch (err) {
+        // One waiter failing must not drop the signal for the rest.
+      }
+    }
+    if (queueWatching) scheduleQueuePost();
+  }
+
+  function ensureQueueListeners() {
+    if (queueListening) return;
+    const doc = root.document;
+    if (!doc || typeof doc.addEventListener !== 'function') return;
+    doc.addEventListener('yt-playlist-data-updated', onQueueSignal, false);
+    doc.addEventListener('yt-navigate-finish', onQueueSignal, false);
+    // Capture: that is where yt-update-playlist-action was seen on document.
+    doc.addEventListener('yt-action', onQueueSignal, true);
+    queueListening = true;
+  }
+
+  // Resolves on the next signal for which `pred` is true, or when the wait
+  // is up. A timeout is the page staying quiet, and the batch carries on.
+  function expectQueue(pred) {
+    ensureQueueListeners();
+    return new Promise(function (resolve) {
+      let settled = false;
+      const entry = {
+        match: function (name) {
+          let ok = false;
+          try {
+            ok = !!pred(name);
+          } catch (err) {
+            ok = false;
+          }
+          if (ok) finish();
+        },
+      };
+      function finish() {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        const at = queueWaiters.indexOf(entry);
+        if (at !== -1) queueWaiters.splice(at, 1);
+        resolve();
+      }
+      queueWaiters.push(entry);
+      const timer = setTimeout(finish, QUEUE_WAIT_MS);
+    });
+  }
+
+  function expectSignal(name) {
+    return expectQueue(function (got) { return got === name; });
+  }
+
+  function expectQueued(v) {
+    return expectQueue(function () {
+      const snap = readQueueSnapshot();
+      return snap.ids.indexOf(v) !== -1;
+    });
+  }
+
+  async function runRemove(v) {
+    const state = readQueueState();
+    if (!state.listId) return false;
+    let set = '';
+    for (let i = 0; i < state.queued.length; i++) {
+      if (state.queued[i].v === v) {
+        set = state.queued[i].set;
+        break;
+      }
+    }
+    if (!set) return false;
+    const pending = expectSignal('yt-update-playlist-action');
+    dispatchEdit(state.panel, state.listId, [{
+      action: 'ACTION_REMOVE_VIDEO',
+      setVideoId: set,
+    }], 'CAE%3D');
+    await pending;
+    return true;
+  }
+
+  async function runMove(v, after) {
+    const state = readQueueState();
+    if (!state.listId) return false;
+    const rows = state.queued;
+    let from = -1;
+    let afterAt = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (from === -1 && rows[i].v === v) from = i;
+      if (after != null && afterAt === -1 && rows[i].v === after) afterAt = i;
+    }
+    if (from === -1) return false;
+    if (after == null) {
+      if (from === 0) return false;
+    } else if (afterAt === -1 || from === afterAt + 1) {
+      return false;
+    }
+    const mine = rows[from].set;
+    if (!mine) return false;
+    let actions;
+    if (after == null) {
+      const successor = rows[0].set;
+      if (!successor) return false;
+      actions = [{
+        action: 'ACTION_MOVE_VIDEO_BEFORE',
+        setVideoId: mine,
+        movedSetVideoIdSuccessor: successor,
+      }];
+    } else {
+      const predecessor = rows[afterAt].set;
+      if (!predecessor) return false;
+      actions = [{
+        action: 'ACTION_MOVE_VIDEO_AFTER',
+        setVideoId: mine,
+        movedSetVideoIdPredecessor: predecessor,
+      }];
+    }
+    const pending = expectSignal('yt-update-playlist-action');
+    dispatchEdit(state.panel, state.listId, actions);
+    await pending;
+    return true;
+  }
+
+  async function runAdd(op) {
+    const snap = readQueueSnapshot();
+    if (snap.ids.indexOf(op.v) !== -1) return false;
+    const pending = expectQueued(op.v);
+    dispatchAdd(op.v);
+    await pending;
+    if (!Object.prototype.hasOwnProperty.call(op, 'after')) return false;
+    const now = readQueueSnapshot();
+    const at = now.ids.indexOf(op.v);
+    const before = at <= 0 ? null : now.ids[at - 1];
+    if (before === op.after) return false;
+    return runMove(op.v, op.after);
+  }
+
+  async function runClear() {
+    const snap = readQueueSnapshot();
+    if (!snap.listId) return false;
+    const pending = expectSignal('yt-playlist-data-updated');
+    dispatchClear(snap.listId);
+    await pending;
+    return true;
+  }
+
+  // The panel does not redraw after a remove or a move until something
+  // asks it to. One refresh at the end of the batch is enough; Clear has
+  // already dropped the list, so there is nothing left to redraw.
+  async function refreshQueue() {
+    const snap = readQueueSnapshot();
+    if (!snap.listId) return;
+    const pending = expectSignal('yt-playlist-data-updated');
+    dispatchRefresh(snap.listId);
+    await pending;
+  }
+
+  async function performQueueOps(ops) {
+    let edited = false;
+    let didClear = false;
+    for (let i = 0; i < ops.length; i++) {
+      const op = ops[i];
+      if (op.op === 'add') {
+        if (await runAdd(op)) edited = true;
+      } else if (op.op === 'remove') {
+        if (await runRemove(op.v)) edited = true;
+      } else if (op.op === 'move') {
+        if (await runMove(op.v, op.after)) edited = true;
+      } else if (op.op === 'clear') {
+        if (await runClear()) didClear = true;
+      }
+    }
+    if (edited) await refreshQueue();
+    const snap = readQueueSnapshot();
+    snap.cleared = didClear === true && snap.listId === '';
+    return snap;
+  }
+
+  function runQueueOps(ops) {
+    const prev = queueChain || Promise.resolve();
+    const job = prev.then(function () {
+      return performQueueOps(ops);
+    });
+    queueChain = job.then(function () { return null; }, function () { return null; });
+    return job;
+  }
+
+  function queueWatch(on) {
+    if (on) {
+      queueWatching = true;
+      ensureQueueListeners();
+    } else {
+      queueWatching = false;
+      if (queueDebounce != null) {
+        clearTimeout(queueDebounce);
+        queueDebounce = null;
+      }
+    }
+    return readQueueSnapshot();
+  }
+
   function onMessage(event) {
     try {
       const adoptReq = readAdopt(event, win);
@@ -386,6 +924,22 @@
       }
       if (req.method === 'sessionIndex') {
         reply(req.token, req.id, { ok: true, result: readSessionIndex() });
+        return;
+      }
+      if (req.method === 'queueSnapshot') {
+        reply(req.token, req.id, { ok: true, result: readQueueSnapshot() });
+        return;
+      }
+      if (req.method === 'queueOps') {
+        runQueueOps(req.args[0]).then(function (snap) {
+          reply(req.token, req.id, { ok: true, result: snap });
+        }, function () {
+          reply(req.token, req.id, { ok: false, error: 'failed' });
+        });
+        return;
+      }
+      if (req.method === 'queueWatch') {
+        reply(req.token, req.id, { ok: true, result: queueWatch(req.args[0]) });
         return;
       }
       const player = getPlayer();
@@ -430,6 +984,8 @@
     readCollaborators,
     readSubscribedChannels,
     readSessionIndex,
+    readQueueSnapshot,
+    runQueueOps,
     onMessage,
     hasToken: function (token) { return adopted.has(token); },
   };

@@ -1593,7 +1593,7 @@
     "description": "Cancels clearing the listen-later queue."
   },
   "queueEmpty": {
-    "message": "لا شيء هنا بعد. أضف فيديو من الموجز أو المشغّل.",
+    "message": "لا شيء هنا بعد. أضف فيديو من الموجز.",
     "description": "Empty state inside the listen-later queue when it is expanded."
   },
   "queueAdd": {
@@ -1603,6 +1603,16 @@
   "queueRemove": {
     "message": "إزالة من التالي",
     "description": "Accessible name and tooltip of the button that removes a video from the queue."
+  },
+  "queueMove": {
+    "message": "انقل $TITLE$ — استخدم مفاتيح الأسهم",
+    "description": "Accessible name and tooltip of the Up next drag handle. $TITLE$ is the video title. Arrow keys, Home and End reorder the row while this handle is focused.",
+    "placeholders": {
+      "title": {
+        "content": "$1",
+        "example": "iPhone 18 Pro/Duo Impressions: Mogged"
+      }
+    }
   },
   "queueFull": {
     "message": "التالي ممتلئ (100 فيديو).",

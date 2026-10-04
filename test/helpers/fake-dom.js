@@ -540,8 +540,35 @@ class FakeElement extends FakeNode {
 
   getContext() { return null; }
 
+  // Queue reorder tests place rows by pointer Y. Layout is not modelled;
+  // a test that needs positions sets `_bounds` ({ top, left, width, height }).
   getBoundingClientRect() {
-    return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 };
+    const box = this._bounds;
+    if (!box) return { top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0 };
+    const top = Number(box.top) || 0;
+    const left = Number(box.left) || 0;
+    const width = Number(box.width) || 0;
+    const height = Number(box.height) || 0;
+    return { top, left, width, height, right: left + width, bottom: top + height, x: left, y: top };
+  }
+
+  // The popup's queue drag calls these. Events are not retargeted; the
+  // test dispatches pointermove on the handle that captured the pointer.
+  setPointerCapture(pointerId) {
+    this._capturedPointer = pointerId;
+  }
+
+  releasePointerCapture(pointerId) {
+    if (this._capturedPointer !== pointerId) {
+      const err = new Error(`No pointer capture for ${pointerId}`);
+      err.name = 'NotFoundError';
+      throw err;
+    }
+    this._capturedPointer = null;
+  }
+
+  hasPointerCapture(pointerId) {
+    return this._capturedPointer === pointerId;
   }
 
   get offsetWidth() { return 0; }

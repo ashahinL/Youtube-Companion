@@ -20,6 +20,15 @@
   const SAMPLE_MS = 5000;
   const FLUSH_MS = 30000;
   const CALL_TIMEOUT_MS = 1500;
+  // One queue edit can wait on the page for several seconds, and a batch
+  // runs them one after another.
+  const QUEUE_OPS_TIMEOUT_MS = 60000;
+  const QUEUE_LIST_RE = /^TLPQ[A-Za-z0-9_-]{0,60}$/;
+  const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+  const QUEUE_MAX_IDS = 100;
+  // The queue panel is often still empty on the first read after this tab
+  // loads, so an empty watch waits for the page before sending a snapshot.
+  const QUEUE_BOOT_WAIT_MS = 4000;
   const BRIDGE_READY_MS = 1500;
   const BRIDGE_RETRY_MS = 50;
   // 32 random bytes, hex. A page can still watch postMessage; there is no
@@ -101,6 +110,12 @@
   let sleepAt = 0;
   let nextCallId = 1;
   const pending = new Map();
+  // A reload starts a new world. The clock keeps a snapshot from the
+  // previous one below anything this page sends, so a late message loses.
+  let queueSeq = Date.now();
+  let queueWatching = false;
+  let queueBootTimer = null;
+  let queueBootArmed = false;
 
   function normalizeLevels(levels) {
     if (Array.isArray(levels)) {
@@ -443,15 +458,16 @@
     });
   }
 
-  function callPlayer(method, args) {
+  function callPlayer(method, args, timeoutMs) {
     const win = root.window || root;
     if (!win || typeof win.postMessage !== 'function') return Promise.resolve(undefined);
     const id = nextCallId++;
+    const waitMs = timeoutMs == null ? CALL_TIMEOUT_MS : timeoutMs;
     return new Promise(function (resolve) {
       const timer = setTimeout(function () {
         pending.delete(id);
         resolve(undefined);
-      }, CALL_TIMEOUT_MS);
+      }, waitMs);
       pending.set(id, { resolve: resolve, timer: timer });
       try {
         if (!bridgeToken) {
@@ -493,6 +509,11 @@
       }
       if (data.dir === 'event' && data.event === 'onPlaybackQualityChange') {
         onQualityChange(data.quality);
+        return;
+      }
+      if (data.dir === 'event' && data.event === 'queueChanged') {
+        if (!queueWatching) return;
+        sendQueueSnapshot(data.snapshot);
       }
     } catch (err) {
       // swallow
@@ -701,6 +722,104 @@
       out.push({ id: id, handle: handle, name: name });
     }
     return out.length > 1 ? out : [];
+  }
+
+  function clipQueueField(value) {
+    if (typeof value !== 'string') return '';
+    return value.length > 200 ? value.slice(0, 200) : value;
+  }
+
+  function cleanQueueTitles(rawTitles, ids) {
+    const titles = {};
+    const source = rawTitles && typeof rawTitles === 'object' ? rawTitles : null;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const row = source ? source[id] : null;
+      const t = row && typeof row === 'object' ? clipQueueField(row.t) : '';
+      const ct = row && typeof row === 'object' ? clipQueueField(row.ct) : '';
+      titles[id] = { t: t, ct: ct };
+    }
+    return titles;
+  }
+
+  // The bridge answer is the page's own data, so it is checked here: a
+  // playlist id of the shape YouTube uses, and video ids only.
+  function cleanQueueSnapshot(raw, seq) {
+    const empty = { seq: seq, listId: '', ids: [], playing: '', titles: {}, cleared: false };
+    if (!raw || typeof raw !== 'object') return empty;
+    const listId = typeof raw.listId === 'string' && QUEUE_LIST_RE.test(raw.listId) ? raw.listId : '';
+    const ids = [];
+    if (listId && Array.isArray(raw.ids)) {
+      const seen = Object.create(null);
+      for (let i = 0; i < raw.ids.length && ids.length < QUEUE_MAX_IDS; i++) {
+        const id = raw.ids[i];
+        if (typeof id !== 'string' || !VIDEO_ID_RE.test(id) || seen[id]) continue;
+        seen[id] = true;
+        ids.push(id);
+      }
+    }
+    const playing = typeof raw.playing === 'string' && VIDEO_ID_RE.test(raw.playing) ? raw.playing : '';
+    return {
+      seq: seq,
+      listId: listId,
+      ids: ids,
+      playing: playing,
+      titles: cleanQueueTitles(raw.titles, ids),
+      cleared: raw.cleared === true,
+    };
+  }
+
+  // A tab with no queue panel still has a video on /watch. The bridge's
+  // playing field is empty then; the address is the one the worker can store.
+  function queueSnapshotNow(raw) {
+    const snap = cleanQueueSnapshot(raw, ++queueSeq);
+    let onWatch = false;
+    try {
+      onWatch = Core.isWatchUrl(location.href) === true;
+    } catch (err) {
+      onWatch = false;
+    }
+    let playing = snap.playing;
+    if (!playing) {
+      let id = '';
+      try { id = readVideoId(); } catch (err) { id = ''; }
+      if (typeof id === 'string' && VIDEO_ID_RE.test(id)) playing = id;
+    }
+    return {
+      seq: snap.seq,
+      onWatch: onWatch,
+      listId: snap.listId,
+      ids: snap.ids,
+      playing: playing,
+      titles: snap.titles,
+      cleared: snap.cleared,
+    };
+  }
+
+  function sendQueueSnapshot(raw) {
+    try {
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return false;
+      const snap = queueSnapshotNow(raw);
+      Promise.resolve(ch.runtime.sendMessage({
+        type: 'queue.snapshot',
+        seq: snap.seq,
+        onWatch: snap.onWatch,
+        listId: snap.listId,
+        ids: snap.ids,
+        playing: snap.playing,
+        titles: snap.titles,
+        cleared: snap.cleared,
+      })).then(function () {}, function () {});
+      queueBootArmed = false;
+      if (queueBootTimer != null) {
+        clearTimeout(queueBootTimer);
+        queueBootTimer = null;
+      }
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
 
   async function readCollaborators(owner, videoId) {
@@ -1363,8 +1482,34 @@
     })();
     bootOnce.then(function (reply) {
       if (reply && reply.openInAudioMode === true) enableWhenPlayerReady();
+      if (reply && reply.queueWatch === true) {
+        try { startQueueWatchOnBoot(); } catch (err) { /* swallow */ }
+      }
     }, function () {});
     return bootOnce;
+  }
+
+  function startQueueWatchOnBoot() {
+    queueBootArmed = true;
+    ensureBridge().then(function () {
+      queueWatching = true;
+      return callPlayer('queueWatch', [true]);
+    }).then(function (raw) {
+      if (!queueBootArmed) return;
+      const listId = raw && typeof raw.listId === 'string' ? raw.listId : '';
+      if (listId) {
+        sendQueueSnapshot(raw);
+        return;
+      }
+      queueBootTimer = setTimeout(function () {
+        queueBootTimer = null;
+        if (!queueBootArmed) return;
+        callPlayer('queueSnapshot', []).then(function (fresh) {
+          if (!queueBootArmed) return;
+          sendQueueSnapshot(fresh);
+        }, function () {});
+      }, QUEUE_BOOT_WAIT_MS);
+    }, function () {});
   }
 
   function shouldBoot() {
@@ -3642,6 +3787,41 @@
           try { sendResponse({ ok: ok }); } catch (err) { /* swallow */ }
           return;
         }
+        if (msg.type === 'queue.watch') {
+          if (typeof msg.on !== 'boolean') {
+            sendResponse({ ok: false, error: 'invalid' });
+            return true;
+          }
+          const on = msg.on;
+          ensureBridge().then(function () {
+            queueWatching = on;
+            return callPlayer('queueWatch', [on]);
+          }).then(function (result) {
+            if (!on) {
+              sendResponse({ ok: true });
+              return;
+            }
+            sendResponse({ ok: true, snapshot: queueSnapshotNow(result) });
+          }).catch(function () {});
+          return true;
+        }
+        if (msg.type === 'queue.ops') {
+          const ops = msg.ops;
+          if (!Array.isArray(ops) || ops.length < 1 || ops.length > 100) {
+            sendResponse({ ok: false, error: 'invalid' });
+            return true;
+          }
+          ensureBridge().then(function () {
+            return callPlayer('queueOps', [ops], QUEUE_OPS_TIMEOUT_MS);
+          }).then(function (result) {
+            if (result === undefined) {
+              sendResponse({ ok: false, error: 'failed' });
+              return;
+            }
+            sendResponse({ ok: true, snapshot: queueSnapshotNow(result) });
+          }).catch(function () {});
+          return true;
+        }
         if (msg.type !== 'audioMode.toggle') return;
         toggle().then(
           function () { sendResponse({ ok: true, on: !!session }); },
@@ -3694,6 +3874,7 @@
     readPlayer,
     readPlayerWithChannels,
     cleanCollaborators,
+    cleanQueueSnapshot,
     parseControl,
     controlPlayer,
     enable,

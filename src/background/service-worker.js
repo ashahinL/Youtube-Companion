@@ -54,6 +54,9 @@ import {
   removeFromQueue,
   clearQueue,
   takeFromQueue,
+  moveInQueue,
+  updateQueue,
+  QUEUE_CAP,
   withListLock,
   readQueueOpen,
   writeQueueOpen,
@@ -69,6 +72,7 @@ import {
   resolvedFeedGroup,
   WHATS_NEW_VERSION,
 } from '../lib/view.js';
+import { applyOps, createSyncState, inbound, outbound } from '../lib/queue-sync.js';
 
 const OVERLAY_MESSAGE_KEYS = [
   'overlayTitle',
@@ -180,11 +184,13 @@ const UNINSTALL_PAGE = 'https://ashahinl.github.io/Youtube-Companion/uninstall.h
 // subscription scan. queue.ended is only honoured when sender.tab.id and
 // msg.v both match the session record this worker wrote. subscriptions.close
 // only removes sender.tab, and only on youtube.com. A page must not be able
-// to hand this worker a list of channels to add.
+// to hand this worker a list of channels to add. queue.snapshot is only
+// honoured from the one tab this worker is mirroring.
 export const CONTENT_SCRIPT_MESSAGES = new Set([
   'audioMode.boot',
   'audioMode.shortcut',
   'queue.ended',
+  'queue.snapshot',
   'subscriptions.close',
 ]);
 
@@ -304,6 +310,278 @@ async function writeQueuePlay(rec) {
     return;
   }
   await chromeApi().storage.session.set({ [QUEUE_PLAY_KEY]: rec });
+}
+
+const QUEUE_SYNC_KEY = 'queueSync';
+const QUEUE_SYNC_DEPTH = 3;
+
+// One chain for the mirror record. A job must not wait on this chain
+// itself: the helpers below call each other directly.
+let syncChain = Promise.resolve();
+
+function onSyncChain(job) {
+  const run = syncChain.then(job, job);
+  syncChain = run.then(() => {}, () => {});
+  return run;
+}
+
+function scheduleQueuePush() {
+  void onSyncChain(() => pushQueueInner(0));
+}
+
+function syncStateShape(sync) {
+  return !!sync
+    && typeof sync === 'object'
+    && !Array.isArray(sync)
+    && Array.isArray(sync.shadow)
+    && Array.isArray(sync.pending);
+}
+
+function asSyncRecord(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (typeof raw.tabId !== 'number' || !Number.isInteger(raw.tabId)) return null;
+  if (typeof raw.seen !== 'boolean') return null;
+  if (typeof raw.seq !== 'number' || !Number.isFinite(raw.seq)) return null;
+  if (typeof raw.listId !== 'string') return null;
+  if (typeof raw.playing !== 'string') return null;
+  if (!syncStateShape(raw.sync)) return null;
+  return {
+    tabId: raw.tabId,
+    seen: raw.seen,
+    seq: raw.seq,
+    listId: raw.listId,
+    playing: raw.playing,
+    sync: raw.sync,
+  };
+}
+
+async function readSyncRecord() {
+  const got = await chromeApi().storage.session.get(QUEUE_SYNC_KEY);
+  return asSyncRecord(got && got[QUEUE_SYNC_KEY]);
+}
+
+async function writeSyncRecord(rec) {
+  if (!rec) {
+    await chromeApi().storage.session.remove(QUEUE_SYNC_KEY);
+    return;
+  }
+  await chromeApi().storage.session.set({ [QUEUE_SYNC_KEY]: rec });
+}
+
+function exactVideoId(value) {
+  if (typeof value !== 'string') return '';
+  const parsed = normalizeVideoInput(value);
+  if (!parsed || parsed.kind !== 'video' || parsed.id !== value) return '';
+  return value;
+}
+
+function clipQueueText(value) {
+  return typeof value === 'string' ? value.slice(0, 200) : '';
+}
+
+// The page is not trusted. A bad seq is rejected; everything else is
+// trimmed so a malformed snapshot cannot throw later.
+function cleanSnapshot(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.seq !== 'number' || !Number.isFinite(raw.seq)) return null;
+  const listId = typeof raw.listId === 'string'
+    && raw.listId.length <= 80
+    && raw.listId.startsWith('TLPQ')
+    ? raw.listId
+    : '';
+  const ids = [];
+  if (listId) {
+    const seen = new Set();
+    const rawIds = Array.isArray(raw.ids) ? raw.ids : [];
+    for (const value of rawIds) {
+      const id = exactVideoId(value);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      ids.push(id);
+      if (ids.length >= QUEUE_CAP) break;
+    }
+  }
+  const titles = {};
+  const rawTitles = raw.titles;
+  if (rawTitles && typeof rawTitles === 'object' && !Array.isArray(rawTitles)) {
+    for (const id of ids) {
+      const row = rawTitles[id];
+      if (!row || typeof row !== 'object') continue;
+      titles[id] = { t: clipQueueText(row.t), ct: clipQueueText(row.ct) };
+    }
+  }
+  return {
+    seq: raw.seq,
+    onWatch: raw.onWatch === true,
+    listId,
+    ids,
+    playing: exactVideoId(raw.playing),
+    titles,
+    cleared: raw.cleared === true,
+  };
+}
+
+function entryFor(v, titles, feed, channels, now) {
+  const row = (feed || []).find((item) => item && item.v === v);
+  if (row) {
+    const channel = (channels || []).find((ch) => ch && ch.id === row.c);
+    return queueEntryFromItem({ ...row, ct: row.ct || channel?.title || '' }, now);
+  }
+  const title = titles && titles[v];
+  return queueEntryFromItem({
+    v,
+    t: title?.t || '',
+    ct: title?.ct || '',
+  }, now);
+}
+
+function sameQueueIds(a, b) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]?.v !== b[i]?.v) return false;
+  }
+  return true;
+}
+
+async function applySnapshotInner(snap, depth = 0) {
+  if (!snap) return;
+  const rec = await readSyncRecord();
+  if (!rec) return;
+  if (!(snap.seq > rec.seq)) return;
+  rec.seq = snap.seq;
+  if (!snap.onWatch) {
+    await writeSyncRecord(rec);
+    return;
+  }
+  rec.playing = snap.playing;
+  rec.listId = snap.listId;
+  const now = Date.now();
+  const [feed, channels] = await Promise.all([readFeed(), readChannels()]);
+  // No list id, and the person did not press Clear: the page has nothing
+  // we can diff, so this contact only adds. The first snapshot is the same,
+  // so a reload cannot wipe Up next.
+  const union = !rec.seen || (snap.listId === '' && !snap.cleared);
+  if (union) {
+    await updateQueue(async (queue) => {
+      const next = queue.filter((row) => row.v !== snap.playing);
+      const have = new Set(next.map((row) => row.v));
+      for (const id of snap.ids) {
+        if (next.length >= QUEUE_CAP) break;
+        if (have.has(id)) continue;
+        const built = entryFor(id, snap.titles, feed, channels, now);
+        if (!built) continue;
+        have.add(built.v);
+        next.push(built);
+      }
+      return next;
+    });
+    rec.sync = createSyncState(snap.ids);
+    rec.seen = true;
+  } else {
+    const mirrored = inbound(rec.sync, snap.ids, now);
+    rec.sync = mirrored.state;
+    await updateQueue(async (queue) => {
+      const without = queue.filter((row) => row.v !== snap.playing);
+      let next = without;
+      if (mirrored.ops.length) {
+        const ids = applyOps(without.map((row) => row.v), mirrored.ops);
+        const byV = new Map(without.map((row) => [row.v, row]));
+        next = [];
+        for (const id of ids) {
+          const have = byV.get(id);
+          if (have) {
+            next.push(have);
+            continue;
+          }
+          const built = entryFor(id, snap.titles, feed, channels, now);
+          if (built) next.push(built);
+        }
+      }
+      if (sameQueueIds(queue, next)) return;
+      return next;
+    });
+  }
+  await writeSyncRecord(rec);
+  await pushQueueInner(depth);
+}
+
+async function pushQueueInner(depth = 0) {
+  const rec = await readSyncRecord();
+  if (!rec || !rec.seen || depth >= QUEUE_SYNC_DEPTH) return;
+  const ours = (await readQueue()).map((row) => row.v).filter((v) => v !== rec.playing);
+  const mirrored = outbound(rec.sync, ours, Date.now());
+  rec.sync = mirrored.state;
+  await writeSyncRecord(rec);
+  if (!mirrored.ops.length) return;
+  const tabId = rec.tabId;
+  const ops = mirrored.ops;
+  // The page can spend seconds on these ops. Leave the chain while it
+  // does: a snapshot in that window has to fold onto the pending ops.
+  // Waiting here would hold that snapshot until this reply had already
+  // moved the shadow on, and an in-flight add would be deleted.
+  void deliverOps(tabId, ops, depth).catch(() => {});
+}
+
+async function deliverOps(tabId, ops, depth) {
+  let reply = null;
+  let failed = false;
+  try {
+    reply = await chromeApi().tabs.sendMessage(tabId, { type: 'queue.ops', ops });
+  } catch {
+    failed = true;
+  }
+  if (failed) {
+    await onSyncChain(async () => {
+      const rec = await readSyncRecord();
+      if (!rec || rec.tabId !== tabId) return;
+      rec.seen = false;
+      await writeSyncRecord(rec);
+    });
+    return;
+  }
+  if (!reply?.ok || !reply.snapshot) return;
+  const cleaned = cleanSnapshot(reply.snapshot);
+  if (!cleaned) return;
+  await onSyncChain(async () => {
+    const rec = await readSyncRecord();
+    if (!rec || rec.tabId !== tabId) return;
+    await applySnapshotInner(cleaned, depth + 1);
+  });
+}
+
+async function setSyncTabInner(tabId) {
+  const rec = await readSyncRecord();
+  if (rec && rec.tabId === tabId) return;
+  if (rec) {
+    try {
+      await chromeApi().tabs.sendMessage(rec.tabId, { type: 'queue.watch', on: false });
+    } catch {
+      // The previous tab may already be gone.
+    }
+  }
+  if (tabId == null) {
+    await writeSyncRecord(null);
+    return;
+  }
+  await writeSyncRecord({
+    tabId,
+    seen: false,
+    seq: 0,
+    listId: '',
+    playing: '',
+    sync: createSyncState([]),
+  });
+  let reply;
+  try {
+    reply = await chromeApi().tabs.sendMessage(tabId, { type: 'queue.watch', on: true });
+  } catch {
+    // The content script is not in yet. Its boot starts the watch.
+    return;
+  }
+  if (reply && reply.snapshot) {
+    const cleaned = cleanSnapshot(reply.snapshot);
+    if (cleaned) await applySnapshotInner(cleaned, 0);
+  }
 }
 
 async function queueOpensInAudioMode() {
@@ -1819,17 +2097,50 @@ export async function handleMessage(msg, sender) {
         const built = queueEntryFromItem(msg && msg.item, Date.now());
         if (!built) return { ok: false, error: 'invalid' };
         const result = await addToQueue(built);
-        if (result.added) return { ok: true, queue: result.queue };
+        if (result.added) {
+          scheduleQueuePush();
+          return { ok: true, queue: result.queue };
+        }
         if (result.full) return { ok: false, error: 'full', queue: result.queue };
         return { ok: true, queue: result.queue };
       }
       case 'queue.remove': {
         const result = await removeFromQueue(msg && msg.v);
+        scheduleQueuePush();
         return { ok: true, queue: result.queue };
       }
       case 'queue.clear': {
         const result = await clearQueue();
+        scheduleQueuePush();
         return { ok: true, queue: result.queue };
+      }
+      case 'queue.move': {
+        const v = msg && msg.v;
+        const to = msg && msg.to;
+        const parsed = normalizeVideoInput(v);
+        if (!parsed || parsed.kind !== 'video' || parsed.id !== v || !Number.isInteger(to)) {
+          return { ok: false, error: 'invalid' };
+        }
+        const moved = await moveInQueue(v, to);
+        scheduleQueuePush();
+        return { ok: true, queue: moved.queue };
+      }
+      case 'queue.player': {
+        const tabId = msg && msg.tabId;
+        const valid = tabId === null || (typeof tabId === 'number' && Number.isInteger(tabId));
+        if (!valid) return { ok: false, error: 'invalid' };
+        await onSyncChain(() => setSyncTabInner(tabId));
+        return { ok: true };
+      }
+      case 'queue.snapshot': {
+        return await onSyncChain(async () => {
+          const rec = await readSyncRecord();
+          if (!rec || sender?.tab?.id !== rec.tabId) return { ok: false };
+          const snap = cleanSnapshot(msg);
+          if (!snap) return { ok: false, error: 'invalid' };
+          await applySnapshotInner(snap, 0);
+          return { ok: true };
+        });
       }
       case 'queue.setOpen':
         await writeQueueOpen(msg && msg.on);
@@ -1839,13 +2150,25 @@ export async function handleMessage(msg, sender) {
         return { ok: true };
       case 'queue.playAll': {
         const queue = await readQueue();
-        const first = queue[0];
+        const skip = msg && msg.skip;
+        const parsedSkip = normalizeVideoInput(skip);
+        const skipping = parsedSkip && parsedSkip.kind === 'video' && parsedSkip.id === skip
+          ? skip
+          : '';
+        // The popup sends the video the player card is showing. Start on the
+        // next stored row; the skipped one stays, the card already has it.
+        const first = skipping
+          ? queue.find((row) => row && row.v !== skipping)
+          : queue[0];
         if (!first) return { ok: false, error: 'empty' };
         const audio = await queueOpensInAudioMode();
         const tab = await openVideoTab(first.v, first.k, { audio });
         const tabId = tab && tab.id;
         if (tabId == null) return { ok: false, error: 'no tab' };
         await writeQueuePlay({ tabId, v: first.v });
+        // The new tab has no content script yet. The watch send fails and
+        // the tab's boot starts it.
+        await onSyncChain(() => setSyncTabInner(tabId));
         return { ok: true, queue };
       }
       case 'queue.ended': {
@@ -1859,6 +2182,15 @@ export async function handleMessage(msg, sender) {
         if (sender?.tab?.id !== play.tabId) return { ok: false };
         if (msg.v !== play.v) return { ok: false };
         await takeFromQueue(play.v);
+        const youtubePlaysNext = await onSyncChain(async () => {
+          const rec = await readSyncRecord();
+          return !!(rec && rec.tabId === play.tabId && rec.listId !== '');
+        });
+        scheduleQueuePush();
+        if (youtubePlaysNext) {
+          await writeQueuePlay(null);
+          return { ok: true, synced: true };
+        }
         const queue = await readQueue();
         const next = queue[0];
         if (!next) {
@@ -1889,7 +2221,16 @@ export async function handleMessage(msg, sender) {
         if (open) await chromeApi().storage.session.remove(key);
         const settings = await readSettings();
         const strings = await overlayStringsForSettings(settings);
-        return { ok: true, openInAudioMode: open, ...strings };
+        const reply = { ok: true, openInAudioMode: open, ...strings };
+        const queueWatch = await onSyncChain(async () => {
+          const rec = await readSyncRecord();
+          if (!rec || rec.tabId !== tabId) return false;
+          rec.seen = false;
+          await writeSyncRecord(rec);
+          return true;
+        });
+        if (queueWatch) reply.queueWatch = true;
+        return reply;
       }
       case 'importBackup': {
         const raw = msg.data;
@@ -1977,6 +2318,7 @@ export async function onNotificationButtonClicked(id, index) {
   if (index === 1 && alertHasButtons(item)) {
     const channel = channels.find((ch) => ch.id === channelId);
     await addToQueue({ ...item, ct: item.ct || channel?.title || '' });
+    scheduleQueuePush();
   }
 }
 

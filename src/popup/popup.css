@@ -313,6 +313,7 @@ body.is-opening .tabs {
 .feed-row__open:focus-visible,
 .feed-row__channel:focus-visible,
 .queue-row__open:focus-visible,
+.queue-row__handle:focus-visible,
 .swatch:focus-visible,
 .audio-shortcut:focus-visible,
 .audio-picker__tab:focus-visible,
@@ -1683,7 +1684,7 @@ body.is-opening .tabs {
 
 .audio-player {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) auto;
+  grid-template-columns: 56px minmax(0, 1fr);
   gap: 10px;
   max-width: 100%;
   min-width: 0;
@@ -1693,21 +1694,6 @@ body.is-opening .tabs {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-}
-
-.audio-player__queue {
-  align-self: start;
-}
-
-.audio-player__queue svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-
-.audio-player__queue[aria-pressed='true'] {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .audio-player__art {
@@ -2059,6 +2045,66 @@ body.is-opening .tabs {
   align-self: center;
   position: relative;
   z-index: 2;
+}
+
+.queue-row__handle {
+  display: grid;
+  flex: none;
+  align-self: center;
+  place-items: center;
+  position: relative;
+  z-index: 2;
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.queue-row__handle svg {
+  display: block;
+  width: 10px;
+  height: 16px;
+}
+
+.queue-row__handle:hover:not(:disabled),
+.queue-row__handle:focus-visible {
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent);
+}
+
+.queue__list--dragging {
+  user-select: none;
+}
+
+.queue__list--dragging .queue-row {
+  transition: transform 150ms ease;
+}
+
+.queue__list--dragging .queue-row--dragging {
+  transition: none;
+}
+
+.queue-row--dragging,
+.queue-row--dropping {
+  z-index: 3;
+  background: var(--surface);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.28);
+}
+
+.queue-row--dragging,
+.queue-row--dragging .queue-row__handle,
+.queue-row--dropping,
+.queue-row--dropping .queue-row__handle {
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue__list--dragging .queue-row {
+    transition: none;
+  }
 }
 
 .audio-stats {

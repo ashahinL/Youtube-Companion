@@ -824,17 +824,22 @@ export function sanitizeQueue(raw, cap) {
   return out;
 }
 
-export function queueView({ queue, open, cap } = {}) {
-  const items = Array.isArray(queue) ? queue : [];
+export function queueView({ queue, open, cap, playingV } = {}) {
+  const stored = Array.isArray(queue) ? queue : [];
   const limit = Number(cap);
   const max = Number.isFinite(limit) && limit >= 0 ? limit : 0;
-  const count = items.length;
+  const playing = typeof playingV === 'string' ? playingV : '';
+  // The player card already shows this video. Up next is what comes after
+  // it, so the row stays stored and is left out of the list on screen.
+  const items = playing
+    ? stored.filter((row) => !row || row.v !== playing)
+    : stored;
   return {
     items,
-    count,
+    count: items.length,
     open: !!open,
-    full: count >= max,
-    empty: count === 0,
+    full: stored.length >= max,
+    empty: items.length === 0,
   };
 }
 

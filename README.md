@@ -48,8 +48,10 @@
 - A ✔ before the channel name in the player means you follow it.
 - Sleep timer: pause after 15, 30 or 60 minutes. It keeps counting after the
   popup closes.
-- **Up next**: add videos from Feeds or the player, then Play all. They play
-  one after another in one tab. Up to 100, and not in backups.
+- **Up next**: add videos from Feeds or an alert, then Play all. They play
+  one after another in one tab. Drag rows to reorder them. On the Player
+  tab it stays in step with YouTube's own queue, both ways. Up to 100, and
+  not in backups.
 - A **What's new** page after an update, offered as one dismissible line in
   the popup and reopenable from Settings.
 - With more than one YouTube tab open, pick which one to control. A ↗ on
