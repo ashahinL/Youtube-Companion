@@ -36,6 +36,7 @@ const SUITES = [
   ['icon',               './icon.test.js'],
   ['support',            './support.test.js'],
   ['queue sync',         './queue-sync.test.js'],
+  ['queue bridge',       './queue-bridge.test.js'],
 ];
 
 const results = [];
