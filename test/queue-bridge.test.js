@@ -440,7 +440,7 @@ export default async function run(t) {
   page.hideQueue();
   t.check(
     'no panel is an empty snapshot',
-    JSON.stringify(page.bridge.readQueueSnapshot()) === JSON.stringify({ listId: '', ids: [], playing: '' }),
+    JSON.stringify(page.bridge.readQueueSnapshot()) === JSON.stringify({ listId: '', ids: [], playing: '', titles: {} }),
   );
 
   const other = {
@@ -454,7 +454,7 @@ export default async function run(t) {
   page.panels.push(other);
   t.check(
     'a panel whose id is not TLPQ is ignored',
-    JSON.stringify(page.bridge.readQueueSnapshot()) === JSON.stringify({ listId: '', ids: [], playing: '' }),
+    JSON.stringify(page.bridge.readQueueSnapshot()) === JSON.stringify({ listId: '', ids: [], playing: '', titles: {} }),
   );
   page.panels.length = 0;
   page.showQueue([A]);
@@ -463,6 +463,27 @@ export default async function run(t) {
     'the TLPQ panel is the one that is read',
     JSON.stringify(page.bridge.readQueueSnapshot().ids) === JSON.stringify([A]),
   );
+
+  const titledPage = loadQueue({ queued: [A, B, C, D] });
+  const longTitle = 'n'.repeat(300);
+  const titledRows = titledPage.panel.rows;
+  titledRows[1].data.title = { simpleText: '  Alpha  ', runs: [{ text: 'Nope' }] };
+  titledRows[1].data.shortBylineText = { runs: [{ text: ' Ann ' }] };
+  titledRows[2].data.title = { runs: [{ text: 'Be' }, { text: 'ta' }] };
+  titledRows[2].data.longBylineText = { runs: [{ text: ' Bob ' }] };
+  titledRows[3].data.title = { simpleText: longTitle };
+  titledRows[3].data.shortBylineText = { runs: [{ text: 'Cee' }] };
+  const titled = titledPage.bridge.readQueueSnapshot();
+  t.check(
+    'titles keep simpleText, joined runs, a missing row, and a 200-character clip',
+    titled.titles[A].t === 'Alpha' && titled.titles[A].ct === 'Ann'
+      && titled.titles[B].t === 'Beta' && titled.titles[B].ct === 'Bob'
+      && titled.titles[C].t === longTitle.slice(0, 200) && titled.titles[C].ct === 'Cee'
+      && titled.titles[D].t === '' && titled.titles[D].ct === ''
+      && Object.keys(titled.titles).join(',') === [A, B, C, D].join(','),
+    JSON.stringify(titled.titles),
+  );
+  t.check('a titled snapshot has no playlistSetVideoId', hasKey(titled, 'playlistSetVideoId') === false, JSON.stringify(titled));
 
   t.section('queue ops');
 
@@ -482,6 +503,7 @@ export default async function run(t) {
     got.length === 1 && got[0].ok === true && JSON.stringify(idsOf(got[0])) === JSON.stringify([A, B, C]),
     JSON.stringify(got[0]),
   );
+  t.check('a batch without clear says cleared false', got[0] && got[0].result && got[0].result.cleared === false, JSON.stringify(got[0] && got[0].result));
   t.check(
     'add does not refresh',
     addPage.trace.indexOf('yt-refresh-playlist-command') === -1,
@@ -556,7 +578,7 @@ export default async function run(t) {
   got = await runOps(cleared, [{ op: 'clear' }]);
   t.check(
     'clear empties the snapshot',
-    got.length === 1 && JSON.stringify(got[0].result) === JSON.stringify({ listId: '', ids: [], playing: '' }),
+    got.length === 1 && JSON.stringify(got[0].result) === JSON.stringify({ listId: '', ids: [], playing: '', titles: {}, cleared: true }),
     JSON.stringify(got[0]),
   );
 
@@ -677,6 +699,39 @@ export default async function run(t) {
   watch.fireDoc('yt-playlist-data-updated');
   watch.clock.advance(150);
   t.check('queueWatch false stops the events', events(watch.posts).length === 1, JSON.stringify(events(watch.posts)));
+
+  const pageClear = loadQueue({ queued: [A, B] });
+  pageClear.adopt(TOKEN);
+  pageClear.posts.length = 0;
+  pageClear.request('queueWatch', [true], 1);
+  await pageClear.settle();
+  pageClear.posts.length = 0;
+  pageClear.hideQueue();
+  pageClear.fireDoc('yt-action', { actionName: 'yt-end-playlist-command' });
+  pageClear.clock.advance(150);
+  const clearEvents = events(pageClear.posts);
+  t.check(
+    'a page Clear posts one queueChanged with cleared true',
+    clearEvents.length === 1
+      && clearEvents[0].event === 'queueChanged'
+      && clearEvents[0].snapshot
+      && clearEvents[0].snapshot.cleared === true
+      && clearEvents[0].snapshot.listId === ''
+      && JSON.stringify(clearEvents[0].snapshot.ids) === '[]',
+    JSON.stringify(clearEvents),
+  );
+  t.check('that Clear post has no playlistSetVideoId', hasKey(clearEvents[0], 'playlistSetVideoId') === false);
+  pageClear.showQueue([B]);
+  pageClear.fireDoc('yt-playlist-data-updated');
+  pageClear.clock.advance(150);
+  const afterClear = events(pageClear.posts);
+  t.check(
+    'the next queueChanged has cleared false',
+    afterClear.length === 2
+      && afterClear[1].snapshot.cleared === false
+      && JSON.stringify(afterClear[1].snapshot.ids) === JSON.stringify([B]),
+    JSON.stringify(afterClear),
+  );
 
   t.section('adoption');
 

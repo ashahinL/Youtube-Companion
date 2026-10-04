@@ -151,6 +151,8 @@ const view = {
 };
 
 let audioPollTimer = null;
+// undefined so the first time the Player tab settles, the worker hears it.
+let reportedQueueTabId;
 let audioDiscoverTimer = null;
 let audioSeeking = false;
 let audioSpeedPending = false;
@@ -253,6 +255,12 @@ async function applyI18n(setting) {
 // message to the worker, which is the only place that fetches.
 function send(message) {
   return chrome.runtime.sendMessage(message);
+}
+
+function reportQueuePlayer() {
+  if (view.audioTargetId === reportedQueueTabId) return;
+  reportedQueueTabId = view.audioTargetId;
+  void send({ type: 'queue.player', tabId: view.audioTargetId }).catch(() => {});
 }
 
 function applySnapshot(snap) {
@@ -3599,6 +3607,7 @@ async function refreshAudioState() {
     view.audioPlayer = null;
   }
   syncAudioPolling();
+  reportQueuePlayer();
   const players = [...playerById.values()];
   return {
     players,
@@ -3643,6 +3652,7 @@ async function selectAudioTab(id) {
     view.audioReachable = true;
   }
   renderAudio();
+  reportQueuePlayer();
 }
 
 async function controlTarget(action, extra = {}) {

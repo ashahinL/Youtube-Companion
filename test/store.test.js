@@ -39,6 +39,7 @@ import {
   moveInQueue,
   readQueueOpen,
   writeQueueOpen,
+  updateQueue,
 } from '../src/lib/store.js';
 
 function same(a, b) {
@@ -205,6 +206,33 @@ async function queueChecks(t) {
   t.check(
     'two moves at once both land',
     (await order()) === `${C},${B},${A}`,
+    await order(),
+  );
+
+  await seedThree();
+  const updated = await updateQueue(async (queue) => queue.filter((row) => row.v !== B));
+  t.check(
+    'updateQueue saves an array result',
+    updated.queue.map((row) => row.v).join() === `${A},${C}` && (await order()) === `${A},${C}`,
+    await order(),
+  );
+  queueWrites = 0;
+  const left = await updateQueue(async () => null);
+  t.check(
+    'updateQueue leaves the list when the result is not an array',
+    left.queue.map((row) => row.v).join() === `${A},${C}`
+      && queueWrites === 0
+      && (await order()) === `${A},${C}`,
+    await order(),
+  );
+  await seedThree();
+  await Promise.all([
+    updateQueue(async (queue) => queue.filter((row) => row.v !== A)),
+    updateQueue(async (queue) => queue.filter((row) => row.v !== C)),
+  ]);
+  t.check(
+    'two updateQueue calls at once both land',
+    (await order()) === B,
     await order(),
   );
   globalThis.chrome.storage.onChanged.removeListener(onQueueWrite);

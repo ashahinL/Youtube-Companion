@@ -83,6 +83,9 @@ function bootPage(opts) {
         onMessage: { addListener(fn) { listeners.push(fn); } },
         sendMessage(msg) {
           sent.push(msg);
+          if (msg && msg.type === 'audioMode.boot' && Object.prototype.hasOwnProperty.call(opts, 'bootReply')) {
+            return Promise.resolve(opts.bootReply);
+          }
           return Promise.resolve({ ok: true, shortcut: '' });
         },
       },
@@ -132,6 +135,10 @@ function bootPage(opts) {
           : { listId: 'TLPQabc', ids: [], playing: '' };
       } else if (data.method === 'queueOps') {
         result = opts.opsResult;
+      } else if (data.method === 'queueSnapshot') {
+        result = Object.prototype.hasOwnProperty.call(opts, 'snapshotResult')
+          ? opts.snapshotResult
+          : { listId: '', ids: [], playing: '' };
       } else if (data.method === 'collaborators') {
         result = opts.collaborators;
       }
@@ -192,7 +199,7 @@ function sameIds(got, want) {
 
 // Runs a 60s bridge timeout on the next turn. Records every delay so a
 // normal player call can be told apart from a queue edit.
-function timeoutStub(extraFast) {
+function timeoutStub(extraFast, hold) {
   const delays = [];
   const rows = new Map();
   let seq = 1;
@@ -200,24 +207,36 @@ function timeoutStub(extraFast) {
   function setTimeout(fn, ms) {
     delays.push(ms);
     const id = seq++;
-    const row = { ms, cleared: false };
+    const row = { ms, cleared: false, fn: fn };
     rows.set(id, row);
-    const wait = ms === 60000 || (extraFast && ms === 1500) ? 0 : ms;
-    const realId = globalThis.setTimeout(function () {
-      if (row.cleared) return;
-      if (ms === 1500) fired[1500] += 1;
-      fn();
-    }, wait);
-    row.realId = realId;
+    if (!hold) {
+      const wait = ms === 60000 || (extraFast && ms === 1500) ? 0 : ms;
+      row.realId = globalThis.setTimeout(function () {
+        if (row.cleared) return;
+        if (ms === 1500) fired[1500] += 1;
+        fn();
+      }, wait);
+    }
     return id;
   }
   function clearTimeout(id) {
     const row = rows.get(id);
     if (!row) return;
     row.cleared = true;
-    globalThis.clearTimeout(row.realId);
+    if (row.realId != null) globalThis.clearTimeout(row.realId);
   }
-  return { delays, fired, setTimeout, clearTimeout };
+  function fire(ms) {
+    for (const row of rows.values()) {
+      if (row.cleared || row.ms !== ms) continue;
+      row.cleared = true;
+      row.fn();
+    }
+  }
+  return { delays, fired, setTimeout, clearTimeout, fire };
+}
+
+async function flush() {
+  for (let i = 0; i < 40; i++) await Promise.resolve();
 }
 
 export default async function run(t) {
@@ -233,14 +252,22 @@ export default async function run(t) {
   t.section('cleanQueueSnapshot');
   t.check('good snapshot is kept', good.listId === 'TLPQabc' && sameIds(good.ids, [A, B]) && good.playing === A, JSON.stringify(good));
   t.check('seq is the one passed', good.seq === 7, String(good.seq));
-  t.check('no extra keys', Object.keys(good).join(',') === 'seq,listId,ids,playing', Object.keys(good).join(','));
+  t.check('no extra keys', Object.keys(good).join(',') === 'seq,listId,ids,playing,titles,cleared', Object.keys(good).join(','));
+  t.check(
+    'titles for kept ids are empty objects when the bridge sent none',
+    good.titles[A] && good.titles[A].t === '' && good.titles[A].ct === ''
+      && good.titles[B] && Object.keys(good.titles).join(',') === [A, B].join(',')
+      && good.cleared === false,
+    JSON.stringify(good.titles),
+  );
 
   const bare = clean({ listId: 'TLPQ', ids: [], playing: '' }, 1);
   t.check('list id may be just TLPQ', bare.listId === 'TLPQ', bare.listId);
 
   const badList = clean({ listId: 'playlist', ids: [A, B], playing: A, set: 'public' }, 3);
   t.check('bad listId clears the ids', badList.listId === '' && sameIds(badList.ids, []), JSON.stringify(badList));
-  t.check('bad listId still has no extra keys', Object.keys(badList).join(',') === 'seq,listId,ids,playing');
+  t.check('bad listId still has no extra keys', Object.keys(badList).join(',') === 'seq,listId,ids,playing,titles,cleared');
+  t.check('bad listId drops titles', Object.keys(badList.titles).length === 0, JSON.stringify(badList.titles));
 
   const longId = 'TLPQ' + 'a'.repeat(61);
   const tooLong = clean({ listId: longId, ids: [A], playing: '' }, 4);
@@ -258,6 +285,35 @@ export default async function run(t) {
   for (let i = 0; i < 150; i++) many.push(vid(i));
   const capped = clean({ listId: 'TLPQabc', ids: many, playing: A }, 9);
   t.check('150 ids keep the first 100', capped.ids.length === 100 && capped.ids[0] === vid(0) && capped.ids[99] === vid(99), String(capped.ids.length));
+
+  const longTitle = 'n'.repeat(250);
+  const titled = clean({
+    listId: 'TLPQabc',
+    ids: [A, 'short', B],
+    playing: A,
+    titles: {
+      [A]: { t: 'Alpha', ct: 'Ann', extra: 'no' },
+      [B]: { t: longTitle, ct: 12 },
+      [C]: { t: 'dropped', ct: 'nope' },
+    },
+    cleared: true,
+  }, 8);
+  t.check(
+    'titles stay only for kept ids',
+    Object.keys(titled.titles).join(',') === [A, B].join(',')
+      && titled.titles[A].t === 'Alpha'
+      && titled.titles[A].ct === 'Ann'
+      && Object.keys(titled.titles[A]).join(',') === 't,ct',
+    JSON.stringify(titled.titles),
+  );
+  t.check(
+    'a long title is clipped and a non-string channel is dropped',
+    titled.titles[B].t === longTitle.slice(0, 200) && titled.titles[B].ct === '',
+    JSON.stringify(titled.titles[B]),
+  );
+  t.check('cleared is kept only when it is true', titled.cleared === true, String(titled.cleared));
+  const notCleared = clean({ listId: 'TLPQabc', ids: [A], playing: '', cleared: 1 }, 6);
+  t.check('a non-true cleared is false', notCleared.cleared === false, String(notCleared.cleared));
 
   const fromNull = clean(null, 2);
   const fromString = clean('nope', 2);
@@ -282,7 +338,9 @@ export default async function run(t) {
       && turnedOn.snapshot.listId === 'TLPQabc'
       && sameIds(turnedOn.snapshot.ids, [A])
       && turnedOn.snapshot.playing === B
-      && Object.keys(turnedOn.snapshot).join(',') === 'seq,listId,ids,playing'
+      && turnedOn.snapshot.onWatch === true
+      && turnedOn.snapshot.cleared === false
+      && Object.keys(turnedOn.snapshot).join(',') === 'seq,onWatch,listId,ids,playing,titles,cleared'
       && typeof turnedOn.snapshot.seq === 'number',
     JSON.stringify(turnedOn),
   );
@@ -293,9 +351,10 @@ export default async function run(t) {
   t.check('two events send two snapshots', shots.length === 2, String(shots.length));
   t.check(
     'the first event is cleaned and newer than the reply',
-    shots[0] && shots[0].listId === 'TLPQabc' && sameIds(shots[0].ids, [A]) && shots[0].playing === ''
+    shots[0] && shots[0].listId === 'TLPQabc' && sameIds(shots[0].ids, [A]) && shots[0].playing === A
+      && shots[0].onWatch === true
       && shots[0].seq > turnedOn.snapshot.seq
-      && Object.keys(shots[0]).join(',') === 'type,seq,listId,ids,playing',
+      && Object.keys(shots[0]).join(',') === 'type,seq,onWatch,listId,ids,playing,titles,cleared',
     JSON.stringify(shots[0]),
   );
   t.check('event seqs rise', shots[1] && shots[1].seq > shots[0].seq, JSON.stringify(shots.map((s) => s.seq)));
@@ -382,4 +441,97 @@ export default async function run(t) {
     JSON.stringify({ delays: short.delays, fired: short.fired[1500], reply: playerReply, calls: playerPage.calls }),
   );
   t.check('the player read did not wait 60s', playerWaited < 5000, String(playerWaited));
+
+  t.section('snapshot from the tab');
+  const fallback = bootPage({
+    watchResult: { listId: 'TLPQabc', ids: [], playing: '', titles: {} },
+  });
+  const fallbackReply = await fallback.ask({ type: 'queue.watch', on: true });
+  t.check(
+    'an empty playing falls back to the watch URL',
+    fallbackReply && fallbackReply.snapshot
+      && fallbackReply.snapshot.playing === A
+      && fallbackReply.snapshot.onWatch === true,
+    JSON.stringify(fallbackReply),
+  );
+
+  const home = bootPage({ href: 'https://www.youtube.com/' });
+  const homeReply = await home.ask({ type: 'queue.watch', on: true });
+  t.check(
+    'the home page is not a watch page',
+    homeReply && homeReply.snapshot
+      && homeReply.snapshot.onWatch === false
+      && homeReply.snapshot.playing === '',
+    JSON.stringify(homeReply),
+  );
+
+  t.section('watch on boot');
+  const bootReady = bootPage({
+    bootReply: { ok: true, queueWatch: true },
+    watchResult: { listId: 'TLPQabc', ids: [A], playing: '', titles: { [A]: { t: 'Alpha', ct: 'Ann' } } },
+  });
+  await flush();
+  const bootWatch = bootReady.calls.filter((row) => row[0] === 'queueWatch');
+  const bootShots = snapshots(bootReady.sent);
+  t.check('boot with queueWatch calls the bridge with true', bootWatch.length === 1 && bootWatch[0][1] === true, JSON.stringify(bootWatch));
+  t.check(
+    'a list on boot sends one snapshot at once',
+    bootShots.length === 1
+      && bootShots[0].listId === 'TLPQabc'
+      && sameIds(bootShots[0].ids, [A])
+      && bootShots[0].playing === A
+      && bootShots[0].onWatch === true
+      && bootShots[0].titles[A].t === 'Alpha',
+    JSON.stringify(bootShots),
+  );
+
+  const bootEventClock = timeoutStub(false, true);
+  const bootEvent = bootPage({
+    bootReply: { ok: true, queueWatch: true },
+    watchResult: { listId: '', ids: [], playing: '' },
+    setTimeout: bootEventClock.setTimeout,
+    clearTimeout: bootEventClock.clearTimeout,
+  });
+  await flush();
+  t.check('an empty list on boot sends nothing yet', snapshots(bootEvent.sent).length === 0, String(snapshots(bootEvent.sent).length));
+  bootEvent.pageEvent({ listId: 'TLPQabc', ids: [B], playing: B });
+  t.check('the next queueChanged sends one snapshot', snapshots(bootEvent.sent).length === 1 && snapshots(bootEvent.sent)[0].playing === B, JSON.stringify(snapshots(bootEvent.sent)));
+  bootEventClock.fire(4000);
+  await flush();
+  t.check('that queueChanged cancels the boot timer', snapshots(bootEvent.sent).length === 1, String(snapshots(bootEvent.sent).length));
+
+  const bootTimerClock = timeoutStub(false, true);
+  const bootTimer = bootPage({
+    bootReply: { ok: true, queueWatch: true },
+    watchResult: { listId: '', ids: [], playing: '' },
+    snapshotResult: { listId: 'TLPQabc', ids: [C], playing: '' },
+    setTimeout: bootTimerClock.setTimeout,
+    clearTimeout: bootTimerClock.clearTimeout,
+  });
+  await flush();
+  t.check('no event yet means no snapshot', snapshots(bootTimer.sent).length === 0, String(snapshots(bootTimer.sent).length));
+  t.check('the boot wait is 4000 ms', bootTimerClock.delays.indexOf(4000) !== -1, JSON.stringify(bootTimerClock.delays));
+  bootTimerClock.fire(4000);
+  await flush();
+  const timed = snapshots(bootTimer.sent);
+  const snapCalls = bootTimer.calls.filter((row) => row[0] === 'queueSnapshot');
+  t.check(
+    'the boot timer sends one fresh snapshot',
+    timed.length === 1
+      && snapCalls.length === 1
+      && snapCalls[0].length === 1
+      && timed[0].listId === 'TLPQabc'
+      && sameIds(timed[0].ids, [C])
+      && timed[0].playing === A
+      && timed[0].onWatch === true,
+    JSON.stringify({ timed: timed, calls: bootTimer.calls }),
+  );
+
+  const bootOff = bootPage({ bootReply: { ok: true } });
+  await flush();
+  t.check(
+    'boot without queueWatch does not call the bridge',
+    bootOff.calls.every((row) => row[0] !== 'queueWatch'),
+    JSON.stringify(bootOff.calls),
+  );
 }

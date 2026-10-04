@@ -26,6 +26,9 @@
   const QUEUE_LIST_RE = /^TLPQ[A-Za-z0-9_-]{0,60}$/;
   const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
   const QUEUE_MAX_IDS = 100;
+  // The queue panel is often still empty on the first read after this tab
+  // loads, so an empty watch waits for the page before sending a snapshot.
+  const QUEUE_BOOT_WAIT_MS = 4000;
   const BRIDGE_READY_MS = 1500;
   const BRIDGE_RETRY_MS = 50;
   // 32 random bytes, hex. A page can still watch postMessage; there is no
@@ -111,6 +114,8 @@
   // previous one below anything this page sends, so a late message loses.
   let queueSeq = Date.now();
   let queueWatching = false;
+  let queueBootTimer = null;
+  let queueBootArmed = false;
 
   function normalizeLevels(levels) {
     if (Array.isArray(levels)) {
@@ -508,20 +513,7 @@
       }
       if (data.dir === 'event' && data.event === 'queueChanged') {
         if (!queueWatching) return;
-        try {
-          const ch = root.chrome;
-          if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
-          const snap = cleanQueueSnapshot(data.snapshot, ++queueSeq);
-          Promise.resolve(ch.runtime.sendMessage({
-            type: 'queue.snapshot',
-            seq: snap.seq,
-            listId: snap.listId,
-            ids: snap.ids,
-            playing: snap.playing,
-          })).then(function () {}, function () {});
-        } catch (err) {
-          // ignore
-        }
+        sendQueueSnapshot(data.snapshot);
       }
     } catch (err) {
       // swallow
@@ -732,10 +724,28 @@
     return out.length > 1 ? out : [];
   }
 
+  function clipQueueField(value) {
+    if (typeof value !== 'string') return '';
+    return value.length > 200 ? value.slice(0, 200) : value;
+  }
+
+  function cleanQueueTitles(rawTitles, ids) {
+    const titles = {};
+    const source = rawTitles && typeof rawTitles === 'object' ? rawTitles : null;
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const row = source ? source[id] : null;
+      const t = row && typeof row === 'object' ? clipQueueField(row.t) : '';
+      const ct = row && typeof row === 'object' ? clipQueueField(row.ct) : '';
+      titles[id] = { t: t, ct: ct };
+    }
+    return titles;
+  }
+
   // The bridge answer is the page's own data, so it is checked here: a
   // playlist id of the shape YouTube uses, and video ids only.
   function cleanQueueSnapshot(raw, seq) {
-    const empty = { seq: seq, listId: '', ids: [], playing: '' };
+    const empty = { seq: seq, listId: '', ids: [], playing: '', titles: {}, cleared: false };
     if (!raw || typeof raw !== 'object') return empty;
     const listId = typeof raw.listId === 'string' && QUEUE_LIST_RE.test(raw.listId) ? raw.listId : '';
     const ids = [];
@@ -749,7 +759,67 @@
       }
     }
     const playing = typeof raw.playing === 'string' && VIDEO_ID_RE.test(raw.playing) ? raw.playing : '';
-    return { seq: seq, listId: listId, ids: ids, playing: playing };
+    return {
+      seq: seq,
+      listId: listId,
+      ids: ids,
+      playing: playing,
+      titles: cleanQueueTitles(raw.titles, ids),
+      cleared: raw.cleared === true,
+    };
+  }
+
+  // A tab with no queue panel still has a video on /watch. The bridge's
+  // playing field is empty then; the address is the one the worker can store.
+  function queueSnapshotNow(raw) {
+    const snap = cleanQueueSnapshot(raw, ++queueSeq);
+    let onWatch = false;
+    try {
+      onWatch = Core.isWatchUrl(location.href) === true;
+    } catch (err) {
+      onWatch = false;
+    }
+    let playing = snap.playing;
+    if (!playing) {
+      let id = '';
+      try { id = readVideoId(); } catch (err) { id = ''; }
+      if (typeof id === 'string' && VIDEO_ID_RE.test(id)) playing = id;
+    }
+    return {
+      seq: snap.seq,
+      onWatch: onWatch,
+      listId: snap.listId,
+      ids: snap.ids,
+      playing: playing,
+      titles: snap.titles,
+      cleared: snap.cleared,
+    };
+  }
+
+  function sendQueueSnapshot(raw) {
+    try {
+      const ch = root.chrome;
+      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return false;
+      const snap = queueSnapshotNow(raw);
+      Promise.resolve(ch.runtime.sendMessage({
+        type: 'queue.snapshot',
+        seq: snap.seq,
+        onWatch: snap.onWatch,
+        listId: snap.listId,
+        ids: snap.ids,
+        playing: snap.playing,
+        titles: snap.titles,
+        cleared: snap.cleared,
+      })).then(function () {}, function () {});
+      queueBootArmed = false;
+      if (queueBootTimer != null) {
+        clearTimeout(queueBootTimer);
+        queueBootTimer = null;
+      }
+      return true;
+    } catch (err) {
+      return false;
+    }
   }
 
   async function readCollaborators(owner, videoId) {
@@ -1412,8 +1482,34 @@
     })();
     bootOnce.then(function (reply) {
       if (reply && reply.openInAudioMode === true) enableWhenPlayerReady();
+      if (reply && reply.queueWatch === true) {
+        try { startQueueWatchOnBoot(); } catch (err) { /* swallow */ }
+      }
     }, function () {});
     return bootOnce;
+  }
+
+  function startQueueWatchOnBoot() {
+    queueBootArmed = true;
+    ensureBridge().then(function () {
+      queueWatching = true;
+      return callPlayer('queueWatch', [true]);
+    }).then(function (raw) {
+      if (!queueBootArmed) return;
+      const listId = raw && typeof raw.listId === 'string' ? raw.listId : '';
+      if (listId) {
+        sendQueueSnapshot(raw);
+        return;
+      }
+      queueBootTimer = setTimeout(function () {
+        queueBootTimer = null;
+        if (!queueBootArmed) return;
+        callPlayer('queueSnapshot', []).then(function (fresh) {
+          if (!queueBootArmed) return;
+          sendQueueSnapshot(fresh);
+        }, function () {});
+      }, QUEUE_BOOT_WAIT_MS);
+    }, function () {});
   }
 
   function shouldBoot() {
@@ -3705,7 +3801,7 @@
               sendResponse({ ok: true });
               return;
             }
-            sendResponse({ ok: true, snapshot: cleanQueueSnapshot(result, ++queueSeq) });
+            sendResponse({ ok: true, snapshot: queueSnapshotNow(result) });
           }).catch(function () {});
           return true;
         }
@@ -3722,7 +3818,7 @@
               sendResponse({ ok: false, error: 'failed' });
               return;
             }
-            sendResponse({ ok: true, snapshot: cleanQueueSnapshot(result, ++queueSeq) });
+            sendResponse({ ok: true, snapshot: queueSnapshotNow(result) });
           }).catch(function () {});
           return true;
         }

@@ -425,10 +425,43 @@
     }
   }
 
+  // Titles ride along so a video added on YouTube's own queue can be named
+  // in Up next. The set id stays here: it is how this page's edit endpoint
+  // names a row, and a refresh replaces it. It never leaves the bridge.
+  function clipQueueLabel(value) {
+    if (typeof value !== 'string') return '';
+    const text = value.trim();
+    return text.length > 200 ? text.slice(0, 200) : text;
+  }
+
+  function readQueueTitle(data) {
+    const title = data && data.title;
+    if (!title || typeof title !== 'object') return '';
+    if (typeof title.simpleText === 'string') return clipQueueLabel(title.simpleText);
+    if (!Array.isArray(title.runs)) return '';
+    let text = '';
+    for (let i = 0; i < title.runs.length; i++) {
+      const part = title.runs[i];
+      if (part && typeof part.text === 'string') text += part.text;
+    }
+    return clipQueueLabel(text);
+  }
+
+  function readQueueChannel(data) {
+    const shortRuns = data && data.shortBylineText && data.shortBylineText.runs;
+    const longRuns = data && data.longBylineText && data.longBylineText.runs;
+    let text = '';
+    if (Array.isArray(shortRuns) && shortRuns[0] && typeof shortRuns[0].text === 'string') {
+      text = shortRuns[0].text;
+    } else if (Array.isArray(longRuns) && longRuns[0] && typeof longRuns[0].text === 'string') {
+      text = longRuns[0].text;
+    }
+    return clipQueueLabel(text);
+  }
+
   // #movie_player.getPlaylist() stays on the old order until a refresh, and
   // after Clear it still lists videos the panel has dropped. The panel is
-  // the list (docs/youtube.md). playlistSetVideoId never leaves this bridge:
-  // it is how this page's edit endpoint names a row, and a refresh replaces it.
+  // the list (docs/youtube.md).
   function readQueueState() {
     const empty = { panel: null, listId: '', queued: [], playing: '' };
     const doc = root.document;
@@ -456,25 +489,41 @@
           const v = data.videoId;
           if (!isVideoId(v)) continue;
           const set = data.playlistSetVideoId;
-          if (typeof set === 'string' && set) queued.push({ v: v, set: set });
-          else if (!playing) playing = v;
+          if (typeof set === 'string' && set) {
+            queued.push({
+              v: v,
+              set: set,
+              t: readQueueTitle(data),
+              ct: readQueueChannel(data),
+            });
+          } else if (!playing) playing = v;
         }
       }
     }
     return { panel: panel, listId: panel.data.playlistId, queued: queued, playing: playing };
   }
 
+  function emptyQueueSnapshot() {
+    return { listId: '', ids: [], playing: '', titles: {} };
+  }
+
   function readQueueSnapshot() {
     try {
       const state = readQueueState();
-      if (!state.listId) return { listId: '', ids: [], playing: '' };
+      if (!state.listId) return emptyQueueSnapshot();
       const ids = [];
+      const titles = {};
       for (let i = 0; i < state.queued.length && ids.length < MAX_QUEUE_IDS; i++) {
-        ids.push(state.queued[i].v);
+        const row = state.queued[i];
+        ids.push(row.v);
+        titles[row.v] = {
+          t: typeof row.t === 'string' ? row.t : '',
+          ct: typeof row.ct === 'string' ? row.ct : '',
+        };
       }
-      return { listId: state.listId, ids: ids, playing: state.playing };
+      return { listId: state.listId, ids: ids, playing: state.playing, titles: titles };
     } catch (err) {
-      return { listId: '', ids: [], playing: '' };
+      return emptyQueueSnapshot();
     }
   }
 
@@ -583,6 +632,9 @@
   let queueWatching = false;
   let queueDebounce = null;
   let queueLastPosted = null;
+  // YouTube's own Clear is yt-end-playlist-command. The list afterwards can
+  // look like any other empty queue, so the next post says the person cleared it.
+  let queueEndSeen = false;
   // Two queueOps messages can be in flight before either batch has read the
   // panel. One chain keeps the second from editing a list the first is
   // still waiting on.
@@ -619,6 +671,8 @@
       return;
     }
     if (queueLastPosted && snapshotsEqual(queueLastPosted, snap)) return;
+    snap.cleared = queueEndSeen === true;
+    queueEndSeen = false;
     queueLastPosted = snap;
     adopted.forEach(function (token) {
       postToPage({
@@ -647,6 +701,7 @@
       return;
     }
     if (!name) return;
+    if (name === 'yt-end-playlist-command') queueEndSeen = true;
     const pending = queueWaiters.slice();
     for (let i = 0; i < pending.length; i++) {
       try {
@@ -808,6 +863,7 @@
 
   async function performQueueOps(ops) {
     let edited = false;
+    let didClear = false;
     for (let i = 0; i < ops.length; i++) {
       const op = ops[i];
       if (op.op === 'add') {
@@ -817,11 +873,13 @@
       } else if (op.op === 'move') {
         if (await runMove(op.v, op.after)) edited = true;
       } else if (op.op === 'clear') {
-        await runClear();
+        if (await runClear()) didClear = true;
       }
     }
     if (edited) await refreshQueue();
-    return readQueueSnapshot();
+    const snap = readQueueSnapshot();
+    snap.cleared = didClear === true && snap.listId === '';
+    return snap;
   }
 
   function runQueueOps(ops) {

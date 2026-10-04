@@ -700,6 +700,7 @@ async function scenarios(ctx) {
 
   await reorderQueue(ctx);
   await playingRowHidden(ctx);
+  await reportsQueuePlayer(ctx);
 }
 
 function pointer(target, type, clientY) {
@@ -1165,6 +1166,69 @@ async function playingRowHidden(ctx) {
       && !$('queue-play').hidden
       && !$('queue-clear').hidden,
     `${qOrder().join()} ${$('queue-toggle-label').textContent}`,
+  );
+}
+
+async function reportsQueuePlayer(ctx) {
+  const { $, mock } = ctx;
+  // Let the previous clear finish reporting its Player tab before counting.
+  await settle(250);
+  const before = sentOf('queue.player').length;
+  mock.urlTabs = [
+    {
+      id: 9,
+      windowId: 1,
+      url: 'https://www.youtube.com/watch?v=cccccccccc1',
+      title: 'Playing - YouTube',
+    },
+    {
+      id: 11,
+      windowId: 1,
+      url: 'https://www.youtube.com/watch?v=dddddddddd1',
+      title: 'Other - YouTube',
+    },
+  ];
+  mock.activeTab = { ...mock.urlTabs[0] };
+  mock.onTabMessage = async (tabId) => ({
+    ok: true,
+    videoId: tabId === 11 ? 'dddddddddd1' : 'cccccccccc1',
+    title: tabId === 11 ? 'Other' : 'Playing',
+    paused: false,
+    currentTime: 1,
+    duration: 10,
+  });
+  for (const fn of mock.tabUpdatedListeners) fn(9, { status: 'complete' });
+  await settle(250);
+  const opened = sentOf('queue.player').slice(before);
+  check(
+    'a YouTube tab as the Player tab sends one queue.player with its id',
+    opened.length === 1 && opened[0].tabId === 9,
+    JSON.stringify(opened),
+  );
+
+  $('tab-audio').click();
+  await settle(80);
+  const picker = $('audio-picker');
+  const other = picker?.querySelector('.audio-picker__tab[data-tab-id="11"]');
+  check('the picker offers the other tab', !!other, `hidden=${picker?.hidden} children=${picker?.childElementCount}`);
+  if (!other) return;
+  const mid = sentOf('queue.player').length;
+  other.click();
+  await settle(200);
+  const picked = sentOf('queue.player').slice(mid);
+  check(
+    'picking another tab sends one queue.player with the new id',
+    picked.length === 1 && picked[0].tabId === 11,
+    JSON.stringify(picked),
+  );
+
+  const afterPick = sentOf('queue.player').length;
+  for (const fn of mock.tabUpdatedListeners) fn(11, { status: 'complete' });
+  await settle(250);
+  check(
+    'a refresh with the same target sends nothing new',
+    sentOf('queue.player').length === afterPick,
+    JSON.stringify(sentOf('queue.player').slice(afterPick)),
   );
 }
 

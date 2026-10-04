@@ -486,6 +486,17 @@ export async function saveQueue(list) {
   return next;
 }
 
+// `fn` must not call another queue helper: this already holds the queue lock.
+export async function updateQueue(fn) {
+  return withQueueLock(async () => {
+    const queue = await readQueue();
+    const next = await fn(queue);
+    if (!Array.isArray(next)) return { queue };
+    const saved = await saveQueue(next);
+    return { queue: saved };
+  });
+}
+
 export async function addToQueue(entry) {
   return withQueueLock(async () => {
     const queue = await readQueue();
