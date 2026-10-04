@@ -1536,6 +1536,37 @@ export default async function run(t) {
     };
 
     await twoChannels();
+    await runSweep({ scope: 'all' });
+    t.check('two channels with new videos share one alert', mock.notifications.length === 1, JSON.stringify(mock.notifications));
+    t.check(
+      'it counts the videos and names the channels',
+      /2/.test(mock.notifications[0]?.title) && mock.notifications[0]?.message === 'Marques Brownlee · MrBeast',
+      JSON.stringify(mock.notifications[0]),
+    );
+    t.check(
+      'and uses the extension icon',
+      String(mock.notifications[0]?.iconUrl || '').endsWith('icons/icon128.png'),
+      JSON.stringify(mock.notifications[0]),
+    );
+    const mergedId = mock.notifications[0]?.id;
+    await onNotificationClicked(mergedId);
+    t.check(
+      'a click opens the newest video of the two',
+      mock.tabsCreated.some((tab) => String(tab.url).includes('refused0001')),
+      JSON.stringify(mock.tabsCreated),
+    );
+    const mergedPoll = await readPollState();
+    t.check(
+      'every video in it is marked as alerted',
+      mergedPoll.notified.includes('refused0001') && mergedPoll.notified.includes('shown000001'),
+      JSON.stringify(mergedPoll.notified),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, avatar: 'https://yt3.ggpht.com/mkbhd' });
+    installFetch({
+      feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [{ v: 'refused0001', t: 'Refused', at: AT.newest }]) },
+    });
     mock.notificationFail = (opts) => opts.iconUrl === 'https://yt3.ggpht.com/mkbhd';
     await runSweep({ scope: 'all' });
     const refusedIcon = mock.notifications.find((row) => row.title === 'Marques Brownlee');
@@ -1544,20 +1575,11 @@ export default async function run(t) {
       String(refusedIcon?.iconUrl || '').endsWith('icons/icon128.png'),
       JSON.stringify(mock.notifications),
     );
-    t.check(
-      'and the next channel still alerts with its own picture',
-      mock.notifications.some((row) => row.title === 'MrBeast' && row.iconUrl === 'https://yt3.ggpht.com/beast'),
-      JSON.stringify(mock.notifications),
-    );
 
     await twoChannels();
-    mock.notificationFail = (opts) => opts.title === 'Marques Brownlee';
+    mock.notificationFail = () => true;
     const refusedSweep = await runSweep({ scope: 'all' });
-    t.check(
-      'a channel whose alert fails every way does not stop the others',
-      mock.notifications.length === 1 && mock.notifications[0].title === 'MrBeast',
-      JSON.stringify(mock.notifications),
-    );
+    t.check('an alert that fails every way shows nothing', mock.notifications.length === 0, JSON.stringify(mock.notifications));
     const refusedPoll = await readPollState();
     t.check(
       'the check still finishes and records itself',
@@ -1565,8 +1587,8 @@ export default async function run(t) {
       JSON.stringify(refusedSweep),
     );
     t.check(
-      'only the alert that showed is marked as alerted',
-      refusedPoll.notified.includes('shown000001') && !refusedPoll.notified.includes('refused0001'),
+      'and the videos are not marked as alerted',
+      !refusedPoll.notified.includes('shown000001') && !refusedPoll.notified.includes('refused0001'),
       JSON.stringify(refusedPoll.notified),
     );
     mock.notificationFail = null;
@@ -4223,7 +4245,7 @@ export default async function run(t) {
     const cappedFeed = await readFeed();
     t.check('the feed kept the cap', cappedFeed.length === 50, String(cappedFeed.length));
     const noted = mock.notifications.reduce((n, note) => {
-      const m = String(note.message).match(/^(\d+) new videos$/);
+      const m = String(note.title).match(/^(\d+) new videos$/) || String(note.message).match(/^(\d+) new videos$/);
       return n + (m ? Number(m[1]) : 1);
     }, 0);
     t.check(

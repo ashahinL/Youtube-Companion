@@ -91,8 +91,8 @@
 - If a channel's last check failed, it says why and offers **Retry**.
 
 **Alerts**
-- A desktop notification when a channel uploads. One alert per channel, even
-  if it posted several videos.
+- A desktop notification when a channel uploads. One alert per check: if
+  several channels posted, they share one alert.
 - The toolbar badge counts new videos since you last opened the popup.
 
 **Settings**

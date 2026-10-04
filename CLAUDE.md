@@ -140,9 +140,11 @@ asks.
   popup. A channel name opens the in-popup channel sheet, which shows stored
   videos and never fetches on open; its ↗ opens the channel's own page on
   youtube.com the same way.
-- **Alerts**: one notification per channel per check ("3 new videos"), never
-  one per video. Favourites always alert while alerts are on; other channels
-  only if "Notify for non-favourite channels" is on. A video alerts once. A
+- **Alerts**: one notification per check, never one per video or per channel.
+  One channel with new videos gets its own alert ("3 new videos"); two or
+  more share one ("5 new videos", channel names as the body, extension icon),
+  and its click, Listen and Add to Up next act on the newest video. Favourites always alert while alerts are on;
+  other channels only if "Notify for non-favourite channels" is on. A video alerts once. A
   channel muted from its ⋯ menu never alerts, favourite or not, and stays in
   the feed. The mute goes into backups. An alert has two buttons, Listen
   (audio mode) and Add to Up next, both for the newest video; a live or

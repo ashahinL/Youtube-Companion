@@ -16,6 +16,10 @@ shipped yet waits under Unreleased. How a version ships:
 - Up next no longer lists the video that is playing; the player card
   already shows it. The player card's Add to Up next button is gone.
 
+- One desktop alert per check. When several channels have new videos, they
+  share a single alert that counts the videos and names the channels; a click
+  or Listen acts on the newest one. One channel still gets its own alert.
+
 **Fixes**
 - Settings' number boxes are wide enough for four digits, so 1000 or
   more in Keep the newest shows whole. Its arrows move by 50 videos.

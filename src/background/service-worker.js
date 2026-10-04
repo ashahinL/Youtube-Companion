@@ -688,6 +688,9 @@ function notificationIdFor(channelId) {
   return `yt:${channelId}`;
 }
 
+// Not a channel id, so channelIdFromNotificationId never reads it as one.
+const MERGED_NOTIFICATION_ID = 'yt:new';
+
 function channelIdFromNotificationId(id) {
   const raw = String(id || '');
   if (!raw.startsWith('yt:')) return '';
@@ -995,19 +998,13 @@ function shouldNotifyItem(item, channel, settings, poll) {
 /**
  * True when the alert is on screen. Chrome rejects a notification whose
  * icon it cannot load, and a channel picture is a remote image, so that
- * one retries with the extension's own icon. A failure is this channel's
- * alone: throwing here used to end the check before the channels after it
- * were alerted or anything was marked.
+ * one retries with the extension's own icon. Throwing here used to end the
+ * check before anything was marked, so a failure is only a false.
+ * Both buttons act on `newest`, the same video a click on the alert opens.
  */
-async function notifyChannel(channel, items, settings) {
-  const newest = newestOf(items);
-  if (!newest) return false;
-  const title = channel.title || channel.handle || channel.id;
-  const message = items.length === 1 ? newest.t : await nNewVideosText(items.length, settings);
-  const id = notificationIdFor(channel.id);
+async function showAlert({ id, title, message, newest, iconCandidates, settings }) {
   const ownIcon = chromeApi().runtime.getURL(EXT_ICON);
-  const icons = [...new Set([iconUrlFor(channel, settings), ownIcon])];
-  // Both act on the newest video, the same one a click on the alert opens.
+  const icons = [...new Set([...iconCandidates, ownIcon])];
   const buttons = alertHasButtons(newest)
     ? [
       { title: await workerText(settings, 'alertListen', 'Listen') },
@@ -1022,10 +1019,43 @@ async function notifyChannel(channel, items, settings) {
       notificationVideos.set(id, newest.v);
       return true;
     } catch {
-      // Next icon, or give up on this channel only.
+      // Next icon, or give up.
     }
   }
   return false;
+}
+
+async function notifyChannel(channel, items, settings) {
+  const newest = newestOf(items);
+  if (!newest) return false;
+  return showAlert({
+    id: notificationIdFor(channel.id),
+    title: channel.title || channel.handle || channel.id,
+    message: items.length === 1 ? newest.t : await nNewVideosText(items.length, settings),
+    newest,
+    iconCandidates: [iconUrlFor(channel, settings)],
+    settings,
+  });
+}
+
+// A check that finds new videos on several channels shows one alert, so a
+// big sweep does not stack a notification per channel.
+async function notifyMerged(byChannel, byId, settings) {
+  const all = [...byChannel.values()].flat();
+  const newest = newestOf(all);
+  if (!newest) return false;
+  const names = [...byChannel.keys()].map((channelId) => {
+    const ch = byId.get(channelId);
+    return ch?.title || ch?.handle || channelId;
+  });
+  return showAlert({
+    id: MERGED_NOTIFICATION_ID,
+    title: await nNewVideosText(all.length, settings),
+    message: names.join(' · '),
+    newest,
+    iconCandidates: [],
+    settings,
+  });
 }
 
 async function notifyNewItems({ added, unseeded, quiet, settings, generations }) {
@@ -1066,11 +1096,17 @@ async function notifyNewItems({ added, unseeded, quiet, settings, generations })
   }
 
   const alerted = [];
-  for (const [channelId, items] of byChannel) {
-    const channel = byId.get(channelId);
-    if (!channel) continue;
-    if (!(await notifyChannel(channel, items, settings))) continue;
-    for (const item of items) alerted.push(item.v);
+  if (byChannel.size > 1) {
+    if (await notifyMerged(byChannel, byId, settings)) {
+      for (const item of gated) alerted.push(item.v);
+    }
+  } else {
+    for (const [channelId, items] of byChannel) {
+      const channel = byId.get(channelId);
+      if (!channel) continue;
+      if (!(await notifyChannel(channel, items, settings))) continue;
+      for (const item of items) alerted.push(item.v);
+    }
   }
   if (alerted.length) poll = markNotified(poll, alerted);
 
@@ -2301,14 +2337,15 @@ export async function onNotificationButtonClicked(id, index) {
   } catch {
     // The action matters more than removing the alert.
   }
-  const channelId = channelIdFromNotificationId(id);
-  if (!channelId) return;
+  const merged = id === MERGED_NOTIFICATION_ID;
+  const channelId = merged ? '' : channelIdFromNotificationId(id);
+  if (!channelId && !merged) return;
   const mapped = notificationVideos.get(id);
   if (mapped) notificationVideos.delete(id);
   const [feed, channels] = await Promise.all([readFeed(), readChannels()]);
   const item = mapped
     ? (feed || []).find((row) => row && row.v === mapped)
-    : newestForChannel(feed, channelId);
+    : merged ? newestOf(feed || []) : newestForChannel(feed, channelId);
   const v = item?.v || mapped;
   if (!v) return;
   if (index === 0) {
@@ -2316,7 +2353,7 @@ export async function onNotificationButtonClicked(id, index) {
     return;
   }
   if (index === 1 && alertHasButtons(item)) {
-    const channel = channels.find((ch) => ch.id === channelId);
+    const channel = channels.find((ch) => ch.id === (channelId || item.c));
     await addToQueue({ ...item, ct: item.ct || channel?.title || '' });
     scheduleQueuePush();
   }
@@ -2339,9 +2376,12 @@ export async function onNotificationClicked(id) {
     const item = (feed || []).find((row) => row && row.v === mapped);
     url = watchUrl(mapped, item?.k);
   } else {
-    const channelId = channelIdFromNotificationId(id);
-    if (!channelId) return;
-    const newest = newestForChannel(await readFeed(), channelId);
+    const merged = id === MERGED_NOTIFICATION_ID;
+    const channelId = merged ? '' : channelIdFromNotificationId(id);
+    if (!channelId && !merged) return;
+    const feed = await readFeed();
+    const newest = merged ? newestOf(feed || []) : newestForChannel(feed, channelId);
+    if (merged && !newest) return;
     url = newest?.v
       ? watchUrl(newest.v, newest.k)
       : `https://www.youtube.com/channel/${channelId}/videos`;

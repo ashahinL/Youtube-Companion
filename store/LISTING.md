@@ -152,7 +152,7 @@ WATCHLIST
 • Clear the whole list in one go, after a confirm that offers to export it first
 
 ALERTS
-• A desktop notification when a channel uploads: one per channel, not one per video
+• A desktop notification when a channel uploads: one per check, even when several channels posted
 • Listen and Add to Up next buttons right on the alert
 • The toolbar badge counts new videos since you last looked
 
