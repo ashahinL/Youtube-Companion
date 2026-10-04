@@ -7,3 +7,5 @@ dist/
 
 # The owner's private notes; never published.
 .local/
+
+.impeccable/

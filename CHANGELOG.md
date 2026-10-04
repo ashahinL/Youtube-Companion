@@ -19,6 +19,9 @@ shipped yet waits under Unreleased. How a version ships:
 **Fixes**
 - Settings' number boxes are wide enough for four digits, so 1000 or
   more in Keep the newest shows whole. Its arrows move by 50 videos.
+- Grey secondary text in the light theme and the purple used for error
+  and warning lines in the dark theme are easier to read, and the small
+  labels under the Player tab's stats are a little larger.
 
 ## 2.1.0 — 2026-09-26
 

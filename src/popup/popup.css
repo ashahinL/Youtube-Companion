@@ -14,6 +14,9 @@
    * reads as YouTube's own. Each theme's value clears 4.5:1 for white text
    * on it and stays readable as text on that theme's background. */
   --accent: #7c5cf0;
+  /* The accent as small text. The fill value is 3.9:1 on a dark surface, so
+   * text uses a lighter step that clears 4.5:1 on all three dark grounds. */
+  --accent-text: #a58cff;
   --on-accent: #ffffff;
   --ok: #22c55e;
   --radius: 9px;
@@ -66,8 +69,9 @@
   --surface-hover: #eeeef2;
   --border: rgba(0, 0, 0, 0.1);
   --text: #16161a;
-  --text-dim: rgba(22, 22, 26, 0.58);
+  --text-dim: rgba(22, 22, 26, 0.64);
   --accent: #6d4ae8;
+  --accent-text: #5534d6;
   --on-accent: #ffffff;
   --ok: #15803d;
   --tag-live: #d10f20;
@@ -88,8 +92,9 @@
     --surface-hover: #eeeef2;
     --border: rgba(0, 0, 0, 0.1);
     --text: #16161a;
-    --text-dim: rgba(22, 22, 26, 0.58);
+    --text-dim: rgba(22, 22, 26, 0.64);
     --accent: #6d4ae8;
+    --accent-text: #5534d6;
     --on-accent: #ffffff;
     --ok: #15803d;
     --tag-live: #d10f20;
@@ -351,7 +356,7 @@ body.is-opening .tabs {
 }
 
 .banner--error {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .banner--ok {
@@ -398,7 +403,7 @@ body.is-opening .tabs {
 }
 
 .problem-row__text {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .undo-row__btn,
@@ -441,7 +446,7 @@ body.is-opening .tabs {
 .follow-card__error {
   flex: 1 0 100%;
   margin: 0;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 12px;
 }
 
@@ -563,7 +568,7 @@ body.is-opening .tabs {
 }
 
 .channel-row__warn {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .channel-row__groups {
@@ -690,7 +695,7 @@ body.is-opening .tabs {
 }
 
 .menu__item--danger:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .confirm-prompt {
@@ -1251,7 +1256,9 @@ body.is-opening .tabs {
   padding-inline: 12px;
   border-block-end: 1px solid var(--border);
   /* An accent edge rather than a tinted ground: color-mix() only landed in
-   * the Chrome this ships to, and a surface plus a rule needs no fallback. */
+   * the Chrome this ships to, and a surface plus a rule needs no fallback.
+   * It is also what tells this note from an error line, which is accent
+   * text too. */
   border-inline-start: 3px solid var(--accent);
   background: var(--surface);
 }
@@ -2143,7 +2150,7 @@ body.is-opening .tabs {
 
 .audio-stat {
   min-width: 0;
-  padding: 6px 8px;
+  padding: 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -2163,7 +2170,7 @@ body.is-opening .tabs {
 
 .audio-stat__label {
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.3;
 }
 
