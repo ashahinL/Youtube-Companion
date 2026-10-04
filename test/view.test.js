@@ -69,12 +69,6 @@ import {
   queueEntryFromItem,
   sanitizeQueue,
   queueView,
-  playlistKind,
-  shapeQueue,
-  visibleQueue,
-  sameQueueIds,
-  queueFromPage,
-  playerIsActive,
 } from '../src/lib/view.js';
 import { MAX_BACKUP_CHANNELS, parseBackup, backupSizeError } from '../src/lib/backup.js';
 import { YtError } from '../src/lib/yt.js';
@@ -206,35 +200,6 @@ function queueChecks(t) {
   t.check('count and open', shown.count === 1 && shown.open === true && shown.empty === false && shown.full === false && shown.items === rows);
   t.check('full at cap', queueView({ queue: new Array(100).fill(0).map((_, i) => ({ v: i })), open: false, cap: 100 }).full === true);
   t.check('missing queue is empty', queueView({ open: true, cap: 100 }).empty === true && queueView({ open: true, cap: 100 }).open === true);
-
-  t.section('queue sync');
-
-  t.check('TLPQ is the temporary queue', playlistKind('TLPQabcdefghijk') === 'queue');
-  t.check('a saved playlist is not the queue', playlistKind('PLabcdefghijk') === 'saved');
-  t.check('a mix is not the queue', playlistKind('RDabcdefghijk') === 'saved');
-  t.check('watch later is not the queue', playlistKind('WL') === 'saved');
-  t.check('no playlist id is none', playlistKind('') === 'none' && playlistKind(null) === 'none');
-  t.check('an unknown playlist id is left alone', playlistKind('XX123') === 'other');
-
-  const A = { v: 'aaaaaaaaaaa', t: 'Playing', ct: 'Chan' };
-  const B = { v: 'bbbbbbbbbbb', t: 'Next', ct: 'Other' };
-  const C = { v: 'ccccccccccc', t: 'Later' };
-  t.check('nothing playing leaves the list', sameQueueIds(shapeQueue([B, C], null), [B, C]));
-  t.check('a playing video with an empty list stays off it', shapeQueue([], A).length === 0);
-  t.check('a lone playing video stays a single stored row', sameQueueIds(shapeQueue([A], A), [A]));
-  const led = shapeQueue([B, C], A);
-  t.check('a different playing video jumps to the front', sameQueueIds(led, [A, B, C]) && led[0].t === 'Playing');
-  const moved = shapeQueue([B, A, C], A);
-  t.check('a playing video already in the list moves to the front and keeps its row', sameQueueIds(moved, [A, B, C]) && moved[0].t === 'Playing');
-  t.check('the lone playing video is hidden', visibleQueue([A], A.v).length === 0);
-  t.check('two videos stay visible', sameQueueIds(visibleQueue([A, B], A.v), [A, B]));
-  t.check('a queued video is visible when nothing is playing', sameQueueIds(visibleQueue([B], ''), [B]));
-  const merged = queueFromPage([B], [{ v: B.v }, { v: 'ddddddddddd', t: 'New' }], 100);
-  t.check('a page row keeps a title we already stored', merged[0].t === 'Next' && merged[1].t === 'New');
-
-  t.check('a playing player counts', playerIsActive({ paused: false, currentTime: 0 }) === true);
-  t.check('paused at the start does not count', playerIsActive({ paused: true, currentTime: 0 }) === false);
-  t.check('paused partway counts', playerIsActive({ paused: true, currentTime: 3 }) === true);
 }
 
 export default async function run(t) {

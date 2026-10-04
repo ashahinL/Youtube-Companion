@@ -27,7 +27,6 @@ function loadBridge(player, opts) {
   const posts = [];
   const sandbox = {
     URL,
-    CustomEvent,
     addEventListener(type, fn) {
       if (!this._listeners) this._listeners = [];
       this._listeners.push({ type, fn });
@@ -40,11 +39,8 @@ function loadBridge(player, opts) {
         return id === 'movie_player' ? player : null;
       },
       querySelector(sel) {
-        if (opts && opts.flexy && sel === 'ytd-watch-flexy') return opts.flexy;
-        if (opts && opts.owner && sel === 'ytd-watch-metadata ytd-video-owner-renderer') return opts.owner;
-        return null;
+        return opts && opts.owner && sel === 'ytd-watch-metadata ytd-video-owner-renderer' ? opts.owner : null;
       },
-      querySelectorAll() { return []; },
     },
   };
   if (!opts || opts.harness !== false) sandbox.__ytcHarness = true;
@@ -621,87 +617,7 @@ export default async function run(t) {
   t.check('mute with no args is allowed', bridge.isAllowedCall('mute', []) === true);
   t.check('mute with an arg is refused', bridge.isAllowedCall('mute', [1]) === false);
   t.check('unMute with no args is allowed', bridge.isAllowedCall('unMute', []) === true);
-  t.check('watchQueue takes no arguments', bridge.isAllowedCall('watchQueue', []) === true);
-  t.check('watchQueue refuses an argument', bridge.isAllowedCall('watchQueue', ['x']) === false);
-  t.check('setWatchQueue accepts video ids', bridge.isAllowedCall('setWatchQueue', [['aaaaaaaaaaa', 'bbbbbbbbbbb']]) === true);
-  t.check('setWatchQueue refuses one id', bridge.isAllowedCall('setWatchQueue', [['aaaaaaaaaaa']]) === false);
-  t.check('setWatchQueue refuses a bad id', bridge.isAllowedCall('setWatchQueue', [['aaaaaaaaaaa', 'nope']]) === false);
-  t.check('clearWatchQueue takes no arguments', bridge.isAllowedCall('clearWatchQueue', []) === true);
   t.check('unMute with an arg is refused', bridge.isAllowedCall('unMute', [true]) === false);
-
-  const queueEvents = [];
-  const queueFlexy = {
-    data: {
-      contents: {
-        secondaryResults: {
-          results: [
-            { videoId: 'not-a-queue' },
-            {
-              menu: {
-                items: [{
-                  addToPlaylistCommand: {
-                    openMiniplayer: true,
-                    videoId: 'zzzzzzzzzzz',
-                    listType: 'PLAYLIST_EDIT_LIST_TYPE_QUEUE',
-                    onCreateListCommand: {
-                      commandMetadata: {
-                        webCommandMetadata: { sendPost: true, apiUrl: '/youtubei/v1/playlist/create' },
-                      },
-                      createPlaylistServiceEndpoint: {
-                        videoIds: ['zzzzzzzzzzz'],
-                        params: 'CAQ%3D',
-                      },
-                    },
-                    videoIds: ['zzzzzzzzzzz'],
-                  },
-                }],
-              },
-            },
-          ],
-        },
-      },
-    },
-    dispatchEvent(ev) {
-      queueEvents.push(ev);
-      return true;
-    },
-  };
-  const queueBridge = loadAdoptedBridge({
-    getPlaylist() { return null; },
-    getPlaylistId() { return ''; },
-    getPlaylistIndex() { return 0; },
-    getVideoData() { return { video_id: 'aaaaaaaaaaa', title: 'Now', author: 'Me' }; },
-    loadPlaylist() { throw new Error('loadPlaylist'); },
-  }, { flexy: queueFlexy });
-  queueBridge.fire({
-    source: queueBridge.win,
-    origin: PAGE,
-    data: {
-      type: TOKEN,
-      dir: 'request',
-      id: 41,
-      method: 'setWatchQueue',
-      args: [['aaaaaaaaaaa', 'bbbbbbbbbbb']],
-    },
-  });
-  const queueAction = queueEvents.find((ev) => ev && ev.type === 'yt-action');
-  const queueCmd = queueAction
-    && queueAction.detail
-    && queueAction.detail.args
-    && queueAction.detail.args[0]
-    && queueAction.detail.args[0].addToPlaylistCommand;
-  const queueReply = queueBridge.posts.find((p) => p.data && p.data.id === 41);
-  t.check(
-    'setWatchQueue asks the page to add the missing videos',
-    queueReply && queueReply.data.ok === true && queueReply.data.result === true
-      && queueAction.detail.actionName === 'yt-add-to-playlist-command'
-      && queueCmd.listType === 'PLAYLIST_EDIT_LIST_TYPE_QUEUE'
-      && queueCmd.videoIds[0] === 'aaaaaaaaaaa'
-      && queueCmd.videoIds[1] === 'bbbbbbbbbbb'
-      && queueCmd.onCreateListCommand.createPlaylistServiceEndpoint.params === 'CAQ%3D'
-      && queueCmd.onCreateListCommand.createPlaylistServiceEndpoint.videoIds[1] === 'bbbbbbbbbbb',
-    JSON.stringify({ reply: queueReply && queueReply.data, cmd: queueCmd }),
-  );
 
   reset();
   fire(req({
@@ -1696,28 +1612,6 @@ export default async function run(t) {
     };
   }
 
-  t.section('queue sync talks to the player');
-
-  const queuePage = bootPage();
-  t.check(
-    'a watch page opens the player bridge without audio mode',
-    queuePage.posts.some((p) => p && p.dir === 'adopt'),
-  );
-  const applied = await queuePage.ask({
-    type: 'queue.apply',
-    ids: ['aaaaaaaaaaa', 'bbbbbbbbbbb'],
-  });
-  t.check(
-    'apply loads those ids on the page',
-    applied && applied.applied === true
-      && queuePage.calls.some((c) => c[0] === 'watchQueue')
-      && queuePage.calls.some((c) => c[0] === 'setWatchQueue'
-        && Array.isArray(c[1])
-        && c[1][0] === 'aaaaaaaaaaa'
-        && c[1][1] === 'bbbbbbbbbbb'),
-    JSON.stringify({ applied, calls: queuePage.calls }),
-  );
-
   const noPlayerPage = bootPage({ noPlayer: true, noVideo: true });
   const missingRead = await noPlayerPage.ask({ type: 'audioMode.player' });
   t.check(
@@ -1824,11 +1718,7 @@ export default async function run(t) {
       && normalRead.channels[0].handle === '@mkbhd' && normalRead.channels[0].name === 'Marques Brownlee',
     JSON.stringify(normalRead.channels),
   );
-  t.check(
-    'and needs no bridge for it',
-    normalOwner.injected.length === 0 && normalOwner.calls.every((c) => c[0] === 'watchQueue'),
-    JSON.stringify(normalOwner.calls),
-  );
+  t.check('and needs no bridge for it', normalOwner.injected.length === 0 && normalOwner.calls.length === 0);
 
   const idOwner = await bootPage({ owner: { links: [{ href: `/channel/${MKBHD_ID}`, text: 'Marques Brownlee' }] } })
     .ask({ type: 'audioMode.player' });
@@ -1852,10 +1742,9 @@ export default async function run(t) {
     JSON.stringify(collabRead.channels),
   );
   t.check('the line itself stands in as the channel name', collabRead.channel === doacLine, collabRead.channel);
-  const collabAsks = collab.calls.filter((c) => c[0] === 'collaborators');
   t.check(
     'the bridge is asked once, with no arguments',
-    collab.injected.length === 0 && JSON.stringify(collabAsks) === JSON.stringify([['collaborators']]),
+    collab.injected.length === 0 && JSON.stringify(collab.calls) === JSON.stringify([['collaborators']]),
     JSON.stringify({ injected: collab.injected.length, calls: collab.calls }),
   );
   t.check(
@@ -1864,11 +1753,7 @@ export default async function run(t) {
     JSON.stringify(collab.posts.filter((p) => p && p.dir === 'adopt')),
   );
   await collab.ask({ type: 'audioMode.player' });
-  t.check(
-    'the list is kept while the same line shows',
-    collab.calls.filter((c) => c[0] === 'collaborators').length === 1,
-    JSON.stringify(collab.calls),
-  );
+  t.check('the list is kept while the same line shows', collab.calls.length === 1, String(collab.calls.length));
 
   const moving = await bootPage({
     flexyVideo: 'bbbbbbbbbbb',

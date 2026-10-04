@@ -3,8 +3,7 @@
  * page, and group chips on the subscriptions feed. Pins the player to
  * 144p, covers the video, accounts listening time, and tears the session
  * down on one AbortSignal. Also tells the worker when the main video
- * ends, so a listen-later queue can advance. Also keeps that queue in
- * step with YouTube's Add to queue on this tab.
+ * ends, so a listen-later queue can advance.
  * Classic script: content scripts cannot use import.
  */
 
@@ -1329,129 +1328,6 @@
       setTimeout(poll, PLAYER_POLL_MS);
     }
     setTimeout(poll, PLAYER_POLL_MS);
-  }
-
-  // Same split as playlistKind in src/lib/view.js. This file cannot import.
-  function playlistKind(id) {
-    if (typeof id !== 'string' || id.length === 0) return 'none';
-    if (id.indexOf('TLPQ') === 0) return 'queue';
-    if (/^(PL|RD|LL|WL|UU|OL|FL)/.test(id)) return 'saved';
-    return 'other';
-  }
-
-  function sameIds(a, b) {
-    if (!a || !b || a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-    return true;
-  }
-
-  function upcomingIds(items, index) {
-    const list = Array.isArray(items) ? items : [];
-    const start = typeof index === 'number' && index > 0 ? index : 0;
-    const out = [];
-    for (let i = start; i < list.length; i++) {
-      if (list[i] && typeof list[i].v === 'string') out.push(list[i].v);
-    }
-    return out;
-  }
-
-  const QUEUE_POLL_MS = 2000;
-  let queueTimer = null;
-  let queueSettle = null;
-  let queueApplied = null;
-  let queueLastKey = '';
-
-  function onWatchNavigate() {
-    queueLastKey = '';
-    if (queueSettle) return;
-    publishQueue();
-  }
-
-  function publishQueue() {
-    if (queueSettle) return;
-    let href = '';
-    try { href = String((root.location && root.location.href) || ''); } catch (err) { href = ''; }
-    if (!/[?&]v=[\w-]{11}/.test(href) && !/\/shorts\/[\w-]{11}/.test(href)) return;
-    // The bridge otherwise opens only when audio mode starts. A normal
-    // watch page still has to read the queue.
-    ensureBridge().then(function () {
-      return callPlayer('watchQueue', []);
-    }).then(function (snap) {
-      if (!snap || typeof snap !== 'object') return;
-      const items = Array.isArray(snap.items) ? snap.items : [];
-      const upcoming = upcomingIds(items, snap.index);
-      const echo = !!(queueApplied && sameIds(upcoming, queueApplied));
-      const key = String(snap.playlistId || '') + '\n' + String(snap.index || 0) + '\n'
-        + upcoming.join(',') + '\n' + String(snap.videoId || '') + '\n' + (echo ? '1' : '0');
-      if (key === queueLastKey) return;
-      queueLastKey = key;
-      const ch = root.chrome;
-      if (!ch || !ch.runtime || typeof ch.runtime.sendMessage !== 'function') return;
-      Promise.resolve(ch.runtime.sendMessage({
-        type: 'queue.page',
-        playlistId: typeof snap.playlistId === 'string' ? snap.playlistId : '',
-        index: snap.index,
-        videoId: snap.videoId,
-        title: snap.title,
-        channel: snap.channel,
-        items: items,
-        echo: echo,
-      })).then(function () {}, function () {});
-    }, function () {});
-  }
-
-  function startQueueWatch() {
-    if (queueTimer) return;
-    publishQueue();
-    queueTimer = setInterval(publishQueue, QUEUE_POLL_MS);
-    const doc = pageDocument();
-    if (doc && typeof doc.addEventListener === 'function') {
-      try { doc.addEventListener('yt-navigate-finish', onWatchNavigate); } catch (err) { /* swallow */ }
-    }
-  }
-
-  function applyQueue(ids) {
-    // Same as publishQueue: writing the queue cannot wait for audio mode.
-    return ensureBridge().then(function () {
-      return callPlayer('watchQueue', []);
-    }).then(function (snap) {
-      const playlistId = snap && typeof snap.playlistId === 'string' ? snap.playlistId : '';
-      const kind = playlistKind(playlistId);
-      if (kind === 'saved' || kind === 'other') return { ok: true, applied: false, skipped: 'playlist' };
-      const want = Array.isArray(ids) ? ids : [];
-      if (want.length < 2) {
-        if (kind === 'none') {
-          queueApplied = [];
-          return { ok: true, applied: true };
-        }
-        return callPlayer('clearWatchQueue', []).then(function () {
-          queueApplied = [];
-          queueLastKey = '';
-          if (queueSettle) clearTimeout(queueSettle);
-          queueSettle = setTimeout(function () {
-            queueSettle = null;
-            publishQueue();
-          }, 1500);
-          return { ok: true, applied: true };
-        });
-      }
-      const upcoming = upcomingIds(snap && snap.items, snap && snap.index);
-      if (sameIds(upcoming, want)) {
-        queueApplied = want.slice();
-        return { ok: true, applied: true };
-      }
-      return callPlayer('setWatchQueue', [want]).then(function (ok) {
-        if (ok !== true) return { ok: true, applied: false };
-        queueApplied = want.slice();
-        queueLastKey = '';
-        if (queueSettle) clearTimeout(queueSettle);
-        queueSettle = setTimeout(function () {
-          queueSettle = null;
-          publishQueue();
-        }, 1500);
-        return { ok: true, applied: true };
-      });
-    });
   }
 
   function onVideoEnded(event) {
@@ -3724,13 +3600,6 @@
           sendResponse({ ok: true, on: !!session });
           return;
         }
-        if (msg.type === 'queue.apply') {
-          applyQueue(msg.ids).then(
-            function (res) { sendResponse(res || { ok: false }); },
-            function () { sendResponse({ ok: false }); },
-          );
-          return true;
-        }
         if (msg.type === 'audioMode.player') {
           readPlayerWithChannels().then(
             function (res) { sendResponse(res); },
@@ -3795,7 +3664,6 @@
     // The worker says whether this tab was opened in audio mode.
     requestAudioModeBoot();
     try { startSubsGroups(); } catch (err) { /* swallow */ }
-    try { startQueueWatch(); } catch (err) { /* swallow */ }
   }
 
   const api = {

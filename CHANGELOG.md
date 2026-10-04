@@ -6,15 +6,6 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
-**New**
-- Up next and YouTube's Add to queue stay in step, on the tab the Player
-  controls. Add a video on the watch page and it shows in Up next. Add one
-  from Feeds and it shows in that tab's queue. Remove and clear do the same
-  on both sides. A saved playlist, a mix, and Watch Later are left alone.
-- The video that is playing leads Up next whenever something else is lined
-  up, and the next one starts on its own when it ends. A playing video with
-  nothing after it stays off the list.
-
 **Fixes**
 - Settings' number boxes are wide enough for four digits, so 1000 or
   more in Keep the newest shows whole. Its arrows move by 50 videos.

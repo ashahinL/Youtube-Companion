@@ -515,26 +515,6 @@ export async function clearQueue() {
   });
 }
 
-function queueChanged(prev, next) {
-  if (prev.length !== next.length) return true;
-  for (let i = 0; i < prev.length; i++) {
-    const a = prev[i];
-    const b = next[i];
-    if (a.v !== b.v || a.t !== b.t || a.ct !== b.ct || a.c !== b.c || a.k !== b.k) return true;
-  }
-  return false;
-}
-
-/** One locked read-change-write. `fn` must not take this lock. */
-export async function updateQueue(fn) {
-  return withQueueLock(async () => {
-    const queue = await readQueue();
-    const next = sanitizeQueue(fn(queue), QUEUE_CAP);
-    if (queueChanged(queue, next)) await saveQueue(next);
-    return next;
-  });
-}
-
 export async function takeFromQueue(v) {
   return withQueueLock(async () => {
     const queue = await readQueue();

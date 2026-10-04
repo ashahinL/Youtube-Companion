@@ -180,13 +180,7 @@ asks.
   remembered. Auto-advance plays the list in one YouTube tab, audio mode
   on or off. Add from a feed row (and so the channel sheet), or from the
   player card for what is playing now. Cap 100. Not in backups. Live
-  streams and premieres cannot be queued from a feed row. The list stays
-  in step with YouTube's Add to queue on the tab the Player controls:
-  an add, remove, or clear on either side shows on the other. A saved
-  playlist, a mix, and Watch Later are not that queue. When a video is
-  playing and anything else is lined up, the playing video is first and
-  the next one starts on its own when it ends. A playing video with
-  nothing after it is kept off the list.
+  streams and premieres cannot be queued from a feed row.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
   popup header and a Support group at the bottom of Settings open one sheet
   (PayPal, InstaPay with address, Copy and QR); the README and store text
@@ -384,12 +378,6 @@ Most live as comments at the line they protect. These span files or tools:
   for a fixes-only patch does not ask everyone to look at an unchanged page.
   Change it in the same commit that rewrites the page's content, and change
   the copy in both locales.
-- **YouTube's Add to queue is a playlist id that starts with `TLPQ`.**
-  Any other id (a saved list, a mix, Watch Later) is left alone. The queue
-  panel is not updated by `loadPlaylist`; the page's `addToPlaylistCommand`
-  (`listType` `PLAYLIST_EDIT_LIST_TYPE_QUEUE`) is what shows it. Up next
-  syncs only with the tab the Player controls. `queue.page` from any other
-  tab is ignored.
 - **`queue.ended` is gated on the tab id and the video id.** The worker
   honours it only when `sender.tab.id` is the tab it wrote into
   `queuePlay` and `msg.v` is the video it handed that tab. Any other tab

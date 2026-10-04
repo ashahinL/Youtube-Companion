@@ -745,7 +745,7 @@ export function isNewSince(item, seenAt) {
  * position that is not the end. Missing/NaN `currentTime` is not a
  * position, so that tab does not count.
  */
-export function playerIsActive(player) {
+function playerIsActive(player) {
   if (!player || player.ok === false) return false;
   const t = Number(player.currentTime);
   if (!Number.isFinite(t) || t < 0) return false;
@@ -822,75 +822,6 @@ export function sanitizeQueue(raw, cap) {
     if (out.length >= max) break;
   }
   return out;
-}
-
-/**
- * YouTube's temporary Add to queue uses a playlist id that starts with
- * TLPQ. A saved list, a mix, or Watch Later must not be treated as that
- * queue, or Up next would swallow it.
- */
-export function playlistKind(id) {
-  if (typeof id !== 'string' || id.length === 0) return 'none';
-  if (id.startsWith('TLPQ')) return 'queue';
-  if (/^(PL|RD|LL|WL|UU|OL|FL)/.test(id)) return 'saved';
-  return 'other';
-}
-
-/**
- * The playing video leads when anything else is lined up. A playing video
- * with nothing after it stays as it was stored: one item the person added
- * on purpose, or nothing.
- */
-export function shapeQueue(queue, playing) {
-  const items = Array.isArray(queue) ? queue.slice() : [];
-  const head = queueEntryFromItem(playing, playing?.qa);
-  if (!head) return items;
-  const rest = items.filter((row) => row && row.v !== head.v);
-  if (rest.length === 0) return items;
-  const existing = items.find((row) => row && row.v === head.v);
-  return [existing || head, ...rest];
-}
-
-/** A lone playing video is not shown. Anything else is the stored list. */
-export function visibleQueue(queue, playingId) {
-  const items = Array.isArray(queue) ? queue : [];
-  if (items.length === 1 && playingId && items[0] && items[0].v === playingId) return [];
-  return items;
-}
-
-export function sameQueueIds(a, b) {
-  const left = Array.isArray(a) ? a : [];
-  const right = Array.isArray(b) ? b : [];
-  if (left.length !== right.length) return false;
-  for (let i = 0; i < left.length; i++) {
-    const av = typeof left[i] === 'string' ? left[i] : left[i] && left[i].v;
-    const bv = typeof right[i] === 'string' ? right[i] : right[i] && right[i].v;
-    if (av !== bv) return false;
-  }
-  return true;
-}
-
-/**
- * Page rows from the current index on, keeping a title we already stored
- * when the page did not send one.
- */
-export function queueFromPage(stored, pageItems, cap) {
-  const previous = new Map();
-  for (const row of stored || []) {
-    if (row && row.v) previous.set(row.v, row);
-  }
-  const built = [];
-  for (const item of pageItems || []) {
-    const old = item && previous.get(item.v);
-    built.push({
-      ...(old || {}),
-      ...(item || {}),
-      t: (item && item.t) || (old && old.t) || '',
-      ct: (item && item.ct) || (old && old.ct) || '',
-      c: (item && item.c) || (old && old.c) || '',
-    });
-  }
-  return sanitizeQueue(built, cap);
 }
 
 export function queueView({ queue, open, cap } = {}) {
