@@ -519,6 +519,13 @@ export default async function run(t) {
     nextPage.entries[1].views === 0 && nextPage.entries[1].ago === 'قبل سنتين',
     JSON.stringify(nextPage.entries[1]),
   );
+  t.check(
+    'an Arabic continuation row keeps the view words',
+    nextPage.entries[1].views === 0
+      && nextPage.entries[1].viewsText === '1.5 ألف مشاهدة'
+      && nextPage.entries[0].viewsText === '',
+    JSON.stringify(nextPage.entries.map((row) => ({ views: row.views, viewsText: row.viewsText }))),
+  );
   const lastPage = parseChannelVideosPage(continuation([
     lockup('ccccccccccc', 'Last', '9 views', '3 years ago'),
   ]), beastId);

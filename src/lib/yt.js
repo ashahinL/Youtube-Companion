@@ -520,15 +520,17 @@ function viewsFromLockup(lockup) {
 
 // The age is the second metadata part ("2 years ago"). Views are only the
 // English word: an Arabic page says "مشاهدة", which parseCompactCount would
-// misread, so that row keeps 0 and the caller shows the words instead.
+// misread, so that row keeps 0 and viewsText carries the words.
 function pageFields(lockup) {
   const meta = lockup.metadata?.lockupMetadataViewModel || {};
   const parts = meta.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts || [];
   const first = ytText(parts[0]?.text);
+  const views = /\bviews?\b/i.test(first) ? parseCompactCount(first) : 0;
   return {
     title: ytText(meta.title),
-    views: /\bviews?\b/i.test(first) ? parseCompactCount(first) : 0,
+    views,
     ago: ytText(parts[1]?.text),
+    viewsText: views === 0 && first ? first : '',
   };
 }
 

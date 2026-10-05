@@ -32,6 +32,10 @@ const DEFAULT_POLL_STATE = {
   // Set while a long check writes the feed in batches: how many channels
   // of this check are done. Null whenever no such check is running.
   progress: null,
+  // Rows already stored by this check and not announced yet. Null once
+  // the alert has gone out. A worker killed between the two reads this
+  // on the next start.
+  pendingAlert: null,
 };
 
 const VIDEO_META_CAP = 3000;

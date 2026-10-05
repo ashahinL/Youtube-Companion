@@ -722,6 +722,9 @@ export async function reconcileRunning() {
 // The rejection is not swallowed here: runSweep still recovers a leftover
 // running flag when this worker is not sweeping.
 const reconciled = reconcileRunning();
+// A batch is stored before its alert is sent. Replay that alert before a
+// sweep starts, or both could announce the same rows.
+const startup = reconciled.then(replayPendingAlert);
 const coverMigrated = migrateAudioCover();
 
 let originRulePromise = null;
@@ -956,20 +959,33 @@ async function fillHeaders(channels, patchChannel, fetchImpl, shouldStop) {
 
 // The merged feed keeps the newest maxItems across every channel, so a quiet
 // channel's own sheet would be empty. Five newest normal uploads stay on the
-// channel, outside that cap. Shorts are never shown.
-function recentFromEntries(entries) {
-  const rows = [];
+// channel, outside that cap. Shorts are never shown. A page of them must not
+// wipe the five already stored, so the new rows merge with those.
+function recentFromEntries(entries, stored, videoMeta) {
+  const byV = new Map();
+  for (const row of Array.isArray(stored) ? stored : []) {
+    if (!row || !row.v) continue;
+    byV.set(row.v, row);
+  }
+  const meta = videoMeta || {};
   for (const entry of entries || []) {
     if (!entry || entry.short || !(entry.at > 0) || !entry.v) continue;
-    rows.push(entry);
+    const rec = meta[entry.v];
+    // Not classified yet: it arrives next check. A short is never shown.
+    if (!rec || !rec.k || rec.k === 'short') continue;
+    byV.set(entry.v, {
+      v: entry.v,
+      t: String(entry.title || '').slice(0, 200),
+      at: entry.at,
+      vw: Number(entry.views) || 0,
+      k: rec.k,
+      d: rec.d ?? 0,
+      st: rec.st ?? 0,
+    });
   }
-  rows.sort((a, b) => b.at - a.at);
-  return rows.slice(0, 5).map((entry) => ({
-    v: entry.v,
-    t: String(entry.title || '').slice(0, 200),
-    at: entry.at,
-    vw: Number(entry.views) || 0,
-  }));
+  return [...byV.values()]
+    .sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0))
+    .slice(0, 5);
 }
 
 function itemFromEntry(entry, channelId, rec) {
@@ -1124,6 +1140,31 @@ async function notifyNewItems({ added, unseeded, quiet, settings, generations })
 
   if (seedIds.length || alerted.length) {
     await writePollState({ notified: poll.notified });
+  }
+}
+
+/**
+ * A check stores each batch before it alerts. If the worker is killed in
+ * between, those rows are already in the feed and the next check will not
+ * see them as new. This sends the alert that check had not sent yet.
+ * A throw is logged and swallowed: the next start tries again.
+ */
+export async function replayPendingAlert() {
+  try {
+    const pending = (await readPollState()).pendingAlert;
+    if (!pending) return;
+    const storedIds = new Set((await readFeed()).map((row) => row && row.v));
+    const added = pending.added.filter((row) => row && storedIds.has(row.v));
+    await notifyNewItems({
+      added,
+      quiet: new Set(pending.quiet),
+      unseeded: new Set(pending.unseeded),
+      settings: await readSettings(),
+      generations: listingGenerations(await readChannels()),
+    });
+    await writePollState({ pendingAlert: null });
+  } catch (err) {
+    console.warn('Companion for YouTube:', err);
   }
 }
 
@@ -1305,7 +1346,7 @@ async function performSweep({ onlyId, onlyIds }) {
       const fields = { lastVideoAt };
       // The Videos tab has no upload time and no short mark, so it must not
       // replace a list the feed already stored.
-      if (via === 'feed') fields.recent = recentFromEntries(entries);
+      if (via === 'feed') fields.recent = recentFromEntries(entries, channel.recent, videoMeta);
       // A pushback can stop classification before a new channel's backfill is
       // all in. Left unseeded, the rest arrives silently next time instead of
       // as a burst of alerts for old videos.
@@ -1313,9 +1354,17 @@ async function performSweep({ onlyId, onlyIds }) {
       patchChannel(channel.id, fields);
     }
     await updateChannels(patches, generations);
-    if (trackProgress) {
-      await writePollState({ progress: { done: start + batch.length, total: list.length } });
-    }
+    // The alert goes out once, after the last batch. Stored with the batch
+    // so a worker killed before that still has the rows to announce.
+    const pendingAlert = {
+      added: [...added],
+      quiet: [...quiet],
+      unseeded: [...silentNew],
+    };
+    const progressPatch = trackProgress
+      ? { progress: { done: start + batch.length, total: list.length } }
+      : {};
+    await writePollState({ ...progressPatch, pendingAlert });
     if (pushedBack) break;
   }
 
@@ -1335,6 +1384,9 @@ async function performSweep({ onlyId, onlyIds }) {
   const storedIds = new Set((await readFeed()).map((row) => row && row.v));
   const stillAdded = added.filter((row) => row && storedIds.has(row.v));
   await notifyNewItems({ added: stillAdded, unseeded: silentNew, quiet, settings, generations });
+  // notified is already stored. Clearing this in its own write means a kill
+  // between the two cannot announce the same rows twice.
+  await writePollState({ pendingAlert: null });
 
   const now = Date.now();
   if (pushedBack) {
@@ -1369,7 +1421,7 @@ export async function runSweep({
   scheduled = false,
 } = {}) {
   try {
-    await reconciled;
+    await startup;
   } catch {
     // Boot write failed. A leftover running flag is cleared below when this
     // worker is not sweeping.
@@ -2602,7 +2654,7 @@ chromeApi().commands?.onCommand?.addListener((command, tab) => {
 });
 
 export const ready = Promise.all([
-  reconciled.catch(() => {}),
+  startup.catch(() => {}),
   coverMigrated.catch(() => {}),
   ensureYtOriginRule().catch(() => {}),
 ]);

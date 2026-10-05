@@ -5,6 +5,8 @@
  */
 
 const PAGE_ORIGIN = 'https://ashahinl.github.io';
+// The site key is public, so a token solved on any other page must not pass.
+const PAGE_HOST = 'ashahinl.github.io';
 
 const BASE_HEADERS = {
   'Access-Control-Allow-Origin': PAGE_ORIGIN,
@@ -17,6 +19,15 @@ function reply(status, payload, extra) {
     status,
     headers: extra ? { ...BASE_HEADERS, ...extra } : BASE_HEADERS,
   });
+}
+
+// GitHub renders an issue as Markdown: a note could load a remote image when
+// the issue is opened, or @mention someone. A fence longer than any backtick
+// run inside the note shows it as plain text.
+function fenced(text) {
+  const longest = Math.max(0, ...(text.match(/`+/g) || []).map((run) => run.length));
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return `${fence}text\n${text}\n${fence}`;
 }
 
 function invalid() {
@@ -91,14 +102,14 @@ export async function handle(request, env, fetchImpl = fetch) {
   } catch {
     return reply(502, { ok: false, error: 'failed' });
   }
-  if (!verify || verify.success !== true) {
+  if (!verify || verify.success !== true || verify.hostname !== PAGE_HOST) {
     return reply(403, { ok: false, error: 'challenge' });
   }
 
   const line = message.split('\n')[0];
   const clipped = line.length > 60 ? `${line.slice(0, 60)}…` : line;
   const title = `${kind === 'uninstall' ? 'Uninstall: ' : 'Feedback: '}${clipped}`;
-  const body = `${message}\n\nVersion: ${version || 'unknown'} · Language: ${lang}`;
+  const body = `${fenced(message)}\n\nVersion: ${version || 'unknown'} · Language: ${lang}`;
 
   try {
     const res = await fetchImpl(`https://api.github.com/repos/${env.FEEDBACK_REPO}/issues`, {

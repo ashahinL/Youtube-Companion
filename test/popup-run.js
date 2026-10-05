@@ -659,6 +659,49 @@ async function scenarios(ctx) {
   await chrome.storage.local.set({ channels: structuredClone(state.channels) });
   await settle();
 
+  // A stale premiere stays out of the sheet. A live row has no Up next.
+  // See more keeps an Arabic view line when the count did not parse.
+  const E = 'UCeeeeeeeeeeeeeeeeeeeeee';
+  state.channels.push(channel(E, 'Echo', {
+    recent: [
+      { v: 'eeeeeeeeee1', t: 'Old premiere', at: NOW - 3 * HOUR, k: 'premiere', st: NOW - 2 * HOUR },
+      { v: 'eeeeeeeeee2', t: 'Live now', at: NOW - HOUR, k: 'live', st: NOW - HOUR },
+    ],
+  }));
+  await chrome.storage.local.set({ channels: structuredClone(state.channels) });
+  await settle();
+  replies['channel.more'] = () => ({
+    ok: true,
+    rows: [{ v: 'eeeeeeeeee3', title: 'Arabic views', views: 0, viewsText: 'x مشاهدة', ago: 'قبل سنة' }],
+    token: '',
+  });
+  rowOf(E).querySelector('.channel-row__main').click();
+  await settle();
+  const echoList = $('channel-sheet-videos');
+  check(
+    'a premiere more than an hour past its start is left out of the sheet',
+    rowKeys(echoList).join() === 'eeeeeeeeee2',
+    rowKeys(echoList).join(),
+  );
+  check(
+    'a live row in the sheet has no Up next button',
+    !echoList.querySelector('[data-row-key="eeeeeeeeee2"]')?.querySelector('.feed-row__queue'),
+  );
+  $('channel-sheet-more').click();
+  await settle();
+  const arabicRow = echoList.querySelector('[data-row-key="eeeeeeeeee3"]');
+  check(
+    'See more shows the Arabic view words when the count is 0',
+    arabicRow?.querySelector('.feed-row__views')?.textContent === 'x مشاهدة',
+    arabicRow?.textContent,
+  );
+  delete replies['channel.more'];
+  $('channel-sheet-close').click();
+  await settle();
+  state.channels = state.channels.filter((ch) => ch.id !== E);
+  await chrome.storage.local.set({ channels: structuredClone(state.channels) });
+  await settle();
+
   // Open on YouTube
   rowOf(A).querySelector('.channel-row__main').click();
   await settle();

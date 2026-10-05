@@ -343,6 +343,7 @@ export default async function run(t) {
     CONTENT_SCRIPT_MESSAGES,
     syncAlarms,
     reconcileRunning,
+    replayPendingAlert,
     refreshBadge,
     addChannelByInput,
     onNotificationClicked,
@@ -1106,6 +1107,104 @@ export default async function run(t) {
       'a Videos-tab fallback leaves recent as it was',
       JSON.stringify((await readChannels())[0].recent) === JSON.stringify(keptRecent),
       JSON.stringify((await readChannels())[0].recent),
+    );
+
+    t.section('recent merges with what the channel already stored');
+
+    await wipe();
+    const storedRecent = Array.from({ length: 5 }, (_, i) => ({
+      v: `kept${String(i).padStart(7, '0')}`,
+      t: `Kept ${i}`,
+      at: AT.older - i * 60_000,
+      vw: 10 + i,
+    }));
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.older });
+    const withStored = await readChannels();
+    withStored[0] = { ...withStored[0], recent: storedRecent };
+    await writeChannels(withStored);
+    const shortEntries = Array.from({ length: 15 }, (_, i) => ({
+      v: `sh${String(i).padStart(9, '0')}`,
+      t: `Short ${i}`,
+      at: AT.newest + i * 1000,
+    }));
+    const shortMeta = {};
+    for (const entry of shortEntries) {
+      shortMeta[entry.v] = { k: 'short', d: 20, st: 0, at: entry.at };
+    }
+    await saveVideoMeta(shortMeta);
+    installFetch({ feeds: { [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', shortEntries) } });
+    const shortsKept = await runSweep({ scope: 'all' });
+    t.check('a page of shorts still checks', shortsKept.ok === true, JSON.stringify(shortsKept));
+    t.check(
+      'a page of shorts leaves the stored five',
+      JSON.stringify((await readChannels())[0].recent) === JSON.stringify(storedRecent),
+      JSON.stringify((await readChannels())[0].recent),
+    );
+
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'newnormal01', t: 'New normal', at: AT.newest + 50_000, views: 12 },
+        ]),
+      },
+    });
+    await runSweep({ scope: 'all' });
+    const afterNormal = (await readChannels())[0].recent || [];
+    const normalIds = afterNormal.map((row) => row.v);
+    const freshRow = afterNormal.find((row) => row.v === 'newnormal01');
+    t.check(
+      'a new normal video replaces the oldest',
+      normalIds.length === 5
+        && normalIds[0] === 'newnormal01'
+        && normalIds.includes('kept0000000')
+        && !normalIds.includes('kept0000004'),
+      JSON.stringify(afterNormal),
+    );
+    t.check(
+      'the new row keeps its kind',
+      freshRow?.k === 'video' && freshRow?.d === 600 && freshRow?.st === 0 && freshRow?.vw === 12,
+      JSON.stringify(freshRow),
+    );
+    t.check(
+      'a stored row from before kind was kept stays as it was',
+      !('k' in (afterNormal.find((row) => row.v === 'kept0000000') || {})),
+      JSON.stringify(afterNormal.find((row) => row.v === 'kept0000000')),
+    );
+
+    const premStart = Date.parse('2026-09-13T15:00:00Z');
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', [
+          { v: 'unclassif01', t: 'Not yet', at: AT.newest + 90_000 },
+          { v: 'premiere001', t: 'Premiere', at: AT.newest + 80_000 },
+        ]),
+      },
+      players: {
+        premiere001: playerJson('premiere001', {
+          title: 'Premiere',
+          isUpcoming: true,
+          startTimestamp: '2026-09-13T15:00:00Z',
+        }),
+      },
+      hook(u, opts) {
+        if (String(u).includes('/youtubei/v1/player') && bodyOf(opts).videoId === 'unclassif01') {
+          return jsonRes({}, { status: 500 });
+        }
+        return undefined;
+      },
+    });
+    await runSweep({ scope: 'all' });
+    const afterPrem = (await readChannels())[0].recent || [];
+    const prem = afterPrem.find((row) => row.v === 'premiere001');
+    t.check(
+      'an unclassified upload is not stored in recent',
+      !afterPrem.some((row) => row.v === 'unclassif01'),
+      JSON.stringify(afterPrem),
+    );
+    t.check(
+      'a premiere is stored with its kind and start',
+      prem?.k === 'premiere' && prem?.st === premStart && prem?.t === 'Premiere',
+      JSON.stringify(prem),
     );
 
     t.section('channel.more');
@@ -4354,11 +4453,13 @@ export default async function run(t) {
     const feedAt = [];
     let feedWrites = 0;
     const progressSeen = [];
+    const pendingSeen = [];
     const batchSet = globalThis.chrome.storage.local.set.bind(globalThis.chrome.storage.local);
     globalThis.chrome.storage.local.set = async (items) => {
       if (items && Object.prototype.hasOwnProperty.call(items, 'feed')) feedWrites += 1;
       if (items && Object.prototype.hasOwnProperty.call(items, 'pollState')) {
         progressSeen.push(structuredClone(items.pollState.progress));
+        pendingSeen.push(structuredClone(items.pollState.pendingAlert ?? null));
       }
       return batchSet(items);
     };
@@ -4406,6 +4507,21 @@ export default async function run(t) {
         null,
       ]),
       JSON.stringify(progressSteps(progressSeen)),
+    );
+    const firstBatchAlert = pendingSeen.find((pending, i) => {
+      const progress = progressSeen[i];
+      return progress && progress.done === 25
+        && pending?.added?.some((row) => row && row.v === batchVid(0));
+    });
+    t.check(
+      'the first batch stores the row its alert will need',
+      !!firstBatchAlert,
+      JSON.stringify(pendingSeen.map((pending) => pending?.added?.map((row) => row.v) || null)),
+    );
+    t.check(
+      'the stored alert is cleared once it is sent',
+      (await readPollState()).pendingAlert == null,
+      JSON.stringify((await readPollState()).pendingAlert),
     );
     t.check('rows from two batches share one alert', mock.notifications.length === 1, String(mock.notifications.length));
     const longNote = mock.notifications[0];
@@ -4492,6 +4608,43 @@ export default async function run(t) {
         && batchPushPoll.progress === null && batchPushPoll.running === false,
       JSON.stringify({ level: batchPushPoll.backoffLevel, progress: batchPushPoll.progress, running: batchPushPoll.running }),
     );
+    t.check(
+      'the first batch\'s new video still alerts',
+      mock.notifications.length === 1 && batchPushPoll.notified.includes(batchVid(0))
+        && batchPushPoll.pendingAlert == null,
+      JSON.stringify({ notes: mock.notifications, notified: batchPushPoll.notified, pending: batchPushPoll.pendingAlert }),
+    );
+
+    t.section('a killed check still alerts');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const kept = { v: 'keptalert01', c: MKBHD, t: 'Kept alert', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 };
+    const missing = { v: 'missing0001', c: MKBHD, t: 'Not stored', at: AT.mid, d: 60, vw: 1, k: 'video', st: 0 };
+    const gone = { v: 'gonealert01', c: BEAST, t: 'Channel gone', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 };
+    await saveFeed([kept, gone]);
+    await writePollState({
+      notified: [],
+      pendingAlert: { added: [kept, missing, gone], quiet: [], unseeded: [] },
+    });
+    mock.notifications.length = 0;
+    await replayPendingAlert();
+    const replayedPoll = await readPollState();
+    t.check(
+      'replay alerts the row still on a channel',
+      mock.notifications.length === 1 && mock.notifications[0].message === 'Kept alert',
+      JSON.stringify(mock.notifications),
+    );
+    t.check(
+      'replay marks that id, clears the stored alert, and drops the rest',
+      replayedPoll.pendingAlert == null
+        && replayedPoll.notified.includes('keptalert01')
+        && !replayedPoll.notified.includes('missing0001')
+        && !replayedPoll.notified.includes('gonealert01'),
+      JSON.stringify({ notified: replayedPoll.notified, pending: replayedPoll.pendingAlert }),
+    );
+    await replayPendingAlert();
+    t.check('a second replay creates nothing', mock.notifications.length === 1, String(mock.notifications.length));
 
     await wipe();
     mock.notifications.length = 0;

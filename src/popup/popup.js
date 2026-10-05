@@ -39,6 +39,8 @@ import {
   isChannelRef,
   listedMatch,
   visibleFeedItems,
+  isStalePremiere,
+  liveChannelIds,
   feedItemUrl,
   channelPageUrl,
   rowOpenModes,
@@ -899,6 +901,10 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
   if (Number.isFinite(views) && views > 0) {
     const count = compactCount(views, locale);
     if (count) facts.appendChild(textEl('span', 'feed-row__views', tCount('feedViews', views, [count])));
+  } else if (typeof item.viewsText === 'string' && item.viewsText) {
+    // A Videos-tab page in Arabic says "1.5 ألف مشاهدة". The count parser
+    // only reads the English word, so the row shows the words it was given.
+    facts.appendChild(textEl('span', 'feed-row__views', item.viewsText));
   }
 
   if (facts.childNodes.length) metaNodes.push(facts);
@@ -1311,26 +1317,35 @@ function openFeedback() {
 }
 
 function channelSheetItems(ch) {
+  const now = Date.now();
+  // Same live set visibleFeedItems uses, so a premiere hidden there stays
+  // hidden when it only survives on the channel.
+  const live = liveChannelIds(view.feed);
   const seen = new Set();
   const head = [];
-  for (const item of visibleFeedItems(view.feed, Date.now())) {
+  for (const item of visibleFeedItems(view.feed, now)) {
     if (!item || item.c !== ch.id || !item.v || seen.has(item.v)) continue;
     seen.add(item.v);
     head.push(item);
   }
   for (const row of Array.isArray(ch.recent) ? ch.recent : []) {
     if (!row || !row.v || seen.has(row.v)) continue;
+    // Seen even when the row stays hidden, so See more cannot bring the
+    // same short or premiere back with an Up next button.
     seen.add(row.v);
-    head.push({
+    const item = {
       v: row.v,
       c: ch.id,
       t: row.t || '',
       at: Number(row.at) || 0,
       vw: Number(row.vw) || 0,
-      d: 0,
-      k: 'video',
-      st: 0,
-    });
+      d: Number(row.d) || 0,
+      // A row stored before kind was kept is a normal video.
+      k: row.k || 'video',
+      st: Number(row.st) || 0,
+    };
+    if (item.k === 'short' || isStalePremiere(item, live, now)) continue;
+    head.push(item);
   }
   head.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
   const tail = [];
@@ -1345,6 +1360,7 @@ function channelSheetItems(ch) {
         at: 0,
         ago: typeof row.ago === 'string' ? row.ago : '',
         vw: Number(row.vw) || 0,
+        viewsText: typeof row.viewsText === 'string' ? row.viewsText : '',
         d: 0,
         k: 'video',
         st: 0,
@@ -3395,6 +3411,7 @@ async function loadChannelMore() {
         t: typeof row.title === 'string' ? row.title : '',
         ago: typeof row.ago === 'string' ? row.ago : '',
         vw: Number(row.views) || 0,
+        viewsText: typeof row.viewsText === 'string' ? row.viewsText.slice(0, 40) : '',
       });
     }
     more.token = typeof res.token === 'string' ? res.token : '';

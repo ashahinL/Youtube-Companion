@@ -34,7 +34,7 @@ function mockFetch(reply) {
   return { impl, calls };
 }
 
-function routed({ verify = { success: true }, githubStatus = 201, throwOn = '' } = {}) {
+function routed({ verify = { success: true, hostname: 'ashahinl.github.io' }, githubStatus = 201, throwOn = '' } = {}) {
   return mockFetch(async (call) => {
     if (throwOn && call.url.includes(throwOn)) throw new Error('network');
     if (call.url.includes('siteverify')) {
@@ -121,6 +121,23 @@ export default async function run(t) {
     JSON.stringify(denied.calls.map((c) => c.url)),
   );
 
+  const otherHost = routed({ verify: { success: true, hostname: 'evil.example' } });
+  const otherHostRes = await handle(post(note()), ENV, otherHost.impl);
+  t.check(
+    'a token solved on another host is 403 and does not call GitHub',
+    otherHostRes.status === 403 && otherHost.calls.length === 1,
+    String(otherHostRes.status),
+  );
+
+  const fence = routed();
+  await handle(post(note({ text: 'see ```code``` and ![x](https://e.example/p.png)' })), ENV, fence.impl);
+  const fencedBody = JSON.parse(fence.calls[1].body).body;
+  t.check(
+    'a note with backticks sits inside a longer fence',
+    fencedBody.startsWith('````text\nsee ```code```') && fencedBody.includes('\n````\n\nVersion:'),
+    fencedBody,
+  );
+
   const line = 'a'.repeat(80);
   const message = `${line}\nand a second line`;
   let seenKey = '';
@@ -158,7 +175,7 @@ export default async function run(t) {
   t.check('the issue has no labels', issue.labels === undefined);
   t.check(
     'the body keeps the note and the version line',
-    issue.body === `${message}\n\nVersion: 2.1.0 · Language: en`,
+    issue.body === `\`\`\`text\n${message}\n\`\`\`\n\nVersion: 2.1.0 · Language: en`,
     issue.body,
   );
   t.check('the limiter saw the address', seenKey === IP);
