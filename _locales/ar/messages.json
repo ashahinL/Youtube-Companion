@@ -2059,81 +2059,69 @@
       }
     }
   },
-  "whatsNewImportTitle": {
-    "message": "استيراد من يوتيوب",
-    "description": "What's new page: heading of the Import from YouTube feature."
+  "whatsNewQueueTitle": {
+    "message": "«التالي» وقائمة يوتيوب معًا",
+    "description": "What's new page: heading for Up next and YouTube's own queue mirroring each other."
   },
-  "whatsNewImportBody": {
-    "message": "اضغط «استيراد من يوتيوب» فيقرأ الملحق اشتراكاتك من تبويب يوتيوب الذي سجّلت الدخول إليه. وإن كان أكثر من حساب Google مسجّلًا، تختار أيّها. تُقرأ القائمة على جهازك ولا يخرج منه شيء، وتصل القنوات دون وابل من التنبيهات.",
-    "description": "What's new page: Import from YouTube."
+  "whatsNewQueueBody": {
+    "message": "في تبويب المشغّل، صارت قائمة «التالي» وقائمة الانتظار في يوتيوب نفسه نسخة واحدة. أضف أو احذف أو رتّب أو امسح في أيّ منهما وتتبعها الأخرى. يخرج الفيديو من القائمتين حين يبدأ تشغيله، ويمكنك سحب «التالي» لترتيبها كما تريد.",
+    "description": "What's new page: Up next and YouTube's own queue mirroring each other."
   },
-  "whatsNewImportShot": {
-    "message": "تبويب قائمة المتابعة يعرض القنوات المتابَعة",
-    "description": "Alt text for the watchlist screenshot."
+  "whatsNewQueueShot": {
+    "message": "تبويب المشغّل وتحته قائمة «التالي»",
+    "description": "What's new page: alt text of the picture of Up next and YouTube's own queue mirroring each other."
   },
-  "whatsNewGroupsTitle": {
-    "message": "مجموعاتك على يوتيوب",
-    "description": "What's new page: heading of the groups-on-YouTube feature."
+  "whatsNewSheetTitle": {
+    "message": "أحدث فيديوهات كل قناة",
+    "description": "What's new page: heading for a channel's sheet keeping its newest videos, with See more."
   },
-  "whatsNewGroupsBody": {
-    "message": "شرائح المجموعات التي في الموجز صارت أيضًا في صفحة الاشتراكات على يوتيوب نفسه. اختر واحدة لترى فيديوهات تلك المجموعة وحدها هناك. ويمكنك إيقاف ذلك من الإعدادات.",
-    "description": "What's new page: the group chips on YouTube's Subscriptions page."
+  "whatsNewSheetBody": {
+    "message": "تعرض صفحة القناة دائمًا أحدث فيديوهاتها، حتى إن أزاحتها بقية الخلاصة. اضغط «عرض المزيد» لتحميل الأقدم من يوتيوب.",
+    "description": "What's new page: a channel's sheet keeping its newest videos, with See more."
   },
-  "whatsNewGroupsShot": {
-    "message": "تبويب الموجز وصف من شرائح المجموعات فوق الفيديوهات",
-    "description": "Alt text for the channel groups screenshot."
+  "whatsNewSheetShot": {
+    "message": "صفحة قناة تعرض أحدث فيديوهاتها",
+    "description": "What's new page: alt text of the picture of a channel's sheet keeping its newest videos, with See more."
   },
-  "whatsNewThemeTitle": {
-    "message": "فاتح أو داكن",
-    "description": "What's new page: heading of the theme feature."
+  "whatsNewSettingsTitle": {
+    "message": "إعدادات أقصر",
+    "description": "What's new page: heading for the shorter, regrouped Settings tab."
   },
-  "whatsNewThemeBody": {
-    "message": "اختر فاتح أو داكن أو النظام من الإعدادات. تتبع اختيارَك نافذة الملحق وصفحة الترحيب وهذه الصفحة.",
-    "description": "What's new page: the theme setting."
+  "whatsNewSettingsBody": {
+    "message": "صارت الإعدادات مجمّعة وأقصر. اختفت خمسة خيارات، وكلٌّ منها يعمل الآن بطريقة واحدة ثابتة. وفي الأسفل سطر واحد يفتح الدعم وأرسل ملاحظاتك وهذه الصفحة.",
+    "description": "What's new page: the shorter, regrouped Settings tab."
   },
-  "whatsNewThemeShot": {
-    "message": "تبويب المشغّل بالسمة الفاتحة",
-    "description": "Alt text for the light theme screenshot."
+  "whatsNewSettingsShot": {
+    "message": "تبويب الإعدادات",
+    "description": "What's new page: alt text of the picture of the shorter, regrouped Settings tab."
   },
   "whatsNewMoreTitle": {
     "message": "وأكثر من ذلك",
     "description": "What's new page: heading of the short list of smaller changes."
   },
-  "whatsNewMoreGroupEdit": {
-    "message": "أعد تسمية مجموعة أو احذفها من لوحة المجموعات. وإعادة التسمية إلى اسم مستخدم تدمج المجموعتين.",
-    "description": "What's new page, short list."
-  },
   "whatsNewMoreAlerts": {
-    "message": "لتنبيهات الفيديوهات الجديدة زرّان: «استمع» و«إضافة إلى التالي».",
-    "description": "What's new page, short list."
+    "message": "تنبيه واحد في كل فحص: إذا نزلت فيديوهات جديدة من عدّة قنوات، تجمعها رسالة واحدة.",
+    "description": "What's new page: one line of the short list."
   },
-  "whatsNewMoreFailing": {
-    "message": "عندما يفشل التحقق من قنوات، تعرضها وحدها شريحة في قائمة المتابعة.",
-    "description": "What's new page, short list."
+  "whatsNewMoreFeedback": {
+    "message": "أرسل ملاحظاتك من أسفل الإعدادات: اكتب ملاحظتك واضغط إرسال. بلا حساب وبلا بريد إلكتروني.",
+    "description": "What's new page: one line of the short list."
   },
-  "whatsNewMoreChannelLink": {
-    "message": "زر ↗ في لوحة القناة يفتح القناة على يوتيوب.",
-    "description": "What's new page, short list."
+  "whatsNewMoreImport": {
+    "message": "بعد استيراد قائمة كبيرة، تظهر الفيديوهات في الخلاصات أثناء تحميلها، مع سطر يبيّن إلى أين وصل.",
+    "description": "What's new page: one line of the short list."
   },
-  "whatsNewMoreTabJump": {
-    "message": "عند فتح أكثر من تبويب يوتيوب، ينقلك زر ↗ في تبويب المشغّل إلى أحدها مباشرة، ولو كان في نافذة أخرى.",
-    "description": "What's new page, short list."
+  "whatsNewMoreWidth": {
+    "message": "تحافظ النافذة على العرض نفسه في كل التبويبات.",
+    "description": "What's new page: one line of the short list."
   },
-  "whatsNewMoreTooltip": {
-    "message": "مرّر المؤشر فوق أيقونة الملحق لتقرأ ما يعنيه الرقم عليها.",
-    "description": "What's new page, short list."
+  "whatsNewMoreReadable": {
+    "message": "صار النص الرمادي وأسطر الأخطاء أسهل في القراءة.",
+    "description": "What's new page: one line of the short list."
   },
-  "whatsNewMoreErrors": {
-    "message": "كل رسالة خطأ جملة كاملة بلغتك.",
-    "description": "What's new page, short list."
-  },
-  "whatsNewMoreStats": {
-    "message": "بطاقات الإحصاءات الأربع في تبويب المشغّل صارت في صف واحد.",
-    "description": "What's new page, short list."
-  },
-  "whatsNewMoreClearExport": {
-    "message": "يعرض «مسح قائمة المتابعة» تصدير قائمتك أولًا.",
-    "description": "What's new page, short list."
+  "whatsNewMoreNumbers": {
+    "message": "خانات الأرقام في الإعدادات تتّسع لأربعة أرقام.",
+    "description": "What's new page: one line of the short list."
   },
   "whatsNewAgain": {
     "message": "يمكنك فتح هذه الصفحة مرة أخرى من أسفل الإعدادات.",

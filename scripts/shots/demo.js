@@ -190,7 +190,7 @@
     // Every frame is a picture of the product, not of an update note, so the
     // release reads as already seen. Kept in step with WHATS_NEW_VERSION by
     // test/whatsnew.test.js.
-    whatsNewSeen: '2.1',
+    whatsNewSeen: '2.2',
     pollState: {
       running: false,
       lastPollAt: ago(12 * 60 * 1000),

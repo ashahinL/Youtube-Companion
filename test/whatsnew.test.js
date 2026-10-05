@@ -30,10 +30,10 @@ export default async function run(t) {
   t.check('three illustrated features', (html.match(/<li class="feature">/g) || []).length === 3);
   t.check(
     'each feature has a picture the script fills',
-    ['shot-player', 'shot-feeds', 'shot-watchlist']
+    ['shot-queue', 'shot-sheet', 'shot-settings']
       .every((id) => html.includes(`id="${id}"`) && js.includes(`'${id}'`)),
   );
-  t.check('the short list has nine lines', (html.match(/data-i18n="whatsNewMore(?!Title)/g) || []).length === 9);
+  t.check('the short list has six lines', (html.match(/data-i18n="whatsNewMore(?!Title)/g) || []).length === 6);
   t.check('the page has the language select', /id="whatsnew-locale"/.test(html) && js.includes("'whatsnew-locale'"));
   t.check('the page loads the boot script before its stylesheet', (() => {
     const head = html.slice(html.indexOf('<head>'), html.indexOf('</head>'));
@@ -105,7 +105,7 @@ export default async function run(t) {
   t.check(
     'every scene is rendered in English and Arabic',
     JSON.stringify(files) === JSON.stringify([
-      'player', 'feeds', 'watchlist', 'player-ar', 'feeds-ar', 'watchlist-ar',
+      'queue', 'sheet', 'settings', 'queue-ar', 'sheet-ar', 'settings-ar',
     ]),
     JSON.stringify(files),
   );
@@ -140,7 +140,7 @@ export default async function run(t) {
     'the heading carries the release',
     en.whatsNewTitle.message.includes('$RELEASE$') && ar.whatsNewTitle.message.includes('$RELEASE$'),
   );
-  t.check('the Arabic page is really Arabic', /[؀-ۿ]/.test(ar.whatsNewImportBody.message));
+  t.check('the Arabic page is really Arabic', /[؀-ۿ]/.test(ar.whatsNewQueueBody.message));
 
   t.section('offered once, reopened on purpose');
 

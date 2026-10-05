@@ -108,12 +108,12 @@ export const SITE_SHOTS = [
 // they are scale 1 and there are only three of them per language — and both
 // languages, because an Arabic reader should not get English screenshots.
 export const PAGE_SHOTS = [
-  { name: 'page-player', file: 'player', scene: 'player', locale: 'en', theme: 'light' },
-  { name: 'page-feeds', file: 'feeds', scene: 'feeds', locale: 'en' },
-  { name: 'page-watchlist', file: 'watchlist', scene: 'watchlist', locale: 'en' },
-  { name: 'page-player-ar', file: 'player-ar', scene: 'player', locale: 'ar', theme: 'light' },
-  { name: 'page-feeds-ar', file: 'feeds-ar', scene: 'feeds', locale: 'ar' },
-  { name: 'page-watchlist-ar', file: 'watchlist-ar', scene: 'watchlist', locale: 'ar' },
+  { name: 'page-queue', file: 'queue', scene: 'queue', locale: 'en', theme: 'light' },
+  { name: 'page-sheet', file: 'sheet', scene: 'sheet', locale: 'en' },
+  { name: 'page-settings', file: 'settings', scene: 'settings', locale: 'en' },
+  { name: 'page-queue-ar', file: 'queue-ar', scene: 'queue', locale: 'ar', theme: 'light' },
+  { name: 'page-sheet-ar', file: 'sheet-ar', scene: 'sheet', locale: 'ar' },
+  { name: 'page-settings-ar', file: 'settings-ar', scene: 'settings', locale: 'ar' },
 ];
 
 // A blank 1280×800 store frame compresses to tens of KB; a real one is
