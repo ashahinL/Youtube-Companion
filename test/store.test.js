@@ -254,7 +254,7 @@ export default async function run(t) {
       'readPollState is the documented default',
       poll.running === false
         && poll.lastPollAt === 0
-        && poll.lastFavPollAt === 0
+        && !('lastFavPollAt' in poll)
         && poll.lastSeenAt === 0
         && same(poll.notified, []),
       JSON.stringify(poll),
@@ -469,12 +469,10 @@ export default async function run(t) {
       item('v2', { at: 80, k: 'video' }),
       item('v3', { at: 10, k: 'video' }),
     ];
-    t.check('excludes shorts when showShorts is false',
-      newSinceCount(sinceFeed, 50, false) === 2, String(newSinceCount(sinceFeed, 50, false)));
-    t.check('includes shorts when showShorts is true',
-      newSinceCount(sinceFeed, 50, true) === 3, String(newSinceCount(sinceFeed, 50, true)));
+    t.check('shorts never count',
+      newSinceCount(sinceFeed, 50) === 2, String(newSinceCount(sinceFeed, 50)));
     t.check('items at lastSeenAt are not new',
-      newSinceCount(sinceFeed, 100, true) === 0);
+      newSinceCount(sinceFeed, 100) === 0);
 
     const mixedFeed = [
       item('fav1', { at: 100, k: 'video', c: 'UCfav' }),
@@ -482,20 +480,17 @@ export default async function run(t) {
       item('favs', { at: 80, k: 'short', c: 'UCfav' }),
       item('old1', { at: 10, k: 'video', c: 'UCfav' }),
     ];
-    t.check('restricts to the given channel ids',
-      newSinceCount(mixedFeed, 50, true, new Set(['UCfav'])) === 2,
-      String(newSinceCount(mixedFeed, 50, true, new Set(['UCfav']))));
-    t.check('restrict plus hide shorts',
-      newSinceCount(mixedFeed, 50, false, new Set(['UCfav'])) === 1,
-      String(newSinceCount(mixedFeed, 50, false, new Set(['UCfav']))));
-    t.check('null channel set counts every channel',
-      newSinceCount(mixedFeed, 50, true, null) === 3,
-      String(newSinceCount(mixedFeed, 50, true, null)));
-    t.check('omitted channel set keeps the showShorts positional arg',
-      newSinceCount(mixedFeed, 50, true) === 3,
-      String(newSinceCount(mixedFeed, 50, true)));
+    t.check('restricts to the given channel ids and skips shorts',
+      newSinceCount(mixedFeed, 50, new Set(['UCfav'])) === 1,
+      String(newSinceCount(mixedFeed, 50, new Set(['UCfav']))));
+    t.check('null channel set counts every channel except shorts',
+      newSinceCount(mixedFeed, 50, null) === 2,
+      String(newSinceCount(mixedFeed, 50, null)));
+    t.check('omitted channel set counts every channel except shorts',
+      newSinceCount(mixedFeed, 50) === 2,
+      String(newSinceCount(mixedFeed, 50)));
     t.check('empty channel set counts none',
-      newSinceCount(mixedFeed, 50, true, new Set()) === 0);
+      newSinceCount(mixedFeed, 50, new Set()) === 0);
 
     t.section('putVideoMeta');
 
@@ -566,7 +561,7 @@ export default async function run(t) {
       newSinceCount([
         { v: 'a', c: 'C', k: 'live', at: NOW - 60_000 },
         { v: 'b', c: 'C', k: 'premiere', st: NOW - 50 * 60_000, at: NOW - HOUR },
-      ], 0, false, null, NOW) === 1,
+      ], 0, null, NOW) === 1,
     );
     t.check(
       'ids not in keep are skipped',
@@ -582,7 +577,7 @@ export default async function run(t) {
     const written = await writePollState({ lastPollAt: 5, lastSeenAt: 7 });
     t.check('writePollState shallow-merges',
       written.running === false && written.lastPollAt === 5 && written.lastSeenAt === 7
-        && written.lastFavPollAt === 0);
+        && !('lastFavPollAt' in written));
     t.check('writePollState persists', (await readPollState()).lastPollAt === 5);
 
     const deduped = markNotified({ notified: ['a'] }, ['a', 'b', 'a']);

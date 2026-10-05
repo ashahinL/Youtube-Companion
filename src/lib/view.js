@@ -334,13 +334,13 @@ export function isStalePremiere(item, liveChannels, now) {
   return st > 0 && now - st > PREMIERE_STALE_MS;
 }
 
-export function visibleFeedItems(feed, showShorts, now) {
-  // Shorts stay in storage; the view drops them when the setting is off.
+export function visibleFeedItems(feed, now) {
+  // Shorts stay stored; the feed never shows them.
   const items = [];
   const live = liveChannelIds(feed);
   for (const item of feed) {
     if (!item || !item.v) continue;
-    if (!showShorts && item.k === 'short') continue;
+    if (item.k === 'short') continue;
     if (isStalePremiere(item, live, now)) continue;
     items.push(item);
   }
@@ -380,12 +380,11 @@ export function feedsView({ feed, channels, settings, query, now }) {
   const q = String(query || '').trim();
   const onList = !!listedMatch(q, channels, feed);
   const addable = !q || (isChannelRef(q) && !onList);
-  const showShorts = !!settings?.feed?.showShorts;
   const favOnly = !!settings?.feed?.favoritesOnly;
   const group = resolvedFeedGroup(channels, settings?.feed?.group);
   const channelsById = new Map(channels.map((ch) => [ch.id, ch]));
   const channelIds = feedChannelIds(channels, settings);
-  const items = visibleFeedItems(feed, showShorts, now).filter((item) => {
+  const items = visibleFeedItems(feed, now).filter((item) => {
     if (channelIds && !channelIds.has(item.c)) return false;
     return true;
   });

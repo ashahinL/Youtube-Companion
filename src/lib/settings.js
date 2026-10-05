@@ -13,23 +13,17 @@ export const DEFAULT_SETTINGS = {
     // cache-control is 15 minutes, so a faster poll only helps because
     // the fetch passes cache:'no-cache'.
     intervalMinutes: 30,
-    // Own alarm for starred channels. 0 turns that alarm off.
-    favoriteIntervalMinutes: 10,
   },
   alerts: {
     enabled: true,
-    notifyNormal: true,
     // Starred channels always alert while the master switch is on.
-    useAvatarIcon: true,
+    notifyNormal: true,
   },
   feed: {
     maxItems: 500,
-    showShorts: false,
     favoritesOnly: false,
     // '' is All. A name that is not on any channel is treated as All.
     group: '',
-    // Chips on youtube.com/feed/subscriptions. Off leaves that page alone.
-    groupsOnYouTube: true,
   },
   ui: {
     // 'auto' follows the browser; 'en' | 'ar' pin a language.
@@ -145,25 +139,16 @@ export function clampSettings(s) {
     poll: {
       enabled: boolOf(poll, 'enabled', d.poll.enabled),
       intervalMinutes: clampMinutes(poll.intervalMinutes, d.poll.intervalMinutes, false),
-      // 0 is a real setting (the favourite alarm is off), not a missing value.
-      favoriteIntervalMinutes: clampMinutes(
-        poll.favoriteIntervalMinutes,
-        d.poll.favoriteIntervalMinutes,
-        true,
-      ),
     },
     alerts: {
       enabled: boolOf(alerts, 'enabled', d.alerts.enabled),
       notifyNormal: boolOf(alerts, 'notifyNormal', d.alerts.notifyNormal),
-      useAvatarIcon: boolOf(alerts, 'useAvatarIcon', d.alerts.useAvatarIcon),
     },
     feed: {
       // Below 50 the feed feels empty; 5000 is still a few hundred KB.
       maxItems: clampRange(feed.maxItems, 50, 5000, d.feed.maxItems),
-      showShorts: boolOf(feed, 'showShorts', d.feed.showShorts),
       favoritesOnly: boolOf(feed, 'favoritesOnly', d.feed.favoritesOnly),
       group: typeof feed.group === 'string' ? normalizeGroupName(feed.group) : d.feed.group,
-      groupsOnYouTube: boolOf(feed, 'groupsOnYouTube', d.feed.groupsOnYouTube),
     },
     ui: {
       // Anything outside the shipped locales follows the browser language.

@@ -24,8 +24,12 @@ GET https://www.youtube.com/feeds/videos.xml?channel_id=UC...
   **without its `UC` prefix** — `BJycsmduvYEL83R_U4JriQ` for
   `UCBJycsmduvYEL83R_U4JriQ`. Entries and the self-link carry the full id. A
   22-character value is the prefix-less form, not another channel.
-- **Shorts are mixed in with no flag.** Of MrBeast's 5 newest entries,
-  `5mU6SRS2Bxo` and `LiH-P4rSkLI` were shorts.
+- **Shorts are mixed in, marked only by their link.** Of MrBeast's 5 newest
+  entries, `5mU6SRS2Bxo` and `LiH-P4rSkLI` were shorts. A short's
+  `<link rel="alternate">` is `https://www.youtube.com/shorts/<id>`, a normal
+  video's `https://www.youtube.com/watch?v=<id>` (MrBeast, 2026-10-05; the
+  committed fixture has the same). The feed checks still use the HEAD below;
+  the link is used only for a channel's last 5 normal videos.
 - **No `ETag`, no `Last-Modified`, no 304.** A conditional GET with
   `If-Modified-Since` returned `200` and the full body. The only caching header
   is `cache-control: public, max-age=900`, so without `cache: 'no-cache'` the
@@ -167,6 +171,19 @@ POST https://www.youtube.com/youtubei/v1/browse
   wire — about nine times the feed.
 - **A channel id that does not exist answers `200`**, 11,601 bytes, with
   `alerts` and no `metadata`.
+- **Older pages come by continuation.** Measured 2026-10-05 on
+  `UCBcRF18a7Qf58cCRy5xuWwQ`: the first page (`200`, 404,662 bytes) had 30
+  video rows and three `continuationItemRenderer`s. The grid's own is the
+  **last item of `richGridRenderer.contents`**; the other two sit under
+  `sectionListRenderer` and are not the next page. `POST browse
+  {"continuation": "<token>"}` answered `200`, 367,853 bytes, 30 more rows
+  with no overlap, under
+  `onResponseReceivedActions[0].appendContinuationItemsAction.continuationItems`,
+  whose last item is the next token. That answer has no `metadata`, so the
+  channel id cannot be checked on it.
+- `metadataRows[0].metadataParts` is `[views, age]`, translated by the
+  context's `hl`: `["1.5K views", "2 years ago"]` with `en`,
+  `["1.5 ألف مشاهدة", "قبل سنتين"]` with `ar` (2026-10-05).
 
 ## Channel search by name — not used
 

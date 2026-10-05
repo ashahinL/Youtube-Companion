@@ -7,11 +7,11 @@ _Changes for 2.0 take effect when 2.0 is published._
 _Import from your signed-in YouTube tab, and your groups on YouTube's
 Subscriptions page, take effect when the next version is published._
 
-_Keeping Up next in step with YouTube's queue takes effect when 2.2.0 is
-published._
+_Keeping Up next in step with YouTube's queue, and the feedback form on the
+uninstall and feedback pages, take effect when 2.2.0 is published._
 
-Companion for YouTube is a browser extension for Chrome and Edge. It has no
-server, no account and no analytics. This page says exactly what it touches.
+Companion for YouTube is a browser extension for Chrome and Edge. The
+extension talks to no server of ours, has no account and no analytics. This page says exactly what it touches.
 
 ## What it stores
 
@@ -68,10 +68,19 @@ It sends nothing to any other server, and it never sends your channel list,
 settings, listening totals or cover picture anywhere.
 
 **When you remove the extension**, your browser opens a short page at
-`ashahinl.github.io` on GitHub Pages. Visiting it is a normal GitHub Pages
-visit: GitHub may log the address, which carries only the extension's
-language and version. Nothing is sent unless you post the GitHub issue the
-page fills in for you.
+`ashahinl.github.io` on GitHub Pages. Settings' **Send feedback** link opens
+a page like it. Visiting either is a normal GitHub Pages visit: GitHub may
+log the address, which carries only the extension's language and version.
+
+Both pages have one text box and a Send button. Nothing is sent until you
+press Send. Then the page sends what you typed, the extension's version and
+the page's language to `feedback.ammarshahin.dev`, a small Cloudflare Worker
+run by the developer. It files your message as an issue in a private GitHub
+repository, which only the developer can read. It asks for no name, email or
+account. Your IP address is used only to limit how many messages can be sent
+in a minute; it is not stored and not passed on, and the worker keeps no
+logs. Before sending, the page runs Cloudflare Turnstile, a check that stops
+spam bots; Turnstile is covered by Cloudflare's own privacy policy.
 
 ## On YouTube pages
 
@@ -93,8 +102,8 @@ page reads the channels listed there, as described above.
 On YouTube's Subscriptions page, the extension shows your groups as buttons
 above the videos. To hide the videos of channels outside the group you pick,
 it reads the channel name and handle on each video and compares them with your
-list, on your device. Nothing is sent anywhere. A switch in Settings turns
-this off.
+list, on your device. Nothing is sent anywhere. The buttons show only when
+you have groups.
 
 ## What it does not do
 

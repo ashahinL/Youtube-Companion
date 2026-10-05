@@ -32,7 +32,7 @@ let busy = false;
 let sweepWatch = 0;
 // Kept as a key, not text, so a language change redraws it.
 let status = { key: '', subs: [], kind: '' };
-let shortcuts = { shortcut: '', popup: '' };
+let shortcuts = { shortcut: '' };
 
 const el = (id) => document.getElementById(id);
 
@@ -61,15 +61,13 @@ function render() {
   el('welcome-import-youtube').disabled = busy;
   el('welcome-import-spinner').hidden = !busy;
 
-  for (const [id, key, keys] of [
-    ['welcome-audio-key', 'welcomeAudioKey', shortcuts.shortcut],
-    ['welcome-popup-key', 'welcomePopupKey', shortcuts.popup],
-  ]) {
-    // Chrome binds nothing when the suggested keys were taken. Same words
-    // as the popup; this page has no link to change them.
-    el(id).hidden = false;
-    el(id).textContent = keys ? t(key, [isolate(keys)]) : t('audioShortcutNone');
-  }
+  // Chrome binds nothing when the suggested keys were taken. Same words
+  // as the popup; this page has no link to change them.
+  const audioKey = el('welcome-audio-key');
+  audioKey.hidden = false;
+  audioKey.textContent = shortcuts.shortcut
+    ? t('welcomeAudioKey', [isolate(shortcuts.shortcut)])
+    : t('audioShortcutNone');
 }
 
 async function applyLanguage(setting) {
@@ -211,7 +209,7 @@ void (async () => {
     setting = state?.settings?.ui?.locale || 'auto';
     theme = state?.settings?.ui?.theme || 'system';
     const keys = await send({ type: 'audioMode.shortcut' });
-    if (keys?.ok) shortcuts = { shortcut: keys.shortcut || '', popup: keys.popup || '' };
+    if (keys?.ok) shortcuts = { shortcut: keys.shortcut || '' };
   } catch {
     // The page still reads in the browser's language without the worker.
   }

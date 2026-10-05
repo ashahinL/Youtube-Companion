@@ -16,6 +16,7 @@ import {
   saveVideoMeta,
   readPollState,
   writePollState,
+  mergeFeedItems,
   readQueue,
   addToQueue,
   QUEUE_CAP,
@@ -45,6 +46,14 @@ function backupJson(channels) {
 
 function hoursAgo(n) {
   return Date.now() - n * 60 * 60_000;
+}
+
+function ucId(n) {
+  return `UC${String(n).padStart(22, '0')}`;
+}
+
+function batchVid(n) {
+  return `b${String(n).padStart(10, '0')}`;
 }
 
 function daysAgo(n) {
@@ -395,6 +404,7 @@ export default async function run(t) {
 
     await wipe();
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await globalThis.chrome.alarms.create('poll-fav', { periodInMinutes: 10 });
     await syncAlarms();
     t.check(
       'poll-all period is 30',
@@ -402,8 +412,8 @@ export default async function run(t) {
       JSON.stringify(mock.alarms['poll-all']),
     );
     t.check(
-      'poll-fav period is 10',
-      mock.alarms['poll-fav']?.periodInMinutes === 10,
+      'syncAlarms clears a leftover poll-fav and does not recreate it',
+      mock.alarms['poll-fav'] === undefined,
       JSON.stringify(mock.alarms['poll-fav']),
     );
 
@@ -460,8 +470,7 @@ export default async function run(t) {
     );
 
     await globalThis.chrome.alarms.clear('poll-all');
-    await globalThis.chrome.alarms.clear('poll-fav');
-    await writePollState({ lastPollAt: 0, lastFavPollAt: 0 });
+    await writePollState({ lastPollAt: 0 });
     const zeroStart = Date.now();
     await syncAlarms();
     const zeroEnd = Date.now();
@@ -472,40 +481,7 @@ export default async function run(t) {
       String(zeroWhen),
     );
 
-    await globalThis.chrome.alarms.clear('poll-all');
-    await globalThis.chrome.alarms.clear('poll-fav');
-    const laterPollAt = Date.now() - 5 * 60_000;
-    const olderFavAt = Date.now() - 40 * 60_000;
-    await writePollState({ lastPollAt: laterPollAt, lastFavPollAt: olderFavAt });
-    await syncAlarms();
-    t.check(
-      'poll-fav uses lastPollAt when it is later than lastFavPollAt',
-      mock.alarms['poll-fav']?.scheduledTime === laterPollAt + 10 * 60_000,
-      String(mock.alarms['poll-fav']?.scheduledTime),
-    );
-
-    await globalThis.chrome.alarms.clear('poll-fav');
-    const olderPollAt = Date.now() - 25 * 60_000;
-    const laterFavAt = Date.now() - 3 * 60_000;
-    await writePollState({ lastPollAt: olderPollAt, lastFavPollAt: laterFavAt });
-    await syncAlarms();
-    t.check(
-      'poll-fav uses lastFavPollAt when it is later than lastPollAt',
-      mock.alarms['poll-fav']?.scheduledTime === laterFavAt + 10 * 60_000,
-      String(mock.alarms['poll-fav']?.scheduledTime),
-    );
-
-    await writeSettings({ poll: { intervalMinutes: 30, favoriteIntervalMinutes: 0 } });
-    await wait(20);
-    await syncAlarms();
-    t.check('a 0 favourite interval clears poll-fav', mock.alarms['poll-fav'] === undefined);
-    t.check(
-      'poll-all remains when favourite interval is 0',
-      mock.alarms['poll-all']?.periodInMinutes === 30,
-      JSON.stringify(mock.alarms['poll-all']),
-    );
-
-    await writeSettings({ poll: { enabled: false, favoriteIntervalMinutes: 10 } });
+    await writeSettings({ poll: { enabled: false } });
     await syncAlarms();
     t.check('poll.enabled false clears poll-all', mock.alarms['poll-all'] === undefined);
     t.check('poll.enabled false clears poll-fav', mock.alarms['poll-fav'] === undefined);
@@ -521,13 +497,8 @@ export default async function run(t) {
     await syncAlarms();
     t.check(
       'one channel brings poll-all back',
-      mock.alarms['poll-all']?.periodInMinutes === 30,
-      JSON.stringify(mock.alarms['poll-all']),
-    );
-    t.check(
-      'one channel brings poll-fav back',
-      mock.alarms['poll-fav']?.periodInMinutes === 10,
-      JSON.stringify(mock.alarms['poll-fav']),
+      mock.alarms['poll-all']?.periodInMinutes === 30 && mock.alarms['poll-fav'] === undefined,
+      JSON.stringify(mock.alarms),
     );
 
     await wipe();
@@ -542,14 +513,9 @@ export default async function run(t) {
     const firstAdd = await handleMessage({ type: 'addChannel', input: '@MrBeast' });
     t.check('Add on an empty list reports ok', firstAdd.ok === true, JSON.stringify(firstAdd));
     t.check(
-      'Add brings poll-all back',
-      mock.alarms['poll-all']?.periodInMinutes === 30,
-      JSON.stringify(mock.alarms['poll-all']),
-    );
-    t.check(
-      'Add brings poll-fav back',
-      mock.alarms['poll-fav']?.periodInMinutes === 10,
-      JSON.stringify(mock.alarms['poll-fav']),
+      'Add brings poll-all back and leaves poll-fav clear',
+      mock.alarms['poll-all']?.periodInMinutes === 30 && mock.alarms['poll-fav'] === undefined,
+      JSON.stringify(mock.alarms),
     );
     await waitForIdle();
 
@@ -565,14 +531,9 @@ export default async function run(t) {
       JSON.stringify(takeoutFirst),
     );
     t.check(
-      'Takeout import brings poll-all back',
-      mock.alarms['poll-all']?.periodInMinutes === 30,
-      JSON.stringify(mock.alarms['poll-all']),
-    );
-    t.check(
-      'Takeout import brings poll-fav back',
-      mock.alarms['poll-fav']?.periodInMinutes === 10,
-      JSON.stringify(mock.alarms['poll-fav']),
+      'Takeout import brings poll-all back and leaves poll-fav clear',
+      mock.alarms['poll-all']?.periodInMinutes === 30 && mock.alarms['poll-fav'] === undefined,
+      JSON.stringify(mock.alarms),
     );
 
     await wipe();
@@ -585,14 +546,9 @@ export default async function run(t) {
     const undoneFirst = await handleMessage({ type: 'undoRemove', id: MKBHD });
     t.check('undo of the last removal reports ok', undoneFirst.ok === true, JSON.stringify(undoneFirst));
     t.check(
-      'undo brings poll-all back',
-      mock.alarms['poll-all']?.periodInMinutes === 30,
-      JSON.stringify(mock.alarms['poll-all']),
-    );
-    t.check(
-      'undo brings poll-fav back',
-      mock.alarms['poll-fav']?.periodInMinutes === 10,
-      JSON.stringify(mock.alarms['poll-fav']),
+      'undo brings poll-all back and leaves poll-fav clear',
+      mock.alarms['poll-all']?.periodInMinutes === 30 && mock.alarms['poll-fav'] === undefined,
+      JSON.stringify(mock.alarms),
     );
 
     for (const mode of ['merge', 'replace']) {
@@ -612,14 +568,9 @@ export default async function run(t) {
         JSON.stringify(restored),
       );
       t.check(
-        `${mode} backup brings poll-all back`,
-        mock.alarms['poll-all']?.periodInMinutes === 30,
-        JSON.stringify(mock.alarms['poll-all']),
-      );
-      t.check(
-        `${mode} backup brings poll-fav back`,
-        mock.alarms['poll-fav']?.periodInMinutes === 10,
-        JSON.stringify(mock.alarms['poll-fav']),
+        `${mode} backup brings poll-all back and leaves poll-fav clear`,
+        mock.alarms['poll-all']?.periodInMinutes === 30 && mock.alarms['poll-fav'] === undefined,
+        JSON.stringify(mock.alarms),
       );
       await waitForIdle();
     }
@@ -632,6 +583,17 @@ export default async function run(t) {
     const afterReconcile = await readPollState();
     t.check('clears a stranded running: true', afterReconcile.running === false);
     t.check('leaves other pollState fields', afterReconcile.lastPollAt === 9, String(afterReconcile.lastPollAt));
+    t.check('clears progress along with running', afterReconcile.progress === null);
+
+    await writePollState({ running: true, progress: { done: 12, total: 40 }, lastPollAt: 9 });
+    await reconcileRunning();
+    const clearedProgress = await readPollState();
+    t.check(
+      'clears a stored progress',
+      clearedProgress.progress === null && clearedProgress.running === false,
+      JSON.stringify(clearedProgress.progress),
+    );
+    t.check('a stored progress clear leaves the last check time', clearedProgress.lastPollAt === 9);
 
     t.section('stranded running on a fresh worker load');
 
@@ -772,7 +734,7 @@ export default async function run(t) {
     t.check('first sweep completes ok', firstResult.ok === true);
     t.check('running is false after the sweep', (await readPollState()).running === false);
 
-    t.section('a skipped poll-all runs after the current sweep');
+    t.section('a skipped poll-all runs after a partial sweep');
 
     await waitForIdle();
     await wipe();
@@ -797,24 +759,24 @@ export default async function run(t) {
         [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'ovlall00001', t: 'All', at: AT.mid }]),
       },
     });
-    const favSweep = runSweep({ scope: 'favorites' });
+    const favSweep = runSweep({ onlyIds: [MKBHD] });
     for (let i = 0; i < 80 && !overlapInFeed; i++) await wait(5);
-    t.check('the favourite check reached the feed', overlapInFeed === true);
+    t.check('the partial check reached the feed', overlapInFeed === true);
     const skippedAll = await mock.fireAlarm('poll-all');
     t.check(
-      'poll-all during a favourite check is already running',
+      'poll-all during a partial check is already running',
       [].concat(skippedAll).some((r) => r && r.error === 'already running'),
       JSON.stringify(skippedAll),
     );
     t.check(
-      'poll-all did not fetch the non-favourite while the favourite check ran',
+      'poll-all did not fetch the other channel while the partial check ran',
       !feedIdsOf(overlapFetch.calls).includes(BEAST),
       JSON.stringify(feedIdsOf(overlapFetch.calls)),
     );
     releaseOverlap();
     await favSweep;
     t.check(
-      'the favourite check replied before the skipped all-check',
+      'the partial check replied before the skipped all-check',
       !feedIdsOf(overlapFetch.calls).includes(BEAST),
       JSON.stringify(feedIdsOf(overlapFetch.calls)),
     );
@@ -829,7 +791,7 @@ export default async function run(t) {
     );
     await waitForIdle();
 
-    t.section('an all-check already covers a skipped favourite alarm');
+    t.section('a full sweep already covers a poll-all that arrives during it');
 
     await waitForIdle();
     await wipe();
@@ -857,18 +819,18 @@ export default async function run(t) {
     const coveringAll = runSweep({ scope: 'all' });
     for (let i = 0; i < 80 && !allInFeed; i++) await wait(5);
     t.check('the all-check reached the feed', allInFeed === true);
-    await mock.fireAlarm('poll-fav');
+    await mock.fireAlarm('poll-all');
     releaseAllHang();
     await coveringAll;
     await waitForIdle();
     const mkbhdCovered = feedIdsOf(allCoverFetch.calls).filter((id) => id === MKBHD).length;
     t.check(
-      'the favourite alarm did not start a second check',
+      'the poll-all did not start a second check',
       mkbhdCovered === 1,
       String(mkbhdCovered),
     );
 
-    t.section('a skipped all-check covers a skipped favourite check');
+    t.section('two skipped poll-alls become one follow-up');
 
     await waitForIdle();
     await wipe();
@@ -898,7 +860,6 @@ export default async function run(t) {
     t.check('the partial check reached the feed', partialInFeed === true);
     await mock.fireAlarm('poll-all');
     await mock.fireAlarm('poll-all');
-    await mock.fireAlarm('poll-fav');
     releasePartial();
     await partialSweep;
     t.check(
@@ -914,7 +875,7 @@ export default async function run(t) {
       JSON.stringify(partialIds),
     );
     t.check(
-      'the favourite alarm was folded into the all-check',
+      'the follow-up checked the partial channel again',
       partialIds.filter((id) => id === MKBHD).length === 2,
       JSON.stringify(partialIds),
     );
@@ -948,9 +909,9 @@ export default async function run(t) {
         [BEAST]: rssXml(BEAST, 'MrBeast', [{ v: 'manall00001', t: 'All', at: AT.mid }]),
       },
     });
-    const hungFav = runSweep({ scope: 'favorites' });
+    const hungFav = runSweep({ onlyIds: [MKBHD] });
     for (let i = 0; i < 80 && !manualInFeed; i++) await wait(5);
-    t.check('the favourite check reached the feed', manualInFeed === true);
+    t.check('the partial check reached the feed', manualInFeed === true);
     const manualRefresh = await handleMessage({ type: 'sweep', scope: 'all' });
     t.check(
       'manual refresh is already running',
@@ -1104,6 +1065,122 @@ export default async function run(t) {
       goneError?.kind === 'http' && goneError?.status === 404,
       JSON.stringify(goneError),
     );
+
+    t.section('a channel keeps its five newest normal videos');
+
+    await wipe();
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    const beastRss = fs.readFileSync(new URL('./fixtures/rss.mrbeast-with-shorts.xml', import.meta.url), 'utf8');
+    installFetch({ feeds: { [BEAST]: beastRss } });
+    const recentSweep = await runSweep({ scope: 'all' });
+    t.check('the sweep with shorts in the feed is ok', recentSweep.ok === true, JSON.stringify(recentSweep));
+    const recent = (await readChannels())[0].recent;
+    const recentIds = (recent || []).map((row) => row.v);
+    t.check(
+      'recent is the five newest non-shorts, newest first',
+      recentIds.join() === 'gTKS8SAwUzE,Qtl8lJwbd4g,Af6i6ChAVTw,lVylRtlPOIE,iYlODtkyw_I'
+        && recent.every((row) => row.at > 0 && row.t && typeof row.vw === 'number')
+        && recent.every((row, i) => i === 0 || row.at <= recent[i - 1].at)
+        && !recentIds.includes('5mU6SRS2Bxo'),
+      JSON.stringify(recent),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.mid });
+    const keptRecent = [{ v: 'keptrecent1', t: 'Kept', at: AT.older, vw: 4 }];
+    const withRecent = await readChannels();
+    withRecent[0] = { ...withRecent[0], recent: keptRecent };
+    await writeChannels(withRecent);
+    installFetch({
+      failFeeds: { [MKBHD]: '404' },
+      videosTabs: {
+        [MKBHD]: videosTabJson(MKBHD, [{ v: 'tabnewvid01', t: 'Brand new', views: 12 }]),
+      },
+      players: {
+        tabnewvid01: playerJson('tabnewvid01', { title: 'Brand new', publishDate: '2026-09-12T12:00:00+00:00' }),
+      },
+    });
+    const keptSweep = await runSweep({ scope: 'all' });
+    t.check('the Videos-tab sweep is ok', keptSweep.ok === true, JSON.stringify(keptSweep));
+    t.check(
+      'a Videos-tab fallback leaves recent as it was',
+      JSON.stringify((await readChannels())[0].recent) === JSON.stringify(keptRecent),
+      JSON.stringify((await readChannels())[0].recent),
+    );
+
+    t.section('channel.more');
+
+    await wipe();
+    const unknownMore = await handleMessage({ type: 'channel.more', id: MKBHD });
+    t.check(
+      'an unknown channel is invalid',
+      unknownMore.ok === false && unknownMore.error === 'invalid',
+      JSON.stringify(unknownMore),
+    );
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const longMore = await handleMessage({ type: 'channel.more', id: MKBHD, token: 'x'.repeat(2000) });
+    t.check('a 2000-character token is invalid', longMore.ok === false && longMore.error === 'invalid', JSON.stringify(longMore));
+
+    const pausedFetch = installFetch();
+    await writePollState({ backoffUntil: Date.now() + 60_000, backoffLevel: 2 });
+    const pausedMore = await handleMessage({ type: 'channel.more', id: MKBHD });
+    t.check(
+      'backoff answers slow down and does not fetch',
+      pausedMore.ok === false && pausedMore.error === 'slow down' && pausedMore.until > Date.now()
+        && pausedFetch.calls.length === 0,
+      JSON.stringify(pausedMore),
+    );
+    await writePollState({ backoffUntil: 0, backoffLevel: 0 });
+
+    await writeSettings({ ui: { locale: 'ar' } });
+    const moreFetch = installFetch({
+      hook(u) {
+        if (!u.includes('/youtubei/v1/browse')) return undefined;
+        const tab = videosTabJson(MKBHD, [{ v: 'abcdefghijk', t: 'Hello', views: 1500 }]);
+        const contents = tab.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer.content.richGridRenderer.contents;
+        contents.push({
+          continuationItemRenderer: {
+            continuationEndpoint: { continuationCommand: { token: 'NEXTTOK' } },
+          },
+        });
+        return jsonRes(tab);
+      },
+    });
+    const beforeMore = await readChannels();
+    const happyMore = await handleMessage({ type: 'channel.more', id: MKBHD });
+    const moreBody = bodyOf(moreFetch.calls.find((c) => c.url.includes('/youtubei/v1/browse'))?.opts);
+    t.check(
+      'channel.more returns the rows and the token',
+      happyMore.ok === true
+        && happyMore.token === 'NEXTTOK'
+        && happyMore.rows?.[0]?.v === 'abcdefghijk'
+        && happyMore.rows?.[0]?.ago === '1 day ago'
+        && happyMore.rows?.[0]?.views === 1500
+        && moreBody.browseId === MKBHD
+        && moreBody.context?.client?.hl === 'ar',
+      JSON.stringify(happyMore),
+    );
+    t.check(
+      'channel.more stores nothing',
+      JSON.stringify(await readChannels()) === JSON.stringify(beforeMore) && (await readFeed()).length === 0,
+    );
+
+    installFetch({
+      hook(u) {
+        if (u.includes('/youtubei/v1/browse')) return jsonRes({}, { status: 429 });
+        return undefined;
+      },
+    });
+    const pushedMore = await handleMessage({ type: 'channel.more', id: MKBHD, token: 'NEXTTOK' });
+    const pushedPoll = await readPollState();
+    t.check(
+      'a pushback on channel.more slows down and sets backoffUntil',
+      pushedMore.ok === false && pushedMore.error === 'slow down'
+        && pushedMore.until === pushedPoll.backoffUntil && pushedPoll.backoffUntil > Date.now()
+        && pushedPoll.backoffLevel === 1,
+      JSON.stringify({ pushedMore, backoffUntil: pushedPoll.backoffUntil, level: pushedPoll.backoffLevel }),
+    );
+    await writePollState({ backoffUntil: 0, backoffLevel: 0 });
 
     t.section('channel records are written once per sweep');
 
@@ -1297,7 +1374,6 @@ export default async function run(t) {
     const manual = await handleMessage({ type: 'sweep', scope: 'all' });
     t.check('a manual refresh during the wait is refused', manual.error === 'slow down', JSON.stringify(manual));
     await mock.fireAlarm('poll-all');
-    await mock.fireAlarm('poll-fav');
     t.check('nothing is fetched during the wait', pushFetch.calls.length === callsDuringBlock, String(pushFetch.calls.length - callsDuringBlock));
 
     await writePollState({ backoffUntil: Date.now() - 1 });
@@ -1683,7 +1759,6 @@ export default async function run(t) {
     t.section('short hidden from notifications');
 
     await wipe();
-    await writeSettings({ feed: { showShorts: false } });
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
     installFetch({
       feeds: {
@@ -1698,7 +1773,7 @@ export default async function run(t) {
     });
     await runSweep({ scope: 'all' });
     t.check(
-      'a short does not notify while showShorts is false',
+      'a short never notifies',
       mock.notifications.length === 0,
       JSON.stringify(mock.notifications),
     );
@@ -1904,7 +1979,7 @@ export default async function run(t) {
     ]);
     await writePollState({ lastSeenAt: 50 });
     const localeBefore = (await readSettings()).ui.locale;
-    await writeSettings({ feed: { showShorts: false }, ui: { locale: 'en' } });
+    await writeSettings({ ui: { locale: 'en' } });
     await refreshBadge();
     t.check('badge counts items newer than lastSeenAt, excluding shorts', mock.badgeText === '2', JSON.stringify(mock.badgeText));
     t.check(
@@ -1912,10 +1987,6 @@ export default async function run(t) {
       mock.actionTitle === 'Companion for YouTube — 2 new videos',
       mock.actionTitle,
     );
-
-    await writeSettings({ feed: { showShorts: true } });
-    await refreshBadge();
-    t.check('badge includes shorts when shown', mock.badgeText === '3', JSON.stringify(mock.badgeText));
 
     await writePollState({ lastSeenAt: 1000 });
     await refreshBadge();
@@ -1925,12 +1996,12 @@ export default async function run(t) {
 
     await writePollState({ lastSeenAt: 0 });
     await refreshBadge();
-    t.check('badge is 4 when lastSeenAt is 0 and shorts shown', mock.badgeText === '4', JSON.stringify(mock.badgeText));
+    t.check('badge skips shorts when lastSeenAt is 0', mock.badgeText === '3', JSON.stringify(mock.badgeText));
     await writeSettings({ ui: { locale: 'ar' } });
     await refreshBadge();
     t.check(
       'the tooltip follows the interface language',
-      mock.actionTitle === 'رفيق ليوتيوب — فيديوهات جديدة: 4',
+      mock.actionTitle === 'رفيق ليوتيوب — فيديوهات جديدة: 3',
       mock.actionTitle,
     );
     await writeSettings({ ui: { locale: localeBefore } });
@@ -1952,7 +2023,7 @@ export default async function run(t) {
     await refreshBadge();
     t.check(
       'badge still counts items newer than lastSeenAt before the next open',
-      mock.badgeText === '3',
+      mock.badgeText === '2',
       JSON.stringify(mock.badgeText),
     );
     const openedAgain = await handleMessage({ type: 'popupOpened' });
@@ -1985,23 +2056,15 @@ export default async function run(t) {
       { v: 'oldfav00001', c: MKBHD, t: 'Old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
     ]);
     await writePollState({ lastSeenAt: 50 });
-    await writeSettings({ feed: { showShorts: false, favoritesOnly: true } });
+    await writeSettings({ feed: { favoritesOnly: true } });
     await refreshBadge();
     t.check(
-      'favoritesOnly badge ignores non-favourite channels and hidden shorts',
+      'favoritesOnly badge ignores non-favourite channels and shorts',
       mock.badgeText === '1',
       JSON.stringify(mock.badgeText),
     );
 
-    await writeSettings({ feed: { showShorts: true, favoritesOnly: true } });
-    await refreshBadge();
-    t.check(
-      'favoritesOnly badge includes favourite shorts when shown',
-      mock.badgeText === '2',
-      JSON.stringify(mock.badgeText),
-    );
-
-    await writeSettings({ feed: { showShorts: false, favoritesOnly: false } });
+    await writeSettings({ feed: { favoritesOnly: false } });
     await refreshBadge();
     t.check(
       'favoritesOnly off counts every channel, still hiding shorts',
@@ -2020,7 +2083,7 @@ export default async function run(t) {
       { v: 'musicold01', c: MKBHD, t: 'Music old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
     ]);
     await writePollState({ lastSeenAt: 50 });
-    await writeSettings({ feed: { showShorts: true, favoritesOnly: false, group: 'Music' } });
+    await writeSettings({ feed: { favoritesOnly: false, group: 'Music' } });
     await refreshBadge();
     t.check(
       'a selected group counts only that group\'s new videos',
@@ -2054,7 +2117,7 @@ export default async function run(t) {
       { v: 'oldbeast01', c: BEAST, t: 'Old', at: 10, d: 1, vw: 0, k: 'video', st: 0 },
     ]);
     await writePollState({ lastSeenAt: 50 });
-    await writeSettings({ feed: { showShorts: true, favoritesOnly: true } });
+    await writeSettings({ feed: { favoritesOnly: true } });
     await refreshBadge();
     t.check(
       'favourites-only badge ignores an unstarred channel with new videos',
@@ -3927,6 +3990,9 @@ export default async function run(t) {
       'the newly merged channel seeds without another message',
       await waitUntil(async () => (await readChannels()).find((c) => c.id === BEAST)?.seeded === true),
     );
+    // Seeded is stored with that channel's rows, before pictures and the
+    // one alert. Wait until the check has finished posting it.
+    await waitForIdle();
     await runSweep({ scope: 'all' });
     await waitForIdle();
     t.check(
@@ -3993,6 +4059,7 @@ export default async function run(t) {
       'the new backup channel seeds after the check',
       await waitUntil(async () => (await readChannels()).find((c) => c.id === BEAST)?.seeded === true),
     );
+    await waitForIdle();
     t.check(
       'and alerts only for the upload newer than lastVideoAt',
       mock.notifications.length === 1 && mock.notifications[0].message === 'After backup',
@@ -4254,6 +4321,200 @@ export default async function run(t) {
       JSON.stringify({ noted, messages: mock.notifications.map((n) => n.message) }),
     );
     await writeSettings({ feed: { maxItems: 500 } });
+
+    t.section('a long check writes the feed as it goes');
+
+    function progressSteps(seen) {
+      const steps = [];
+      for (const value of seen) {
+        const key = JSON.stringify(value ?? null);
+        if (steps.length && JSON.stringify(steps[steps.length - 1]) === key) continue;
+        steps.push(value ?? null);
+      }
+      return steps;
+    }
+
+    await wipe();
+    await writeSettings({ feed: { maxItems: 50 }, ui: { locale: 'en' } });
+    const longN = 60;
+    const longFeeds = {};
+    const longMeta = {};
+    const longItems = [];
+    for (let i = 0; i < longN; i++) {
+      const id = ucId(i);
+      const v = batchVid(i);
+      const at = AT.older + i * 1000;
+      const title = `N${String(i).padStart(2, '0')}`;
+      await putChannel({ id, title, seeded: true });
+      longFeeds[id] = rssXml(id, title, [{ v, t: v, at }]);
+      longMeta[v] = { k: 'video', d: 600, st: 0, at };
+      longItems.push({ v, c: id, t: v, at, d: 600, vw: 0, k: 'video', st: 0 });
+    }
+    await saveVideoMeta(longMeta);
+    const feedAt = [];
+    let feedWrites = 0;
+    const progressSeen = [];
+    const batchSet = globalThis.chrome.storage.local.set.bind(globalThis.chrome.storage.local);
+    globalThis.chrome.storage.local.set = async (items) => {
+      if (items && Object.prototype.hasOwnProperty.call(items, 'feed')) feedWrites += 1;
+      if (items && Object.prototype.hasOwnProperty.call(items, 'pollState')) {
+        progressSeen.push(structuredClone(items.pollState.progress));
+      }
+      return batchSet(items);
+    };
+    installFetch({
+      feeds: longFeeds,
+      hook: async (url) => {
+        if (!String(url).includes('/feeds/videos.xml')) return undefined;
+        const id = decodeURIComponent((String(url).match(/channel_id=([^&]+)/) || [])[1] || '');
+        if (id === ucId(25) || id === ucId(50)) feedAt.push({ id, n: (await readFeed()).length });
+        return undefined;
+      },
+    });
+    mock.notifications.length = 0;
+    try {
+      await runSweep({ scope: 'all' });
+    } finally {
+      globalThis.chrome.storage.local.set = batchSet;
+    }
+    t.check('the feed is written more than once', feedWrites > 1, String(feedWrites));
+    t.check(
+      'the first batch is stored before the next channels are fetched',
+      feedAt.some((row) => row.id === ucId(25) && row.n === 25),
+      JSON.stringify(feedAt),
+    );
+    t.check(
+      'the second batch is stored before the last channels are fetched',
+      feedAt.some((row) => row.id === ucId(50) && row.n === 50),
+      JSON.stringify(feedAt),
+    );
+    const expectedIds = mergeFeedItems([], longItems, 50).feed.map((row) => row.v);
+    const gotIds = (await readFeed()).map((row) => row.v);
+    t.check(
+      'the feed matches one merge of every upload',
+      gotIds.join() === expectedIds.join(),
+      `got ${gotIds.length} expected ${expectedIds.length}`,
+    );
+    t.check(
+      'progress walks each batch and then clears',
+      JSON.stringify(progressSteps(progressSeen)) === JSON.stringify([
+        null,
+        { done: 0, total: 60 },
+        { done: 25, total: 60 },
+        { done: 50, total: 60 },
+        { done: 60, total: 60 },
+        null,
+      ]),
+      JSON.stringify(progressSteps(progressSeen)),
+    );
+    t.check('rows from two batches share one alert', mock.notifications.length === 1, String(mock.notifications.length));
+    const longNote = mock.notifications[0];
+    const longNames = String(longNote?.message || '').split(' · ');
+    t.check(
+      'the alert counts only rows still in the feed',
+      longNote?.title === '50 new videos',
+      JSON.stringify(longNote),
+    );
+    t.check(
+      'the alert names a channel from each batch',
+      longNames.includes('N10') && longNames.includes('N25'),
+      longNote?.message,
+    );
+    t.check(
+      'a row pushed out by a later batch does not alert',
+      !longNames.includes('N00') && !(await readPollState()).notified.includes(batchVid(0)),
+      JSON.stringify((await readPollState()).notified),
+    );
+
+    await wipe();
+    const smallFeeds = {};
+    const smallProgress = [];
+    for (let i = 0; i < 10; i++) {
+      const id = ucId(i);
+      await putChannel({ id, title: `S${i}`, seeded: true });
+      smallFeeds[id] = rssXml(id, `S${i}`, [{ v: batchVid(i), t: batchVid(i), at: AT.older + i * 1000 }]);
+    }
+    globalThis.chrome.storage.local.set = async (items) => {
+      if (items && Object.prototype.hasOwnProperty.call(items, 'pollState')) {
+        smallProgress.push(structuredClone(items.pollState.progress));
+      }
+      return batchSet(items);
+    };
+    installFetch({ feeds: smallFeeds });
+    try {
+      await runSweep({ scope: 'all' });
+    } finally {
+      globalThis.chrome.storage.local.set = batchSet;
+    }
+    t.check(
+      'a short check leaves progress null',
+      smallProgress.every((value) => value == null) && (await readPollState()).progress === null,
+      JSON.stringify(smallProgress),
+    );
+
+    await wipe();
+    const pushN = 51;
+    const pushFeeds = {};
+    const pushFail = {};
+    const pushMeta = {};
+    for (let i = 0; i < pushN; i++) {
+      const id = ucId(i);
+      await putChannel({ id, title: `P${i}`, seeded: true });
+      if (i === 25) {
+        pushFail[id] = '429';
+      } else if (i < 25) {
+        const v = batchVid(i);
+        const at = AT.older + i * 1000;
+        pushFeeds[id] = rssXml(id, `P${i}`, [{ v, t: v, at }]);
+        pushMeta[v] = { k: 'video', d: 600, st: 0, at };
+      }
+    }
+    await saveVideoMeta(pushMeta);
+    const batchPushFetch = installFetch({ feeds: pushFeeds, failFeeds: pushFail });
+    const batchPushed = await runSweep({ scope: 'all' });
+    const pushCalls = feedIdsOf(batchPushFetch.calls);
+    t.check(
+      'pushback in the second batch stops the check',
+      batchPushed.ok === false && batchPushed.error === 'slow down',
+      JSON.stringify(batchPushed),
+    );
+    t.check('the third batch is never fetched', !pushCalls.includes(ucId(50)), pushCalls.join(','));
+    const pushFeed = await readFeed();
+    t.check(
+      'the first batch stays stored',
+      Array.from({ length: 25 }, (_, i) => batchVid(i)).every((v) => pushFeed.some((row) => row.v === v)),
+      String(pushFeed.length),
+    );
+    const batchPushPoll = await readPollState();
+    t.check(
+      'backoff is set and progress is cleared',
+      batchPushPoll.backoffLevel === 1 && batchPushPoll.backoffUntil > Date.now()
+        && batchPushPoll.progress === null && batchPushPoll.running === false,
+      JSON.stringify({ level: batchPushPoll.backoffLevel, progress: batchPushPoll.progress, running: batchPushPoll.running }),
+    );
+
+    await wipe();
+    mock.notifications.length = 0;
+    const seedN = 26;
+    const seedFeeds = {};
+    for (let i = 0; i < seedN; i++) {
+      const id = ucId(i);
+      await putChannel({ id, title: `U${i}`, seeded: false });
+      seedFeeds[id] = rssXml(id, `U${i}`, [{ v: batchVid(i), t: `U${i}`, at: AT.older + i * 1000 }]);
+    }
+    installFetch({ feeds: seedFeeds });
+    await runSweep({ scope: 'all' });
+    const seededRows = await readChannels();
+    t.check(
+      'unseeded channels in later batches are marked seeded',
+      seededRows.length === seedN && seededRows.every((ch) => ch.seeded === true),
+      JSON.stringify(seededRows.map((ch) => ch.seeded)),
+    );
+    t.check(
+      'their first check stays silent',
+      mock.notifications.length === 0,
+      JSON.stringify(mock.notifications),
+    );
 
     await wipe();
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, lastVideoAt: AT.mid });

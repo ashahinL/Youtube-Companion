@@ -47,6 +47,8 @@ export default async function run(t) {
   const settings = clampSettings({
     ...DEFAULT_SETTINGS,
     feed: { ...DEFAULT_SETTINGS.feed, showShorts: true, maxItems: 200 },
+    poll: { favoriteIntervalMinutes: 5 },
+    alerts: { useAvatarIcon: false },
   });
   const channels = [
     channel(MKBHD, { title: 'Marques Brownlee', handle: '@mkbhd', favorite: true, muted: true, addedAt: 111, groups: [' Music ', 'music', 'Podcasts'] }),
@@ -252,8 +254,8 @@ export default async function run(t) {
   );
   t.check('round trip keeps titles', gotMk?.title === 'Marques Brownlee' && gotBeast?.title === 'MrBeast');
   t.check(
-    'round trip settings showShorts from the file',
-    restored.settings.feed.showShorts === true,
+    'round trip drops a removed showShorts key',
+    !('showShorts' in restored.settings.feed),
     JSON.stringify(restored.settings.feed),
   );
   t.check(
@@ -305,6 +307,8 @@ export default async function run(t) {
   const live = {
     settings: clampSettings({
       alerts: { enabled: false, notifyNormal: false, useAvatarIcon: false },
+      feed: { showShorts: false, groupsOnYouTube: false },
+      poll: { favoriteIntervalMinutes: 10 },
     }),
     channels: [
       channel(MKBHD, { favorite: true, addedAt: 111, title: 'Live title' }),
@@ -314,7 +318,11 @@ export default async function run(t) {
   const fileDisagrees = {
     app: 'youtube-companion',
     version: 1,
-    settings: { alerts: { enabled: true }, feed: { showShorts: true } },
+    settings: {
+      alerts: { enabled: true, useAvatarIcon: false },
+      feed: { showShorts: true, groupsOnYouTube: false },
+      poll: { favoriteIntervalMinutes: 5 },
+    },
     channels: [
       { id: MKBHD, favorite: false, addedAt: 999, title: 'File title' },
       { id: BEAST, favorite: true, addedAt: 222, title: 'MrBeast' },
@@ -334,12 +342,20 @@ export default async function run(t) {
   t.check('merge skipped count is 1', merged.skipped === 1, String(merged.skipped));
   t.check(
     'merge puts the file settings on top',
-    merged.settings.alerts.enabled === true && merged.settings.feed.showShorts === true,
+    merged.settings.alerts.enabled === true,
+    JSON.stringify(merged.settings),
+  );
+  t.check(
+    'merge drops settings that no longer exist',
+    !('showShorts' in merged.settings.feed)
+      && !('groupsOnYouTube' in merged.settings.feed)
+      && !('useAvatarIcon' in merged.settings.alerts)
+      && !('favoriteIntervalMinutes' in merged.settings.poll),
     JSON.stringify(merged.settings),
   );
   t.check(
     'merge keeps settings the file did not mention',
-    merged.settings.alerts.notifyNormal === false && merged.settings.alerts.useAvatarIcon === false,
+    merged.settings.alerts.notifyNormal === false,
     JSON.stringify(merged.settings.alerts),
   );
 
@@ -368,7 +384,7 @@ export default async function run(t) {
   );
   t.check(
     'replace applies the file settings',
-    replaced.settings.alerts.enabled === true && replaced.settings.feed.showShorts === true,
+    replaced.settings.alerts.enabled === true && !('showShorts' in replaced.settings.feed),
   );
 
   t.section('imported records reset volatile fields');

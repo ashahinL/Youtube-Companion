@@ -118,7 +118,7 @@ function walk(dir) {
   return out;
 }
 
-for (const file of ['src', 'test', 'scripts', 'site'].flatMap((dir) => walk(path.join(ROOT, dir)))) {
+for (const file of ['src', 'test', 'scripts', 'site', 'server'].flatMap((dir) => walk(path.join(ROOT, dir)))) {
   const rel = path.relative(ROOT, file);
   try {
     execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });

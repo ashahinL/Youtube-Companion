@@ -23,6 +23,8 @@ import {
   fetchChannelHeader,
   fetchLatestUploads,
   parseChannelVideos,
+  parseChannelVideosPage,
+  fetchChannelVideosPage,
   isShort,
   classifyVideo,
   isChannelId,
@@ -347,6 +349,20 @@ export default async function run(t) {
   );
   t.check('includes short 5mU6SRS2Bxo at index 1', beastIds[1] === '5mU6SRS2Bxo');
   t.check('includes short LiH-P4rSkLI at index 3', beastIds[3] === 'LiH-P4rSkLI');
+  const beastShorts = [
+    '5mU6SRS2Bxo', 'LiH-P4rSkLI', 'NMR32p4kwAQ', 'f7y2XikE7sY', 'Df5Y-2ndQyU',
+    'egvLKQe6I4I', 'LgbyEFILLJI', 'YA_kX8hu1gg', 'XCGVurja73c', 'r9aWeGqp43s',
+  ];
+  t.check(
+    'only the /shorts/ entries are marked short',
+    beastFeed.entries.every((e) => e.short === beastShorts.includes(e.v))
+      && beastFeed.entries.filter((e) => e.short).length === beastShorts.length,
+    JSON.stringify(beastFeed.entries.filter((e) => e.short).map((e) => e.v)),
+  );
+  t.check(
+    'a watch link is not a short',
+    beastFeed.entries.every((e) => e.short === false || beastShorts.includes(e.v)),
+  );
   t.check('MrBeast channel title', beastFeed.channelTitle === 'MrBeast', beastFeed.channelTitle);
   t.check(
     'MrBeast channel id',
@@ -410,6 +426,103 @@ export default async function run(t) {
     goneTab = err;
   }
   t.check('a missing channel (alert, no metadata) is a parse error', goneTab instanceof YtError && goneTab.kind === 'parse');
+
+  /* ---- parseChannelVideosPage --------------------------------------- */
+  t.section('parseChannelVideosPage');
+
+  const beastId = 'UCX6OQ3DkcsbYNE6H8uQQuVA';
+  const videoPage = parseChannelVideosPage(browseJson, beastId);
+  t.check(
+    'the first page keeps every grid row, past the feed window',
+    videoPage.entries.length === 30,
+    String(videoPage.entries.length),
+  );
+  t.check(
+    'a row carries the age words and the English view count',
+    videoPage.entries[0]?.v === 'gTKS8SAwUzE'
+      && videoPage.entries[0]?.ago === '6 days ago'
+      && videoPage.entries[0]?.views === 79000000,
+    JSON.stringify(videoPage.entries[0]),
+  );
+  t.check(
+    'the token is the grid\'s trailing continuation, not a panel\'s',
+    typeof videoPage.token === 'string' && videoPage.token.startsWith('4qmFsgLd'),
+    videoPage.token.slice(0, 12),
+  );
+  let pageOther = null;
+  try {
+    parseChannelVideosPage(browseJson, mkbhdId);
+  } catch (err) {
+    pageOther = err;
+  }
+  t.check('another channel\'s first page is a parse error', pageOther instanceof YtError && pageOther.kind === 'parse');
+
+  const lockup = (v, title, viewsText, ago) => ({
+    richItemRenderer: {
+      content: {
+        lockupViewModel: {
+          contentId: v,
+          contentType: 'LOCKUP_CONTENT_TYPE_VIDEO',
+          metadata: {
+            lockupMetadataViewModel: {
+              title: { content: title },
+              metadata: {
+                contentMetadataViewModel: {
+                  metadataRows: [{
+                    metadataParts: [
+                      { text: { content: viewsText } },
+                      { text: { content: ago } },
+                    ],
+                  }],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  const continuation = (items) => ({
+    onResponseReceivedActions: [{
+      appendContinuationItemsAction: { continuationItems: items },
+    }],
+    contents: {
+      sectionListRenderer: {
+        contents: [{
+          continuationItemRenderer: {
+            continuationEndpoint: { continuationCommand: { token: 'IGNORE' } },
+          },
+        }],
+      },
+    },
+  });
+  const nextPage = parseChannelVideosPage(continuation([
+    lockup('abcdefghijk', 'Hello', '1.5K views', '2 years ago'),
+    lockup('bbcdefghijk', 'Two', '1.5 ألف مشاهدة', 'قبل سنتين'),
+    {
+      continuationItemRenderer: {
+        continuationEndpoint: { continuationCommand: { token: 'NEXT' } },
+      },
+    },
+  ]), mkbhdId);
+  t.check(
+    'a continuation answer returns its rows and the next token',
+    nextPage.token === 'NEXT'
+      && nextPage.entries.length === 2
+      && nextPage.entries[0].v === 'abcdefghijk'
+      && nextPage.entries[0].views === 1500
+      && nextPage.entries[0].ago === '2 years ago',
+    JSON.stringify(nextPage),
+  );
+  t.check(
+    'an Arabic views part is not parsed as a count',
+    nextPage.entries[1].views === 0 && nextPage.entries[1].ago === 'قبل سنتين',
+    JSON.stringify(nextPage.entries[1]),
+  );
+  const lastPage = parseChannelVideosPage(continuation([
+    lockup('ccccccccccc', 'Last', '9 views', '3 years ago'),
+  ]), beastId);
+  t.check('no trailing token means an empty one', lastPage.token === '' && lastPage.entries.length === 1, lastPage.token);
 
   /* ---- parsePlayer -------------------------------------------------- */
   t.section('parsePlayer');
@@ -725,7 +838,6 @@ export default async function run(t) {
     t.check('a working feed is used as is', got.via === 'feed' && got.entries.length === 15 && feedOnly.calls.length === 1);
   }
 
-  const beastId = 'UCX6OQ3DkcsbYNE6H8uQQuVA';
   const feedThen = (feedRes, browseRes) => recordFetch((url) => {
     if (url.includes('/feeds/videos.xml')) {
       if (feedRes instanceof Error) throw feedRes;
@@ -785,6 +897,44 @@ export default async function run(t) {
   const SORRY = 'https://www.google.com/sorry/index?continue=https://www.youtube.com/';
   const blocked = recordFetch(() => headRes({ status: 429, url: '' }));
   const sorry = recordFetch(() => headRes({ status: 200, redirected: true, url: SORRY }));
+
+  {
+    const fetch = recordFetch(() => jsonRes(browseJson));
+    const page = await fetchChannelVideosPage(beastId, { fetch, hl: 'ar' });
+    const body = JSON.parse(fetch.calls[0].opts.body);
+    t.check(
+      'the first page sends browseId and params',
+      body.browseId === beastId && body.params === 'EgZ2aWRlb3PyBgQKAjoA' && !('continuation' in body),
+      JSON.stringify(body),
+    );
+    t.check(
+      'hl ar keeps the other client fields',
+      body.context.client.hl === 'ar'
+        && body.context.client.clientName === 'WEB'
+        && body.context.client.gl === 'US'
+        && body.context.client.clientVersion === '2.20260925.01.00',
+      JSON.stringify(body.context.client),
+    );
+    t.check('the page parses', page.entries.length === 30 && page.token.startsWith('4qmFsgLd'));
+  }
+  {
+    const fetch = recordFetch(() => jsonRes({
+      onResponseReceivedActions: [{ appendContinuationItemsAction: { continuationItems: [] } }],
+    }));
+    await fetchChannelVideosPage(beastId, { token: 'TOK', hl: 'fr', fetch });
+    const body = JSON.parse(fetch.calls[0].opts.body);
+    t.check(
+      'a token sends continuation and falls back to English',
+      body.continuation === 'TOK' && !('params' in body) && !('browseId' in body)
+        && body.context.client.hl === 'en'
+        && body.context.client.clientName === 'WEB',
+      JSON.stringify(body),
+    );
+  }
+  t.check(
+    'a block page on a videos page is pushback',
+    isPushback(await thrown(() => fetchChannelVideosPage(beastId, { fetch: sorry }))),
+  );
 
   const feed429 = await thrown(() => fetchChannelFeed(mkbhdId, { fetch: blocked }));
   t.check('a 429 feed is pushback', isPushback(feed429), String(feed429?.message));

@@ -53,11 +53,6 @@
     }
   ],
   "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Alt+Shift+Y"
-      }
-    },
     "toggle-audio-mode": {
       "suggested_key": {
         "default": "Alt+Shift+A"

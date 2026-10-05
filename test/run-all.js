@@ -17,6 +17,7 @@ const SUITES = [
   ['popup view',         './view.test.js'],
   ['focus',              './focus.test.js'],
   ['welcome page',       './welcome.test.js'],
+  ['feedback server',    './feedback-server.test.js'],
   ["what's new page",    './whatsnew.test.js'],
   ['shots',              './shots.test.js'],
   ['formatting',         './fmt.test.js'],

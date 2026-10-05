@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="no-referrer" />
     <meta name="robots" content="noindex" />
-    <title>Companion for YouTube was removed</title>
+    <title>Send feedback — Companion for YouTube</title>
     <!-- Turnstile loads to stop spam. feedback.js posts the note. -->
     <style>
       :root {
@@ -148,12 +148,12 @@
   <body>
     <main>
       <div class="top">
-        <h1 data-text="title">Companion for YouTube was removed</h1>
+        <h1 data-text="feedbackTitle">Send feedback — Companion for YouTube</h1>
         <a id="switch-lang" href="?lang=ar" lang="ar" data-text="switchTo">العربية</a>
       </div>
-      <p class="dim" data-text="lede">Sorry to see it go. What made you remove it? Anything you write helps the next version.</p>
+      <p class="dim" data-text="feedbackLede">Tell us what works, what doesn't, or what you'd like next.</p>
 
-      <form id="send-form" data-kind="uninstall" novalidate>
+      <form id="send-form" data-kind="feedback" novalidate>
         <label for="text" data-text="label">Your message</label>
         <textarea id="text" maxlength="2000" required></textarea>
         <div id="challenge"></div>
@@ -163,12 +163,6 @@
       <p id="status" class="dim" role="status" aria-live="polite"></p>
       <p class="dim" data-text="sendNote">
         Only what you type is sent, with the extension's version and this page's language. No name, email or account is needed, and nothing else is kept. A Cloudflare check runs first to stop spam.
-      </p>
-
-      <p class="dim again">
-        <span data-text="again">Changed your mind?</span>
-        <a href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd" data-text="storeChrome">Get it again from the Chrome Web Store</a>
-        <a href="https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh" data-text="storeEdge">Get it again from Edge Add-ons</a>
       </p>
     </main>
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>

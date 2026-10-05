@@ -406,7 +406,6 @@ export default async function run(t) {
     JSON.stringify(qualityValues),
   );
   t.check('hd720 is selected in markup', /<option\b[^>]*\bvalue="hd720"[^>]*\bselected\b/.test(a));
-  t.check('has a shortcut hint', /id="audio-shortcut"/.test(a));
   t.check(
     'popup loads core.js as a classic script before the module',
     /<script src="\.\.\/content\/core\.js"><\/script>\s*<script type="module" src="popup\.js">/.test(html),
@@ -529,19 +528,7 @@ export default async function run(t) {
   );
   t.check('disabled settings-select is dimmed', /\.settings-select:disabled/.test(css));
   t.check(
-    'empty shortcut uses audioShortcutNone',
-    /audioShortcutNone/.test(js),
-  );
-  t.check(
-    'bound shortcut uses audioShortcutBound',
-    /audioShortcutBound/.test(js),
-  );
-  t.check(
-    'shortcut hint does not invent Alt+Shift+A when empty',
-    /audioShortcutNone/.test(js) && !/audioShortcutNone[\s\S]{0,80}Alt\+Shift\+A/.test(js),
-  );
-  t.check(
-    'clicking the shortcut hint opens chrome://extensions/shortcuts',
+    'Change shortcuts opens chrome://extensions/shortcuts',
     /chrome:\/\/extensions\/shortcuts/.test(js),
   );
   t.check(
@@ -570,41 +557,37 @@ export default async function run(t) {
   const settings = html.match(/<section\b[^>]*\bid="settings"[^>]*>[\s\S]*?<\/section>/);
   t.check('settings panel exists', !!settings);
   const s = settings ? settings[0] : '';
-  const groupIds = [
-    'settings-notifications',
-    'settings-checking',
-    'settings-feed',
-    'settings-language',
-    'settings-theme',
-    'settings-audio',
-    'settings-backup',
-  ];
-  for (const id of groupIds) {
-    t.check(`has settings group ${id}`, new RegExp(`id="${id}"`).test(s), id);
-  }
+  const groupIds = [...s.matchAll(/<fieldset class="group" id="([^"]+)"/g)].map((m) => m[1]);
+  t.check(
+    'settings groups are appearance, notifications, feed, audio, backup',
+    groupIds.join() === 'settings-appearance,settings-notifications,settings-feed,settings-audio,settings-backup',
+    groupIds.join(),
+  );
   t.check(
     'look group has the open-feed-in-audio-mode checkbox',
     /data-setting="audio.openFeedInAudioMode"/.test(s),
   );
+  const appearance = (s.match(/<fieldset class="group" id="settings-appearance">[\s\S]*?<\/fieldset>/) || [''])[0];
+  const langGroup = (appearance.match(/role="radiogroup" aria-labelledby="settings-locale-label">[\s\S]*?<\/div>/) || [''])[0];
+  const themeGroup = (appearance.match(/role="radiogroup" aria-labelledby="settings-theme-label">[\s\S]*?<\/div>/) || [''])[0];
   t.check(
-    'theme group sits directly after the language group',
-    /id="settings-language">[\s\S]*?<\/fieldset>\s*<fieldset class="group" id="settings-theme">/.test(s),
+    'Appearance holds the language and theme radios',
+    /data-setting="ui\.locale"/.test(langGroup) && /data-setting="ui\.theme"/.test(themeGroup),
   );
-  const langGroup = (s.match(/<fieldset class="group" id="settings-language">[\s\S]*?<\/fieldset>/) || [''])[0];
-  const themeGroup = (s.match(/<fieldset class="group" id="settings-theme">[\s\S]*?<\/fieldset>/) || [''])[0];
   t.check(
-    'the language fieldset has no theme control',
+    'the language control has no theme radios',
     /data-setting="ui\.locale"/.test(langGroup) && !/ui\.theme/.test(langGroup),
   );
   t.check(
-    'language legend is translated',
-    /<legend class="group__legend" data-i18n="settingsLanguage">/.test(langGroup),
+    'language row label reuses settingsLanguage',
+    /id="settings-locale-label"[^>]*data-i18n="settingsLanguage">/.test(appearance)
+      && /<legend class="group__legend" data-i18n="settingsAppearance">/.test(appearance),
   );
   const langRadios = [...langGroup.matchAll(/<input\b[^>]*>/g)].map((m) => m[0]);
   const langValues = langRadios.map((tag) => (tag.match(/\bvalue="([^"]+)"/) || [])[1]);
   const langNames = [...new Set(langRadios.map((tag) => (tag.match(/\bname="([^"]+)"/) || [])[1]))];
   t.check(
-    'language is three radio cards in the order en, ar, auto',
+    'language is three radios in the order en, ar, auto',
     langRadios.length === 3
       && langRadios.every((tag) => /\btype="radio"/.test(tag) && /data-setting="ui\.locale"/.test(tag))
       && langValues.join() === 'en,ar,auto'
@@ -612,28 +595,22 @@ export default async function run(t) {
     JSON.stringify({ langValues, langNames, count: langRadios.length }),
   );
   t.check(
-    'language uses the same card markup as theme',
-    /class="theme-cards"/.test(langGroup)
-      && (langGroup.match(/class="theme-card"/g) || []).length === 3
-      && /class="theme-cards"/.test(themeGroup)
-      && (themeGroup.match(/class="theme-card"/g) || []).length === 3,
+    'language and theme share the segmented control',
+    (langGroup.match(/class="segmented__opt"/g) || []).length === 3
+      && (themeGroup.match(/class="segmented__opt"/g) || []).length === 3
+      && !/theme-card/.test(s),
   );
   t.check(
-    'the English card keeps English script and direction',
-    /lang="en" dir="ltr" data-i18n="settingsLocaleEn">English</.test(langGroup)
-      && /lang="en" dir="ltr" aria-hidden="true">Aa</.test(langGroup),
+    'the English option keeps English script and direction',
+    /<label class="segmented__opt" lang="en" dir="ltr">[\s\S]*?data-i18n="settingsLocaleEn">English</.test(langGroup),
   );
   t.check(
-    'the Arabic card keeps Arabic script and direction',
-    /lang="ar" dir="rtl" data-i18n="settingsLocaleAr">العربية</.test(langGroup)
-      && /lang="ar" dir="rtl" aria-hidden="true">أب</.test(langGroup),
+    'the Arabic option keeps Arabic script and direction',
+    /<label class="segmented__opt" lang="ar" dir="rtl">[\s\S]*?data-i18n="settingsLocaleAr">العربية</.test(langGroup),
   );
   t.check(
-    'the language System card reuses the theme System string',
-    /data-i18n="settingsThemeSystem"/.test(langGroup)
-      && /theme-card__preview--split/.test(langGroup)
-      && /lang="en" dir="ltr">Aa</.test(langGroup)
-      && /lang="ar" dir="rtl">أب</.test(langGroup),
+    'the language System option reuses the theme System string',
+    /data-i18n="settingsThemeSystem"/.test(langGroup),
   );
   const autoRadio = langRadios.find((tag) => /\bvalue="auto"/.test(tag)) || '';
   t.check(
@@ -653,14 +630,14 @@ export default async function run(t) {
     JSON.stringify(langNames),
   );
   t.check(
-    'theme legend is translated',
-    /<legend class="group__legend" data-i18n="settingsTheme">/.test(themeGroup),
+    'theme row label reuses settingsTheme',
+    /id="settings-theme-label"[^>]*data-i18n="settingsTheme">/.test(appearance),
   );
   const themeRadios = [...themeGroup.matchAll(/<input\b[^>]*>/g)].map((m) => m[0]);
   const themeValues = themeRadios.map((tag) => (tag.match(/\bvalue="([^"]+)"/) || [])[1]);
   const themeNames = [...new Set(themeRadios.map((tag) => (tag.match(/\bname="([^"]+)"/) || [])[1]))];
   t.check(
-    'theme is three radio cards in the order light, dark, system',
+    'theme is three radios in the order light, dark, system',
     themeRadios.length === 3
       && themeRadios.every((tag) => /\btype="radio"/.test(tag) && /data-setting="ui\.theme"/.test(tag))
       && themeValues.join() === 'light,dark,system'
@@ -685,58 +662,28 @@ export default async function run(t) {
       && /input\.checked = input\.value === value/.test(js),
   );
   t.check(
-    'choosing a theme card writes ui.theme through data-setting',
+    'choosing a theme option writes ui.theme through data-setting',
     /data-setting="ui\.theme"/.test(themeGroup)
       && !/<select\b[^>]*data-setting="ui\.theme"/.test(s)
       && /function bindSettings\(\) \{[\s\S]*?else next = el\.value;[\s\S]*?patchSettings\(buildPatch\(path, next\)\)/.test(js),
   );
   t.check(
-    'theme cards sit in one row',
-    /\.theme-cards\s*\{[^}]*display:\s*flex/.test(css)
-      && !/\.theme-cards\s*\{[^}]*flex-wrap:\s*wrap/.test(css),
+    'segmented options sit in one row',
+    /\.segmented\s*\{[^}]*display:\s*flex/.test(css)
+      && !/\.segmented\s*\{[^}]*flex-wrap:\s*wrap/.test(css),
   );
   t.check(
-    'the selected theme card uses the same accent ring as a swatch',
-    /\.theme-card:has\(:checked\)/.test(css)
-      && /\.swatch\[aria-pressed='true'\][\s\S]{0,80}\.theme-card:has\(:checked\)\s*\{[^}]*var\(--accent\)/.test(css),
+    'the checked option is filled with the accent',
+    /\.segmented__opt:has\(input:checked\)\s*\{[^}]*background:\s*var\(--accent\)/.test(css),
   );
   t.check(
-    'the system card splits light and dark',
-    /theme-card__preview--split/.test(themeGroup)
-      && /data-theme-preview="light"/.test(themeGroup)
-      && /data-theme-preview="dark"/.test(themeGroup),
-  );
-  const previewTok = (name) => {
-    const m = css.match(new RegExp(`--theme-preview-${name}:\\s*(#[0-9a-fA-F]{3,8})`));
-    return m ? m[1].toLowerCase() : '';
-  };
-  const lightBlock = (css.match(/:root\[data-theme='light'\]\s*\{[^}]*\}/) || [''])[0];
-  const darkBlock = (css.match(/:root\s*\{[^}]*\}/) || [''])[0];
-  const blockTok = (block, name) => {
-    const m = block.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{3,8})`));
-    return m ? m[1].toLowerCase() : '';
-  };
-  t.check(
-    'light preview colours match the light tokens',
-    previewTok('light-bg') === blockTok(lightBlock, 'bg')
-      && previewTok('light-surface') === blockTok(lightBlock, 'surface')
-      && previewTok('light-text') === blockTok(lightBlock, 'text')
-      && previewTok('light-bg') !== '',
-    JSON.stringify({
-      preview: [previewTok('light-bg'), previewTok('light-surface'), previewTok('light-text')],
-      tokens: [blockTok(lightBlock, 'bg'), blockTok(lightBlock, 'surface'), blockTok(lightBlock, 'text')],
-    }),
+    'a focused option shows a ring',
+    /\.segmented__opt:has\(input:focus-visible\)\s*\{[^}]*outline:\s*2px solid var\(--accent\)/.test(css),
   );
   t.check(
-    'dark preview colours match the dark tokens',
-    previewTok('dark-bg') === blockTok(darkBlock, 'bg')
-      && previewTok('dark-surface') === blockTok(darkBlock, 'surface')
-      && previewTok('dark-text') === blockTok(darkBlock, 'text')
-      && previewTok('dark-bg') !== '',
-    JSON.stringify({
-      preview: [previewTok('dark-bg'), previewTok('dark-surface'), previewTok('dark-text')],
-      tokens: [blockTok(darkBlock, 'bg'), blockTok(darkBlock, 'surface'), blockTok(darkBlock, 'text')],
-    }),
+    'the closed overlay marker flips in Arabic',
+    /\.fold\[open\] > summary::before\s*\{[^}]*content:\s*'▾'/.test(css)
+      && /\[dir='rtl'\] \.fold:not\(\[open\]\) > summary::before\s*\{[^}]*scaleX\(\s*-1\s*\)/.test(css),
   );
   for (const key of ['settingsTheme', 'settingsThemeSystem', 'settingsThemeLight', 'settingsThemeDark']) {
     t.check(`theme key ${key} exists in en and ar`, key in en && key in ar);
@@ -747,15 +694,32 @@ export default async function run(t) {
   }
   t.check('the old language select label key is gone', !('settingsLocale' in en) && !('settingsLocale' in ar));
   t.check('the old language select title key is gone', !('settingsLocaleTitle' in en) && !('settingsLocaleTitle' in ar));
-  t.check('look group has a background-type select', /data-setting="audio.backgroundType"/.test(s));
-  const feedGroup = s.match(/<fieldset\b[^>]*\bid="settings-feed"[^>]*>[\s\S]*?<\/fieldset>/);
+  const feedGroup = (s.match(/<fieldset class="group" id="settings-feed">[\s\S]*?<\/fieldset>/) || [''])[0];
+  const feedSettings = [...feedGroup.matchAll(/data-setting="([^"]+)"/g)].map((m) => m[1]);
   t.check(
-    'feed group has the YouTube groups switch',
-    !!feedGroup
-      && /data-setting="feed\.groupsOnYouTube"/.test(feedGroup[0])
-      && /data-i18n="settingsGroupsOnYouTube"/.test(feedGroup[0])
-      && /data-i18n-title="settingsGroupsOnYouTubeTitle"/.test(feedGroup[0]),
+    'the feed group holds the check interval and the cap',
+    feedSettings.join() === 'poll.intervalMinutes,feed.maxItems',
+    feedSettings.join(),
   );
+  const overlay = (s.match(/<details\b[^>]*\bid="settings-overlay"[^>]*>[\s\S]*?<\/details>/) || [''])[0];
+  t.check(
+    '#settings-overlay is a details holding the background type',
+    /^<details\b[^>]*\bid="settings-overlay"/.test(overlay)
+      && !/^<details\b[^>]*\bopen\b/.test(overlay)
+      && /data-setting="audio.backgroundType"/.test(overlay),
+  );
+  const links = (s.match(/<p class="settings-links">[\s\S]*?<\/p>/) || [''])[0];
+  t.check(
+    'the links line holds support, feedback and what\'s new',
+    /id="settings-support-open"/.test(links)
+      && /id="settings-feedback"/.test(links)
+      && /id="settings-whats-new"/.test(links)
+      && /data-i18n="settingsSupportLink"/.test(links)
+      && /data-i18n="settingsFeedback"/.test(links),
+    links.slice(0, 240),
+  );
+  const footer = (s.match(/<footer class="settings-footer">[\s\S]*?<\/footer>/) || [''])[0];
+  t.check('the footer stats have no what\'s new button', !/settings-whats-new/.test(footer));
 
   // An on/off setting takes effect the moment it is clicked, so it wears a
   // switch. The one tick box left in the popup is the Feeds filter, which
@@ -763,13 +727,13 @@ export default async function run(t) {
   const settingBoxes = [...s.matchAll(/<input type="checkbox" data-setting="([^"]+)" \/>/g)].map((m) => m[1]);
   t.check(
     'every on/off setting is a switch',
-    settingBoxes.length === 6
+    settingBoxes.length === 3
       && settingBoxes.every((name) => new RegExp(`<span class="switch">\\s*<input type="checkbox" data-setting="${name.replace('.', '\\.')}"`).test(s)),
     JSON.stringify(settingBoxes),
   );
   t.check(
     'a switch row puts its label and its switch at opposite ends',
-    (s.match(/class="row row--switch"/g) || []).length === 6
+    (s.match(/class="row row--switch"/g) || []).length === 3
       && /\.row--switch\s*\{[^}]*justify-content:\s*space-between/.test(css),
   );
   // Sizing it down to a tick box would shrink the switch's hit area to 15px
@@ -888,6 +852,16 @@ export default async function run(t) {
   t.check('no innerHTML assignment', !/\.innerHTML\s*(=|\+=)/.test(js));
   t.check('no insertAdjacentHTML', !/insertAdjacentHTML/.test(js));
   t.check('no outerHTML assignment', !/\.outerHTML\s*(=|\+=)/.test(js));
+
+  t.section('popup.css page width');
+
+  const htmlRule = (css.match(/(^|\n)html\s*\{([^}]*)\}/) || [])[2] || '';
+  t.check('html is pinned to 400px', /width:\s*400px/.test(htmlRule));
+  t.check(
+    'html hides its scrollbar, so tall and short tabs are the same width',
+    /scrollbar-width:\s*none/.test(htmlRule),
+  );
+  t.check('html is not a scroll container', !/overflow/.test(htmlRule.replace(/\/\*[\s\S]*?\*\//g, '')));
 
   t.section('popup.css colours');
 
@@ -1303,13 +1277,16 @@ export default async function run(t) {
   );
 
   const backupAt = html.indexOf('id="settings-backup"');
-  const settingsSupportAt = html.indexOf('id="settings-support"');
+  const linksAt = html.indexOf('class="settings-links"');
   const footerAt = html.indexOf('class="settings-footer"');
-  t.check('has #settings-support', settingsSupportAt >= 0);
   t.check(
-    '#settings-support sits after #settings-backup and before the footer',
-    backupAt >= 0 && settingsSupportAt > backupAt && footerAt > settingsSupportAt,
-    `${backupAt} ${settingsSupportAt} ${footerAt}`,
+    'the links line sits after #settings-backup and before the footer',
+    backupAt >= 0 && linksAt > backupAt && footerAt > linksAt,
+    `${backupAt} ${linksAt} ${footerAt}`,
+  );
+  t.check(
+    'Support still opens the sheet',
+    /settings-support-open'\)\?\.addEventListener\('click', \(event\) => \{\s*openSupportSheet\(event\.currentTarget\);/.test(js),
   );
 
   t.check('has support sheet overlay', /id="support-sheet"/.test(html));
@@ -1459,15 +1436,18 @@ export default async function run(t) {
 
   t.section('keyboard shortcuts in Settings');
 
-  const keysGroup = html.match(/<fieldset\b[^>]*\bid="settings-keys"[^>]*>[\s\S]*?<\/fieldset>/);
-  t.check('Settings has a keyboard shortcuts group', !!keysGroup);
+  const audioGroup = html.match(/<fieldset\b[^>]*\bid="settings-audio"[^>]*>[\s\S]*?<\/fieldset>/);
+  t.check('there is no keyboard shortcuts group', !/id="settings-keys"/.test(html));
   t.check(
-    'it shows the popup and audio mode keys',
-    /id="settings-key-popup"/.test(keysGroup?.[0] || '') && /id="settings-key-audio"/.test(keysGroup?.[0] || ''),
+    'the audio group shows the shortcut and Change',
+    /id="settings-key-audio"/.test(audioGroup?.[0] || '')
+      && /id="settings-keys-change"/.test(audioGroup?.[0] || '')
+      && /btn btn--small/.test(audioGroup?.[0] || '')
+      && !/id="settings-key-popup"/.test(audioGroup?.[0] || ''),
   );
   t.check(
     'a key Chrome did not bind reads as not set',
-    /view\.popupShortcut/.test(js) && /settingsKeyNone/.test(js),
+    /view\.audioShortcut/.test(js) && /settingsKeyNone/.test(js),
   );
   t.check('Change opens the browser\'s shortcut page', /settings-keys-change[\s\S]{0,120}chrome:\/\/extensions\/shortcuts/.test(js));
 

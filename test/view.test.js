@@ -127,8 +127,8 @@ function sample() {
   };
 }
 
-function settings({ showShorts = false, favoritesOnly = false, group = '' } = {}) {
-  return { feed: { showShorts, favoritesOnly, group } };
+function settings({ favoritesOnly = false, group = '' } = {}) {
+  return { feed: { favoritesOnly, group } };
 }
 
 function vids(rows) {
@@ -341,12 +341,12 @@ export default async function run(t) {
   ];
   t.check(
     'a premiere past its start is hidden once its channel is live on another video',
-    vids(visibleFeedItems(screenshot, false, T)) === '9AU2SmlSjhY',
-    vids(visibleFeedItems(screenshot, false, T)),
+    vids(visibleFeedItems(screenshot, T)) === '9AU2SmlSjhY',
+    vids(visibleFeedItems(screenshot, T)),
   );
   t.check(
     'the same holds when YouTube gave no start time',
-    vids(visibleFeedItems([screenshot[0], { ...screenshot[1], st: 0 }], false, T)) === '9AU2SmlSjhY',
+    vids(visibleFeedItems([screenshot[0], { ...screenshot[1], st: 0 }], T)) === '9AU2SmlSjhY',
   );
   const noLive = new Set();
   t.check('a premiere still to come is shown', !isStalePremiere({ k: 'premiere', c: GH, st: T + MIN }, new Set([GH]), T));
@@ -367,20 +367,15 @@ export default async function run(t) {
   const { feed } = sample();
   const snapshot = JSON.parse(JSON.stringify(feed));
   t.check(
-    'shorts hidden by default',
-    vids(visibleFeedItems(feed, false)) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}`,
-    vids(visibleFeedItems(feed, false)),
+    'shorts are never shown',
+    vids(visibleFeedItems(feed)) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}`,
+    vids(visibleFeedItems(feed)),
   );
-  t.check(
-    'shorts shown when the flag is on',
-    vids(visibleFeedItems(feed, true)) === `${VID_NEW},${VID_SHORT},${VID_OTH},${VID_MID},${VID_OLD}`,
-    vids(visibleFeedItems(feed, true)),
-  );
-  t.check('newest first', vids(visibleFeedItems(feed, false)) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}`);
+  t.check('newest first', vids(visibleFeedItems(feed)) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}`);
   t.check('does not mutate the input feed', same(feed, snapshot));
   t.check(
     'drops rows with no video id',
-    visibleFeedItems([item(VID_NEW), { t: 'no id', at: 999 }, null], false).length === 1,
+    visibleFeedItems([item(VID_NEW), { t: 'no id', at: 999 }, null]).length === 1,
   );
 
   t.section('shorts and favourites');
@@ -388,22 +383,11 @@ export default async function run(t) {
   const base = sample();
   const hidden = feedsView({ ...base, settings: settings(), query: '' });
   t.check(
-    'feedsView hides shorts when the setting is off',
+    'feedsView never shows shorts',
     vids(hidden.shown) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}` && !hidden.forced,
     vids(hidden.shown),
   );
   t.check('showing count total matches the filtered list', hidden.total === 4, String(hidden.total));
-
-  const withShorts = feedsView({
-    ...base,
-    settings: settings({ showShorts: true }),
-    query: '',
-  });
-  t.check(
-    'feedsView keeps shorts when the setting is on',
-    vids(withShorts.shown) === `${VID_NEW},${VID_SHORT},${VID_OTH},${VID_MID},${VID_OLD}`,
-    vids(withShorts.shown),
-  );
 
   const favOnly = feedsView({
     ...base,
@@ -418,17 +402,6 @@ export default async function run(t) {
   t.check(
     'favourites-only does nothing when off',
     vids(hidden.shown) === `${VID_NEW},${VID_OTH},${VID_MID},${VID_OLD}`,
-  );
-
-  const favShorts = feedsView({
-    ...base,
-    settings: settings({ showShorts: true, favoritesOnly: true }),
-    query: '',
-  });
-  t.check(
-    'favourites-only plus shorts keeps a favourite short',
-    vids(favShorts.shown) === `${VID_NEW},${VID_SHORT},${VID_MID},${VID_OLD}`,
-    vids(favShorts.shown),
   );
 
   t.section('text filter');

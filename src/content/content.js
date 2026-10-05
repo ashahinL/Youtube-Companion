@@ -2983,13 +2983,6 @@
   let subsWrite = 0;
   let subsStarted = false;
 
-  function groupsOnYouTubeEnabled(settings) {
-    const feed = settings && typeof settings === 'object' ? settings.feed : null;
-    if (!feed || typeof feed !== 'object' || Array.isArray(feed)) return true;
-    if (!Object.prototype.hasOwnProperty.call(feed, 'groupsOnYouTube')) return true;
-    return !!feed.groupsOnYouTube;
-  }
-
   function subsPathname() {
     let path = pagePath();
     if (path.length > 1 && path.charAt(path.length - 1) === '/') path = path.slice(0, -1);
@@ -3644,8 +3637,8 @@
     const settings = stored.settings;
     subs.locale = localeFromSettings(settings, navigatorLanguage());
     const names = groupNamesInList(channels, subs.locale);
-    // Off, or a list with no groups: the page stays as YouTube drew it.
-    if (!groupsOnYouTubeEnabled(settings) || names.length === 0) {
+    // A list with no groups: the page stays as YouTube drew it.
+    if (names.length === 0) {
       teardownSubsDom();
       return;
     }
@@ -3892,7 +3885,6 @@
     channelInGroup,
     resolvedFeedGroup,
     handleKey,
-    groupsOnYouTubeEnabled,
     subsMatchNote,
     subsBrakeDue,
     subsSpacerPx,

@@ -104,6 +104,8 @@ const view = {
   clearOpen: false,
   sheetId: null,
   sheetError: '',
+  // Older Videos-tab pages for the open channel sheet. Not stored.
+  sheetMore: { id: '', rows: [], token: '', done: false, busy: false, focus: false },
   groupsSheetId: null,
   groupsError: '',
   // Name of the one group row showing the rename field or the delete
@@ -131,7 +133,6 @@ const view = {
   audioReachable: false,
   audioOn: false,
   audioShortcut: '',
-  popupShortcut: '',
   audioTargetId: null,
   audioTabs: [],
   audioPlayer: null,
@@ -232,6 +233,15 @@ document.querySelector('.tabs')?.addEventListener('keydown', (event) => {
 
 function t(key, substitutions) {
   return translate(messages, key, substitutions);
+}
+
+function countDigits(n) {
+  const x = Math.max(0, Math.floor(Number(n) || 0));
+  try {
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(x);
+  } catch {
+    return String(x);
+  }
 }
 
 function tCount(key, count, substitutions) {
@@ -374,11 +384,16 @@ function openUrl(url) {
   }
 }
 
+function freshSheetMore(id) {
+  return { id: id || '', rows: [], token: '', done: false, busy: false, focus: false };
+}
+
 function openChannelSheet(id) {
   if (!id) return;
   view.supportOpen = false;
   view.groupsSheetId = null;
   view.groupsError = '';
+  if (view.sheetMore.id !== id) view.sheetMore = freshSheetMore(id);
   view.sheetId = id;
   view.sheetError = '';
   render();
@@ -462,6 +477,7 @@ function closeChannelSheet() {
   const returnId = view.sheetId;
   view.sheetId = null;
   view.sheetError = '';
+  view.sheetMore = freshSheetMore('');
   render();
   focusSheetOpener(returnId);
 }
@@ -874,6 +890,9 @@ function feedRow(item, locale, channel, { showChannel = true } = {}) {
     const abs = absoluteTime(at, locale);
     if (abs) age.title = abs;
     facts.appendChild(age);
+  } else if (typeof item.ago === 'string' && item.ago) {
+    // A See more row has no exact upload time. YouTube's own "2 years ago" is the age.
+    facts.appendChild(textEl('span', '', item.ago));
   }
 
   const views = Number(item.vw);
@@ -1021,7 +1040,15 @@ function renderFeeds(locale) {
   refreshBtn.title = t('feedRefresh');
 
   const lastAt = Number(view.pollState?.lastPollAt) || 0;
-  if (lastAt) {
+  const progressTotal = Number(view.pollState?.progress?.total) || 0;
+  if (sweeping && progressTotal > 0) {
+    // The last-check time stays put until this ends. While a long check
+    // is still fetching, the count is what the person is waiting on.
+    const done = Number(view.pollState.progress.done) || 0;
+    lastEl.hidden = false;
+    lastEl.textContent = t('feedProgress', [countDigits(done), countDigits(progressTotal)]);
+    lastEl.removeAttribute('title');
+  } else if (lastAt) {
     const rel = relativeTime(lastAt, Date.now(), locale);
     if (rel) {
       lastEl.hidden = false;
@@ -1097,7 +1124,7 @@ function renderFeeds(locale) {
     : (q ? t('feedFilterPlaceholder') : t('watchlistAddFromTab'));
   if (clearBtn) clearBtn.hidden = !q;
 
-  const pageKey = JSON.stringify([q, favOnly, feeds.group, !!view.settings?.feed?.showShorts]);
+  const pageKey = JSON.stringify([q, favOnly, feeds.group]);
   if (pageKey !== feedPageKey) {
     feedPageKey = pageKey;
     feedLimit = FEED_PAGE;
@@ -1249,6 +1276,7 @@ function render() {
 }
 
 const WHATS_NEW_PAGE = 'src/whatsnew/whatsnew.html';
+const FEEDBACK_PAGE = 'https://ashahinl.github.io/Youtube-Companion/feedback.html';
 
 function renderWhatsNew() {
   const note = document.getElementById('whats-new');
@@ -1277,6 +1305,55 @@ function openWhatsNew() {
   openUrl(chrome.runtime.getURL(WHATS_NEW_PAGE));
 }
 
+function openFeedback() {
+  const params = new URLSearchParams({ lang: locale, v: extensionVersion() });
+  openUrl(`${FEEDBACK_PAGE}?${params}`);
+}
+
+function channelSheetItems(ch) {
+  const seen = new Set();
+  const head = [];
+  for (const item of visibleFeedItems(view.feed, Date.now())) {
+    if (!item || item.c !== ch.id || !item.v || seen.has(item.v)) continue;
+    seen.add(item.v);
+    head.push(item);
+  }
+  for (const row of Array.isArray(ch.recent) ? ch.recent : []) {
+    if (!row || !row.v || seen.has(row.v)) continue;
+    seen.add(row.v);
+    head.push({
+      v: row.v,
+      c: ch.id,
+      t: row.t || '',
+      at: Number(row.at) || 0,
+      vw: Number(row.vw) || 0,
+      d: 0,
+      k: 'video',
+      st: 0,
+    });
+  }
+  head.sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+  const tail = [];
+  if (view.sheetMore.id === ch.id) {
+    for (const row of view.sheetMore.rows) {
+      if (!row || !row.v || seen.has(row.v)) continue;
+      seen.add(row.v);
+      tail.push({
+        v: row.v,
+        c: ch.id,
+        t: row.t || '',
+        at: 0,
+        ago: typeof row.ago === 'string' ? row.ago : '',
+        vw: Number(row.vw) || 0,
+        d: 0,
+        k: 'video',
+        st: 0,
+      });
+    }
+  }
+  return head.concat(tail);
+}
+
 function renderChannelSheet() {
   const sheet = document.getElementById('channel-sheet');
   if (!sheet) return;
@@ -1286,6 +1363,7 @@ function renderChannelSheet() {
   if (!id || !ch) {
     const wasShown = !sheet.hidden;
     view.sheetId = null;
+    if (view.sheetMore.id) view.sheetMore = freshSheetMore('');
     sheet.hidden = true;
     // The channel went away while its sheet was open, so closeChannelSheet
     // never ran and focus is sitting inside a panel that just vanished.
@@ -1362,20 +1440,31 @@ function renderChannelSheet() {
   problemText.textContent = problem ? t(problem.key, problem.subs) : '';
   retryBtn.disabled = locked || !!slowText;
 
-  const items = visibleFeedItems(view.feed, !!view.settings?.feed?.showShorts, Date.now())
-    .filter((item) => item.c === ch.id);
+  const items = channelSheetItems(ch);
   const sheetFocus = focusSpot(listEl, document.activeElement);
   listEl.replaceChildren(...items.map((item) => keyed(feedRow(item, locale, ch, { showChannel: false }), item.v)));
   restoreFocusSpot(listEl, sheetFocus);
 
   const hasItems = items.length > 0;
   listEl.hidden = !hasItems;
-  emptyEl.hidden = locked || hasItems;
+  // While See more can still ask YouTube, an empty list is not the answer yet.
+  const showMore = view.sheetMore.id === ch.id && !view.sheetMore.done;
+  const moreBtn = document.getElementById('channel-sheet-more');
+  if (moreBtn) {
+    moreBtn.hidden = !showMore;
+    moreBtn.disabled = !showMore || view.sheetMore.busy || !!slowText;
+  }
+  emptyEl.hidden = locked || hasItems || showMore;
 
-  const itemsNow = sheetFocusables();
-  if (!itemsNow.includes(document.activeElement)) {
-    // The focused video row is gone, or ↻ was hidden under focus.
-    document.getElementById('channel-sheet-close')?.focus?.();
+  if (view.sheetMore.focus && moreBtn && !moreBtn.hidden && !moreBtn.disabled) {
+    moreBtn.focus();
+    view.sheetMore.focus = false;
+  } else {
+    const itemsNow = sheetFocusables();
+    if (!itemsNow.includes(document.activeElement)) {
+      // The focused video row is gone, or ↻ was hidden under focus.
+      document.getElementById('channel-sheet-close')?.focus?.();
+    }
   }
 }
 
@@ -2899,27 +2988,14 @@ function renderAudio() {
   renderQueue();
   renderAudioStats();
 
-  const hint = document.getElementById('audio-shortcut');
-  if (hint) {
-    hint.disabled = view.audioKnown && !reachable;
-    const shortcut = view.audioShortcut;
-    const text = shortcut
-      ? t('audioShortcutBound', [shortcut])
-      : t('audioShortcutNone');
-    hint.textContent = text;
-    hint.title = text;
-  }
-
   syncAudioPolling();
 }
 
 function renderSettings(locale) {
   const s = view.settings || {};
   // Empty when Chrome found the combination taken and bound nothing.
-  for (const [id, keys] of [['settings-key-popup', view.popupShortcut], ['settings-key-audio', view.audioShortcut]]) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = keys || t('settingsKeyNone');
-  }
+  const keyEl = document.getElementById('settings-key-audio');
+  if (keyEl) keyEl.textContent = view.audioShortcut || t('settingsKeyNone');
   for (const input of document.querySelectorAll('#settings [data-setting]')) {
     const value = readPath(s, input.dataset.setting);
     if (input.type === 'checkbox') input.checked = !!value;
@@ -3289,6 +3365,42 @@ async function submitAdd(raw, dest = 'watchlist') {
     return;
   }
   await addChannel(input, dest);
+}
+
+async function loadChannelMore() {
+  const id = view.sheetId;
+  const more = view.sheetMore;
+  if (!id || more.id !== id || more.busy || more.done) return;
+  const token = more.token;
+  more.busy = true;
+  more.focus = true;
+  view.sheetError = '';
+  render();
+  let res;
+  try {
+    res = await send({ type: 'channel.more', id, token });
+  } catch (err) {
+    res = { ok: false, error: err?.message || 'failed' };
+  }
+  if (view.sheetId !== id || view.sheetMore !== more) return;
+  more.busy = false;
+  if (!res || res.ok === false) {
+    view.sheetError = formatError(res && res.error);
+  } else {
+    const rows = Array.isArray(res.rows) ? res.rows : [];
+    for (const row of rows) {
+      if (!row || typeof row.v !== 'string' || !row.v) continue;
+      more.rows.push({
+        v: row.v,
+        t: typeof row.title === 'string' ? row.title : '',
+        ago: typeof row.ago === 'string' ? row.ago : '',
+        vw: Number(row.views) || 0,
+      });
+    }
+    more.token = typeof res.token === 'string' ? res.token : '';
+    more.done = !more.token;
+  }
+  render();
 }
 
 async function requestSweep({ onlyId = null } = {}) {
@@ -3874,10 +3986,8 @@ async function refreshAudioShortcut() {
     const res = await send({ type: 'audioMode.shortcut' });
     const raw = res && res.shortcut;
     view.audioShortcut = typeof raw === 'string' ? raw.trim() : '';
-    view.popupShortcut = typeof res?.popup === 'string' ? res.popup.trim() : '';
   } catch {
     view.audioShortcut = '';
-    view.popupShortcut = '';
   }
 }
 
@@ -3937,10 +4047,6 @@ function bindAudio() {
     const path = el.dataset.setting;
     if (!path) return;
     void patchSettings(buildPatch(path, el.value));
-  });
-
-  document.getElementById('audio-shortcut')?.addEventListener('click', () => {
-    openUrl('chrome://extensions/shortcuts');
   });
 
   document.getElementById('audio-play')?.addEventListener('click', () => {
@@ -4266,6 +4372,9 @@ function bindChannelSheet() {
     if (!view.sheetId) return;
     void requestSweep({ onlyId: view.sheetId });
   });
+  document.getElementById('channel-sheet-more')?.addEventListener('click', () => {
+    void loadChannelMore();
+  });
   sheet?.addEventListener('click', (event) => {
     if (event.target === sheet) closeChannelSheet();
   });
@@ -4346,6 +4455,9 @@ function bindSupportSheet() {
   });
   document.getElementById('settings-support-open')?.addEventListener('click', (event) => {
     openSupportSheet(event.currentTarget);
+  });
+  document.getElementById('settings-feedback')?.addEventListener('click', () => {
+    openFeedback();
   });
   document.getElementById('settings-whats-new')?.addEventListener('click', () => {
     openWhatsNew();

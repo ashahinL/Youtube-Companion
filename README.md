@@ -59,19 +59,15 @@
 - See how much data you used and saved, and how long you listened, this
   month or all time.
 - Keyboard shortcut: <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> turns audio
-  mode on or off (change it at `chrome://extensions/shortcuts`).
-- <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Y</kbd> opens the popup, and Settings
-  shows both keys with a button to change them.
+  mode on or off. Settings shows the key with a button to change it.
 
 **Feeds**
 - Every video from your channels in one list, newest first.
-- Live streams and premieres are tagged. Shorts are hidden unless you turn
-  them on.
+- Live streams and premieres are tagged. Shorts are left out.
 - Type to filter by title or channel. Tick **Favourites only** to narrow it
   down.
 - Your groups also show as chips on YouTube's own Subscriptions page. Pick
-  one to see only that group's videos there. A Settings switch turns this
-  off. *(coming in 2.1)*
+  one to see only that group's videos there.
 
 **Watchlist**
 - Add a channel by pasting its URL or `@handle`, or press **Add** with an
@@ -79,13 +75,12 @@
 - Bring all your YouTube subscriptions at once: **Import from YouTube** reads
   them from your signed-in YouTube tab. If several Google accounts are
   signed in, you pick which one. Nothing is sent anywhere.
-  *(coming in 2.1)*
 - Signed out of YouTube? Download `subscriptions.csv` from Google Takeout and
   pick it on the welcome page instead. The file stays on your device.
 - On a YouTube channel or video you don't follow yet, the Player tab shows
   that channel with a **Follow** button. A video made by several channels
   lists each one, with a ✔ on those you already follow.
-- Star your favourites. They sit at the top and are checked more often.
+- Star your favourites. They sit at the top and always alert.
 - Mute one channel's alerts from its ⋯ menu. Its videos still show in Feeds.
 - Click a channel to see its latest videos without leaving the popup.
 - If a channel's last check failed, it says why and offers **Retry**.
@@ -137,7 +132,9 @@ There is no build step. The folder is the extension.
 - Your channels, feed, settings and stats stay in your browser's extension
   storage. Nothing is sent anywhere else. There are no analytics.
 - Removing the extension opens a short page on GitHub Pages that asks why.
-  It sends nothing unless you post your answers as a GitHub issue.
+  Settings has a Send feedback link to a page like it. On either page, only
+  what you type is sent, with the version and language, when you press
+  Send. No name, email or account is asked for.
 
 The full policy is in [PRIVACY.md](PRIVACY.md). To report a security
 problem, see [SECURITY.md](SECURITY.md).
@@ -180,7 +177,8 @@ src/
 _locales/       English and Arabic strings
 docs/           screenshots, and what YouTube serves (measured)
 scripts/        packaging, screenshots, and the icon drawn from geometry
-site/           the uninstall page, published to GitHub Pages
+site/           the uninstall and feedback pages, published to GitHub Pages
+server/         the feedback worker (Cloudflare) those pages post to
 store/          store listing copy and images
 test/           test suites and fixtures
 ```

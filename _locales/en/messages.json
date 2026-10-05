@@ -455,6 +455,20 @@
       }
     }
   },
+  "feedProgress": {
+    "message": "Loading videos: $DONE$ of $TOTAL$ channels",
+    "description": "Feeds status line while a long check is still fetching channels. $DONE$ is how many of this check are done. $TOTAL$ is how many it will check.",
+    "placeholders": {
+      "done": {
+        "content": "$1",
+        "example": "120"
+      },
+      "total": {
+        "content": "$2",
+        "example": "480"
+      }
+    }
+  },
   "feedSweepRunning": {
     "message": "A check is already running",
     "description": "Inline notice on the Feeds tab when a refresh is requested while a sweep is already in progress."
@@ -671,6 +685,10 @@
     "message": "No videos",
     "description": "Empty state on the channel sheet when this channel has no stored videos to show."
   },
+  "channelSeeMore": {
+    "message": "See more",
+    "description": "Button on the channel sheet that loads older videos from YouTube."
+  },
   "settingsNotifications": {
     "message": "Notifications",
     "description": "Settings group heading for desktop alert controls."
@@ -695,45 +713,13 @@
     "message": "Favourites always alert while notifications are on.",
     "description": "Visible note under the non-favourite notification switch."
   },
-  "settingsUseAvatar": {
-    "message": "Use the channel's avatar as the alert icon",
-    "description": "Switch that uses the channel avatar on desktop alerts."
-  },
-  "settingsUseAvatarTitle": {
-    "message": "When off, alerts use the extension icon instead.",
-    "description": "Tooltip on the alert-icon switch."
-  },
-  "settingsChecking": {
-    "message": "Checking",
-    "description": "Settings group heading for poll interval controls."
-  },
   "settingsPollAllBefore": {
-    "message": "Check all channels every",
-    "description": "Label before the all-channels poll interval input."
+    "message": "Check channels every",
+    "description": "Label before the poll interval input."
   },
   "settingsPollAllAfter": {
     "message": "minutes",
-    "description": "Label after the all-channels poll interval input."
-  },
-  "settingsPollAllTitle": {
-    "message": "YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.",
-    "description": "Tooltip on the all-channels poll interval."
-  },
-  "settingsPollFavBefore": {
-    "message": "Check favourites every",
-    "description": "Label before the favourites poll interval input."
-  },
-  "settingsPollFavAfter": {
-    "message": "minutes",
-    "description": "Label after the favourites poll interval input."
-  },
-  "settingsPollFavTitle": {
-    "message": "0 turns this extra check off. YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.",
-    "description": "Tooltip on the favourites poll interval."
-  },
-  "settingsPollCacheNote": {
-    "message": "YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.",
-    "description": "Visible note under the poll interval controls."
+    "description": "Label after the poll interval input."
   },
   "settingsFeed": {
     "message": "Feed",
@@ -751,30 +737,6 @@
     "message": "Oldest videos fall off the feed when this cap is reached.",
     "description": "Tooltip on the feed retention input."
   },
-  "settingsShowShorts": {
-    "message": "Show shorts",
-    "description": "Switch that includes YouTube Shorts in the feed and badge."
-  },
-  "settingsShowShortsTitle": {
-    "message": "Off hides shorts from the feed and from the toolbar badge.",
-    "description": "Tooltip on the show-shorts switch."
-  },
-  "settingsGroupsOnYouTube": {
-    "message": "My groups on YouTube",
-    "description": "Switch that shows group chips on YouTube's subscriptions page."
-  },
-  "settingsGroupsOnYouTubeTitle": {
-    "message": "Puts your group chips on YouTube's subscriptions page.",
-    "description": "Tooltip on the switch that shows group chips on YouTube's subscriptions page."
-  },
-  "settingsKeys": {
-    "message": "Keyboard shortcuts",
-    "description": "Settings group heading for the extension's keyboard shortcuts."
-  },
-  "settingsKeyPopup": {
-    "message": "Open this popup",
-    "description": "Settings row label for the shortcut that opens the extension's popup."
-  },
   "settingsKeyAudio": {
     "message": "Audio mode on or off",
     "description": "Settings row label for the shortcut that toggles audio mode on the active YouTube tab."
@@ -784,12 +746,16 @@
     "description": "Shown in place of a key combination when Chrome bound no shortcut, usually because another extension had it."
   },
   "settingsKeysChange": {
-    "message": "Change shortcuts",
+    "message": "Change",
     "description": "Settings button that opens the browser's page for changing extension shortcuts."
+  },
+  "settingsAppearance": {
+    "message": "Appearance",
+    "description": "Settings group heading for language and theme."
   },
   "settingsLanguage": {
     "message": "Language",
-    "description": "Settings group heading for the UI language."
+    "description": "Row label for the language choice. Also the welcome and What's new language control."
   },
   "settingsLocaleAuto": {
     "message": "Auto",
@@ -1466,23 +1432,9 @@
       }
     }
   },
-  "audioShortcutBound": {
-    "message": "Shortcut $SHORTCUT$ — click to change",
-    "description": "Player tab hint when a keyboard shortcut is bound. $SHORTCUT$ is the real combination from chrome.commands, such as Alt+Shift+A.",
-    "placeholders": {
-      "shortcut": {
-        "content": "$1",
-        "example": "Alt+Shift+A"
-      }
-    }
-  },
   "audioShortcutNone": {
     "message": "No shortcut assigned — click to set one",
     "description": "Player tab hint when Chrome registered the command with no shortcut. Clicking opens chrome://extensions/shortcuts."
-  },
-  "audioShortcutTitle": {
-    "message": "Click to set the keyboard shortcut.",
-    "description": "Tooltip on the Player tab shortcut hint before JavaScript replaces it with the bound or empty copy."
   },
   "audioPickerLabel": {
     "message": "Open YouTube tabs",
@@ -1670,6 +1622,10 @@
     "message": "On, clicking a video opens it with audio mode already on, and its button opens it normally.",
     "description": "Tooltip on the Open feed videos in audio mode checkbox."
   },
+  "settingsOverlayLook": {
+    "message": "Overlay look",
+    "description": "Folded Settings summary that opens the audio-mode overlay background controls."
+  },
   "settingsAudio": {
     "message": "Audio mode",
     "description": "Settings group heading for audio mode: opening feed videos in it, and the in-page overlay appearance."
@@ -1820,13 +1776,13 @@
     "message": "From any Egyptian bank or wallet app with InstaPay.",
     "description": "Hint under the InstaPay support method."
   },
-  "settingsSupport": {
-    "message": "Support",
-    "description": "Settings group heading for supporting the project."
+  "settingsSupportLink": {
+    "message": "Support ♥",
+    "description": "Settings link that opens the support sheet."
   },
-  "settingsSupportText": {
-    "message": "Free, with no ads. Chip in if it helps you.",
-    "description": "Short note under the Settings support heading."
+  "settingsFeedback": {
+    "message": "Send feedback",
+    "description": "Settings link that opens the feedback page."
   },
   "welcomeTitle": {
     "message": "Welcome to Companion for YouTube",
@@ -2044,15 +2000,6 @@
   "welcomePinned": {
     "message": "Pinned. You're all set.",
     "description": "Shown once the icon is on the toolbar."
-  },
-  "welcomePopupKey": {
-    "message": "$KEYS$ opens the extension.",
-    "description": "Shown when the popup shortcut is set. $KEYS$ is the key combination.",
-    "placeholders": {
-      "keys": {
-        "content": "$1"
-      }
-    }
   },
   "welcomeFooter": {
     "message": "Free and open source, with no ads and no tracking.",

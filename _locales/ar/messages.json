@@ -455,6 +455,20 @@
       }
     }
   },
+  "feedProgress": {
+    "message": "جارٍ تحميل الفيديوهات: $DONE$ من $TOTAL$ قناة",
+    "description": "Feeds status line while a long check is still fetching channels. $DONE$ is how many of this check are done. $TOTAL$ is how many it will check.",
+    "placeholders": {
+      "done": {
+        "content": "$1",
+        "example": "120"
+      },
+      "total": {
+        "content": "$2",
+        "example": "480"
+      }
+    }
+  },
   "feedSweepRunning": {
     "message": "هناك فحص جارٍ بالفعل",
     "description": "Inline notice on the Feeds tab when a refresh is requested while a sweep is already in progress."
@@ -671,6 +685,10 @@
     "message": "لا توجد فيديوهات",
     "description": "Empty state on the channel sheet when this channel has no stored videos to show."
   },
+  "channelSeeMore": {
+    "message": "عرض المزيد",
+    "description": "Button on the channel sheet that loads older videos from YouTube."
+  },
   "settingsNotifications": {
     "message": "الإشعارات",
     "description": "Settings group heading for desktop alert controls."
@@ -695,45 +713,13 @@
     "message": "المفضلة تُنبَّه دائماً ما دامت الإشعارات مفعّلة.",
     "description": "Visible note under the non-favourite notification switch."
   },
-  "settingsUseAvatar": {
-    "message": "استخدم صورة القناة كأيقونة للتنبيه",
-    "description": "Switch that uses the channel avatar on desktop alerts."
-  },
-  "settingsUseAvatarTitle": {
-    "message": "عند الإيقاف تُستخدم أيقونة الإضافة بدل صورة القناة.",
-    "description": "Tooltip on the alert-icon switch."
-  },
-  "settingsChecking": {
-    "message": "الفحص",
-    "description": "Settings group heading for poll interval controls."
-  },
   "settingsPollAllBefore": {
-    "message": "افحص كل القنوات كل",
-    "description": "Label before the all-channels poll interval input."
+    "message": "افحص القنوات كل",
+    "description": "Label before the poll interval input."
   },
   "settingsPollAllAfter": {
     "message": "دقيقة",
-    "description": "Label after the all-channels poll interval input."
-  },
-  "settingsPollAllTitle": {
-    "message": "يخزّن يوتيوب الموجز لمدة 15 دقيقة، لذا الفاصل الأقصر لا يفيد إلا لأن الطلب يتجاوز ذلك التخزين.",
-    "description": "Tooltip on the all-channels poll interval."
-  },
-  "settingsPollFavBefore": {
-    "message": "افحص المفضلة كل",
-    "description": "Label before the favourites poll interval input."
-  },
-  "settingsPollFavAfter": {
-    "message": "دقيقة",
-    "description": "Label after the favourites poll interval input."
-  },
-  "settingsPollFavTitle": {
-    "message": "0 يوقف هذا الفحص الإضافي. يخزّن يوتيوب الموجز لمدة 15 دقيقة، لذا الفاصل الأقصر لا يفيد إلا لأن الطلب يتجاوز ذلك التخزين.",
-    "description": "Tooltip on the favourites poll interval."
-  },
-  "settingsPollCacheNote": {
-    "message": "يخزّن يوتيوب الموجز لمدة 15 دقيقة، لذا الفاصل الأقصر لا يفيد إلا لأن الطلب يتجاوز ذلك التخزين.",
-    "description": "Visible note under the poll interval controls."
+    "description": "Label after the poll interval input."
   },
   "settingsFeed": {
     "message": "الموجز",
@@ -751,30 +737,6 @@
     "message": "تسقط أقدم الفيديوهات من الموجز عند بلوغ هذا الحد.",
     "description": "Tooltip on the feed retention input."
   },
-  "settingsShowShorts": {
-    "message": "إظهار الفيديوهات القصيرة",
-    "description": "Switch that includes YouTube Shorts in the feed and badge."
-  },
-  "settingsShowShortsTitle": {
-    "message": "الإيقاف يخفي المقاطع القصيرة من الموجز ومن شارة شريط الأدوات.",
-    "description": "Tooltip on the show-shorts switch."
-  },
-  "settingsGroupsOnYouTube": {
-    "message": "مجموعاتي على يوتيوب",
-    "description": "Switch that shows group chips on YouTube's subscriptions page."
-  },
-  "settingsGroupsOnYouTubeTitle": {
-    "message": "يضع شرائح مجموعاتك في صفحة الاشتراكات على يوتيوب.",
-    "description": "Tooltip on the switch that shows group chips on YouTube's subscriptions page."
-  },
-  "settingsKeys": {
-    "message": "اختصارات لوحة المفاتيح",
-    "description": "Settings group heading for the extension's keyboard shortcuts."
-  },
-  "settingsKeyPopup": {
-    "message": "فتح هذه النافذة",
-    "description": "Settings row label for the shortcut that opens the extension's popup."
-  },
   "settingsKeyAudio": {
     "message": "تشغيل وضع الصوت أو إيقافه",
     "description": "Settings row label for the shortcut that toggles audio mode on the active YouTube tab."
@@ -784,12 +746,16 @@
     "description": "Shown in place of a key combination when Chrome bound no shortcut, usually because another extension had it."
   },
   "settingsKeysChange": {
-    "message": "تغيير الاختصارات",
+    "message": "تغيير",
     "description": "Settings button that opens the browser's page for changing extension shortcuts."
+  },
+  "settingsAppearance": {
+    "message": "المظهر",
+    "description": "Settings group heading for language and theme."
   },
   "settingsLanguage": {
     "message": "اللغة",
-    "description": "Settings group heading for the UI language."
+    "description": "Row label for the language choice. Also the welcome and What's new language control."
   },
   "settingsLocaleAuto": {
     "message": "تلقائي",
@@ -1466,23 +1432,9 @@
       }
     }
   },
-  "audioShortcutBound": {
-    "message": "الاختصار $SHORTCUT$ — انقر للتغيير",
-    "description": "Player tab hint when a keyboard shortcut is bound. $SHORTCUT$ is the real combination from chrome.commands, such as Alt+Shift+A.",
-    "placeholders": {
-      "shortcut": {
-        "content": "$1",
-        "example": "Alt+Shift+A"
-      }
-    }
-  },
   "audioShortcutNone": {
     "message": "لا يوجد اختصار — انقر لتعيين واحد",
     "description": "Player tab hint when Chrome registered the command with no shortcut. Clicking opens chrome://extensions/shortcuts."
-  },
-  "audioShortcutTitle": {
-    "message": "انقر لتعيين اختصار لوحة المفاتيح.",
-    "description": "Tooltip on the Player tab shortcut hint before JavaScript replaces it with the bound or empty copy."
   },
   "audioPickerLabel": {
     "message": "تبويبات يوتيوب المفتوحة",
@@ -1666,6 +1618,10 @@
     "message": "فتح فيديوهات الموجز في وضع الصوت",
     "description": "Settings checkbox that makes a feed-row click open the video with audio mode already on."
   },
+  "settingsOverlayLook": {
+    "message": "شكل الغطاء",
+    "description": "Folded Settings summary that opens the audio-mode overlay background controls."
+  },
   "settingsOpenFeedInAudioTitle": {
     "message": "عند التشغيل، يفتح النقر على الفيديو في وضع الصوت مباشرة، ويفتحه زره بشكل عادي.",
     "description": "Tooltip on the Open feed videos in audio mode checkbox."
@@ -1820,13 +1776,13 @@
     "message": "من أي تطبيق بنك أو محفظة مصرية يدعم InstaPay.",
     "description": "Hint under the InstaPay support method."
   },
-  "settingsSupport": {
-    "message": "الدعم",
-    "description": "Settings group heading for supporting the project."
+  "settingsSupportLink": {
+    "message": "ادعمنا ♥",
+    "description": "Settings link that opens the support sheet."
   },
-  "settingsSupportText": {
-    "message": "مجانية وبلا إعلانات. ساهم إن كانت تفيدك.",
-    "description": "Short note under the Settings support heading."
+  "settingsFeedback": {
+    "message": "أرسل ملاحظاتك",
+    "description": "Settings link that opens the feedback page."
   },
   "welcomeTitle": {
     "message": "مرحبًا بك في رفيق ليوتيوب",
@@ -2044,15 +2000,6 @@
   "welcomePinned": {
     "message": "تم التثبيت. كل شيء جاهز.",
     "description": "Shown once the icon is on the toolbar."
-  },
-  "welcomePopupKey": {
-    "message": "$KEYS$ يفتح الإضافة.",
-    "description": "Shown when the popup shortcut is set. $KEYS$ is the key combination.",
-    "placeholders": {
-      "keys": {
-        "content": "$1"
-      }
-    }
   },
   "welcomeFooter": {
     "message": "مجانية ومفتوحة المصدر، بلا إعلانات ولا تتبّع.",

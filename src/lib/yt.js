@@ -198,6 +198,40 @@ function attr(attrs, name) {
   return m ? (m[1] ?? m[2] ?? '') : '';
 }
 
+// The entry can carry more than one link. The alternate one is the video.
+function alternateHref(block) {
+  const re = /<link\b([^>]*)\/?>/gi;
+  let m;
+  while ((m = re.exec(block))) {
+    const rel = attr(m[1], 'rel');
+    if (rel && rel.toLowerCase() !== 'alternate') continue;
+    const href = attr(m[1], 'href');
+    if (href) return href;
+  }
+  return '';
+}
+
+function isShortsHref(href) {
+  if (!href) return false;
+  try {
+    return new URL(href, YT_ORIGIN).pathname.startsWith('/shorts/');
+  } catch {
+    return false;
+  }
+}
+
+function contextFor(hl) {
+  return {
+    context: {
+      ...INNERTUBE_CONTEXT.context,
+      client: {
+        ...INNERTUBE_CONTEXT.context.client,
+        hl: hl === 'ar' ? 'ar' : 'en',
+      },
+    },
+  };
+}
+
 function asChannelId(raw) {
   if (!raw) return '';
   const s = String(raw).trim();
@@ -405,6 +439,8 @@ export function parseFeedXml(xml) {
       at: at > 0 ? at : 0,
       views,
       description: tagText(block, 'media:description'),
+      // A short's alternate link is /shorts/<id>. A normal video's is /watch?v=.
+      short: isShortsHref(alternateHref(block)),
     });
   }
 
@@ -456,30 +492,99 @@ export function parseChannelHeader(json) {
  * The id is `contentId` — `videoId` sits on nested endpoints several times
  * per row. There is no upload time, only "3 days ago", so rows have no `at`.
  */
-export function parseChannelVideos(json, channelId) {
-  json = asJson(json, 'browse');
-  const id = asChannelId(json.metadata?.channelMetadataRenderer?.externalId);
-  // A missing channel answers 200 with an alert and no metadata.
-  if (!id || (channelId && id !== channelId)) throw new YtError('parse', 'browse');
-  const entries = [];
+function collectVideoLockups(root) {
+  const rows = [];
   const seen = new Set();
-  walk(json.contents, (node) => {
+  walk(root, (node) => {
     const lockup = node.lockupViewModel;
     if (!lockup || lockup.contentType !== 'LOCKUP_CONTENT_TYPE_VIDEO') return;
     const v = String(lockup.contentId || '');
     if (!VIDEO_ID_RE.test(v) || seen.has(v)) return;
     seen.add(v);
-    const meta = lockup.metadata?.lockupMetadataViewModel || {};
-    let views = 0;
-    walk(meta.metadata, (n) => {
-      for (const part of n.metadataParts || []) {
-        const text = ytText(part.text);
-        if (/\bviews?\b/i.test(text)) views = parseCompactCount(text);
-      }
-    });
-    entries.push({ v, title: ytText(meta.title), views });
+    rows.push(lockup);
   });
-  return { channelId: id, entries: entries.slice(0, FEED_WINDOW) };
+  return rows;
+}
+
+function viewsFromLockup(lockup) {
+  const meta = lockup.metadata?.lockupMetadataViewModel || {};
+  let views = 0;
+  walk(meta.metadata, (n) => {
+    for (const part of n.metadataParts || []) {
+      const text = ytText(part.text);
+      if (/\bviews?\b/i.test(text)) views = parseCompactCount(text);
+    }
+  });
+  return { title: ytText(meta.title), views };
+}
+
+// The age is the second metadata part ("2 years ago"). Views are only the
+// English word: an Arabic page says "مشاهدة", which parseCompactCount would
+// misread, so that row keeps 0 and the caller shows the words instead.
+function pageFields(lockup) {
+  const meta = lockup.metadata?.lockupMetadataViewModel || {};
+  const parts = meta.metadata?.contentMetadataViewModel?.metadataRows?.[0]?.metadataParts || [];
+  const first = ytText(parts[0]?.text);
+  return {
+    title: ytText(meta.title),
+    views: /\bviews?\b/i.test(first) ? parseCompactCount(first) : 0,
+    ago: ytText(parts[1]?.text),
+  };
+}
+
+// The next-page token is the last item of this list. Other
+// continuationItemRenderers live under sectionListRenderer and belong to
+// panels, not the grid.
+function continuationToken(items) {
+  const last = items.length ? items[items.length - 1] : null;
+  const token = last?.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token;
+  return typeof token === 'string' ? token : '';
+}
+
+function gridItems(json) {
+  let items = null;
+  walk(json.contents, (node) => {
+    if (items) return;
+    const contents = node.richGridRenderer?.contents;
+    if (Array.isArray(contents)) items = contents;
+  });
+  return items || [];
+}
+
+function continuationPageItems(json) {
+  const items = json.onResponseReceivedActions?.[0]?.appendContinuationItemsAction?.continuationItems;
+  return Array.isArray(items) ? items : [];
+}
+
+export function parseChannelVideos(json, channelId) {
+  json = asJson(json, 'browse');
+  const id = asChannelId(json.metadata?.channelMetadataRenderer?.externalId);
+  // A missing channel answers 200 with an alert and no metadata.
+  if (!id || (channelId && id !== channelId)) throw new YtError('parse', 'browse');
+  const entries = collectVideoLockups(json.contents)
+    .slice(0, FEED_WINDOW)
+    .map((lockup) => ({ v: String(lockup.contentId || ''), ...viewsFromLockup(lockup) }));
+  return { channelId: id, entries };
+}
+
+/**
+ * One Videos-tab page. A first answer carries `metadata` and the grid; a
+ * continuation answer has neither, and its rows arrive under
+ * appendContinuationItemsAction. No 15-row cut: the caller is paging on purpose.
+ */
+export function parseChannelVideosPage(json, channelId) {
+  json = asJson(json, 'browse');
+  const firstPage = !!json.metadata;
+  if (firstPage) {
+    const id = asChannelId(json.metadata?.channelMetadataRenderer?.externalId);
+    if (!id || (channelId && id !== channelId)) throw new YtError('parse', 'browse');
+  }
+  const items = firstPage ? gridItems(json) : continuationPageItems(json);
+  const entries = collectVideoLockups(items).map((lockup) => ({
+    v: String(lockup.contentId || ''),
+    ...pageFields(lockup),
+  }));
+  return { entries, token: continuationToken(items) };
 }
 
 export function parsePlayer(json) {
@@ -560,6 +665,16 @@ export async function fetchChannelFeed(channelId, { fetch = globalThis.fetch } =
 export async function fetchChannelVideos(channelId, { fetch = globalThis.fetch } = {}) {
   const json = await innertubePost('browse', { browseId: channelId, params: BROWSE_VIDEOS_TAB_PARAMS }, fetch);
   return parseChannelVideos(json, channelId);
+}
+
+// Later pages send `continuation` and no browse id. `hl` is only en or ar;
+// anything else stays English so the views word above still matches.
+export async function fetchChannelVideosPage(channelId, { token = '', hl = 'en', fetch = globalThis.fetch } = {}) {
+  const extra = token
+    ? { continuation: token }
+    : { browseId: channelId, params: BROWSE_VIDEOS_TAB_PARAMS };
+  const json = await innertubePost('browse', { ...contextFor(hl), ...extra }, fetch);
+  return parseChannelVideosPage(json, channelId);
 }
 
 /**

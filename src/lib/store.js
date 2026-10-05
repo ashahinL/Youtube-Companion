@@ -23,13 +23,15 @@ export const MAX_CHANNELS = MAX_BACKUP_CHANNELS;
 const DEFAULT_POLL_STATE = {
   running: false,
   lastPollAt: 0,
-  lastFavPollAt: 0,
   lastSeenAt: 0,
   notified: [],
   // Set when YouTube pushes back: no check runs before backoffUntil, and each
   // pushback in a row doubles the wait. A clean check puts both back to 0.
   backoffUntil: 0,
   backoffLevel: 0,
+  // Set while a long check writes the feed in batches: how many channels
+  // of this check are done. Null whenever no such check is running.
+  progress: null,
 };
 
 const VIDEO_META_CAP = 3000;
@@ -332,7 +334,7 @@ export async function applyFeedMerge(incoming, maxItems, generations) {
   });
 }
 
-export function newSinceCount(feed, lastSeenAt, showShorts, channelIds, now = Date.now()) {
+export function newSinceCount(feed, lastSeenAt, channelIds, now = Date.now()) {
   let n = 0;
   const seen = Number(lastSeenAt) || 0;
   const restrict = channelIds != null;
@@ -340,7 +342,7 @@ export function newSinceCount(feed, lastSeenAt, showShorts, channelIds, now = Da
   for (const item of feed || []) {
     if (!item) continue;
     if (!(item.at > seen)) continue;
-    if (!showShorts && item.k === 'short') continue;
+    if (item.k === 'short') continue;
     if (isStalePremiere(item, live, now)) continue;
     if (restrict && !channelIds.has(item.c)) continue;
     n++;

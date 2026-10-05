@@ -77,7 +77,7 @@ export default async function run(t) {
     const partial = await readSettings();
     t.check('setting only alerts.enabled applies', partial.alerts.enabled === false);
     t.check('other alerts fields stay at their defaults',
-      partial.alerts.notifyNormal === true && partial.alerts.useAvatarIcon === true);
+      partial.alerts.notifyNormal === true);
     t.check('unrelated groups stay at their defaults',
       partial.poll.intervalMinutes === 30 && partial.feed.maxItems === 500);
 
@@ -108,20 +108,6 @@ export default async function run(t) {
     t.check('intervalMinutes missing falls back to the default',
       clampSettings({ ...DEFAULT_SETTINGS, poll: { ...DEFAULT_SETTINGS.poll, intervalMinutes: undefined } })
         .poll.intervalMinutes === 30);
-
-    t.section('clamp: poll.favoriteIntervalMinutes');
-
-    const fav = (n) =>
-      clampSettings({
-        ...DEFAULT_SETTINGS,
-        poll: { ...DEFAULT_SETTINGS.poll, favoriteIntervalMinutes: n },
-      }).poll.favoriteIntervalMinutes;
-    t.check('favoriteIntervalMinutes 0 is preserved', fav(0) === 0);
-    t.check('favoriteIntervalMinutes 1 is kept', fav(1) === 1);
-    t.check('favoriteIntervalMinutes 1440 is kept', fav(1440) === 1440);
-    t.check('favoriteIntervalMinutes 1441 clamps down to 1440', fav(1441) === 1440);
-    t.check('favoriteIntervalMinutes NaN falls back to the default', fav(NaN) === 10);
-    t.check('favoriteIntervalMinutes -1 clamps up to 1', fav(-1) === 1);
 
     t.section('clamp: feed.maxItems');
 
@@ -208,34 +194,18 @@ export default async function run(t) {
         feed: { ...DEFAULT_SETTINGS.feed, group: 1 },
       }).feed.group === '',
     );
+    const droppedOld = clampSettings({
+      poll: { favoriteIntervalMinutes: 5 },
+      alerts: { useAvatarIcon: false },
+      feed: { showShorts: true, groupsOnYouTube: false },
+    });
     t.check(
-      'groupsOnYouTube defaults on',
-      DEFAULT_SETTINGS.feed.groupsOnYouTube === true,
-    );
-    t.check(
-      'groupsOnYouTube 0 coerces to false',
-      clampSettings({
-        ...DEFAULT_SETTINGS,
-        feed: { ...DEFAULT_SETTINGS.feed, groupsOnYouTube: 0 },
-      }).feed.groupsOnYouTube === false,
-    );
-    t.check(
-      'groupsOnYouTube 1 coerces to true',
-      clampSettings({
-        ...DEFAULT_SETTINGS,
-        feed: { ...DEFAULT_SETTINGS.feed, groupsOnYouTube: 1 },
-      }).feed.groupsOnYouTube === true,
-    );
-    t.check(
-      'groupsOnYouTube false stays false',
-      clampSettings({
-        ...DEFAULT_SETTINGS,
-        feed: { ...DEFAULT_SETTINGS.feed, groupsOnYouTube: false },
-      }).feed.groupsOnYouTube === false,
-    );
-    t.check(
-      'a missing groupsOnYouTube stays on',
-      clampSettings({ feed: { showShorts: true } }).feed.groupsOnYouTube === true,
+      'removed settings are dropped',
+      !('favoriteIntervalMinutes' in droppedOld.poll)
+        && !('useAvatarIcon' in droppedOld.alerts)
+        && !('showShorts' in droppedOld.feed)
+        && !('groupsOnYouTube' in droppedOld.feed),
+      JSON.stringify(droppedOld),
     );
 
     t.section('clamp: audio.restoreQuality');
@@ -448,21 +418,17 @@ export default async function run(t) {
     const patched = await readSettings();
     t.check('deep partial patch applies', patched.alerts.enabled === false);
     t.check('siblings in the same group survive',
-      patched.alerts.notifyNormal === true && patched.alerts.useAvatarIcon === true);
+      patched.alerts.notifyNormal === true);
     t.check('other groups survive', patched.poll.enabled === true && patched.feed.maxItems === 500);
 
     await writeSettings({ feed: { group: 'Podcasts' } });
     const grouped = await readSettings();
     t.check('feed.group survives a write', grouped.feed.group === 'Podcasts');
-    await writeSettings({ feed: { showShorts: true } });
+    await writeSettings({ feed: { favoritesOnly: true } });
     const keptGroup = await readSettings();
     t.check(
       'a later feed patch keeps group',
-      keptGroup.feed.group === 'Podcasts' && keptGroup.feed.showShorts === true,
-    );
-    t.check(
-      'groupsOnYouTube stays on across a feed patch',
-      keptGroup.feed.groupsOnYouTube === true,
+      keptGroup.feed.group === 'Podcasts' && keptGroup.feed.favoritesOnly === true,
     );
 
     await writeSettings({ poll: { intervalMinutes: 45 } });
@@ -476,15 +442,14 @@ export default async function run(t) {
     await globalThis.chrome.storage.local.clear();
     const seen = [];
     const stop = onSettingsChanged((s) => seen.push(s));
-    await writeSettings({ feed: { showShorts: true } });
+    await writeSettings({ feed: { maxItems: 200 } });
     t.check('fires with merged settings',
       seen.length === 1
-        && seen[0].feed.showShorts === true
-        && seen[0].feed.maxItems === 500
+        && seen[0].feed.maxItems === 200
         && seen[0].poll.intervalMinutes === 30,
       JSON.stringify(seen[0]?.feed));
     stop();
-    await writeSettings({ feed: { showShorts: false } });
+    await writeSettings({ feed: { maxItems: 500 } });
     t.check('unsubscribe actually stops it', seen.length === 1, String(seen.length));
   } finally {
     mock.restore();

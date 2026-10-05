@@ -233,17 +233,6 @@ export default async function run(t) {
     t.check(`${key} has a One sibling`, `${key}One` in en && `${key}One` in ar);
   }
   t.check(
-    'settingsGroupsOnYouTube is translated',
-    en.settingsGroupsOnYouTube?.message === 'My groups on YouTube'
-      && en.settingsGroupsOnYouTube.message !== ar.settingsGroupsOnYouTube?.message
-      && en.settingsGroupsOnYouTubeTitle?.message !== ar.settingsGroupsOnYouTubeTitle?.message
-      && /subscriptions page/.test(en.settingsGroupsOnYouTubeTitle?.message || ''),
-    JSON.stringify({
-      en: en.settingsGroupsOnYouTube?.message,
-      ar: ar.settingsGroupsOnYouTube?.message,
-    }),
-  );
-  t.check(
     'subscriptions chips name All, the row, and the match count',
     en.subsGroupsAll?.message === 'All'
       && en.subsGroupsLabel?.message === 'Groups'

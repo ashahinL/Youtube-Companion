@@ -89,9 +89,9 @@ asks.
   box and Favourites only, and the badge counts the same way. A group exists
   only while a channel is in it. Rename and delete live in the Groups sheet:
   renaming onto an existing name merges the two, and delete asks inline.
-  There is no Settings screen. At most 20 groups, 8 on one channel, 24 characters a name.
+  There is no groups screen in Settings. At most 20 groups, 8 on one channel, 24 characters a name.
   Groups ride along in backups. The same groups show as chips on YouTube's
-  own `/feed/subscriptions` page (a Settings switch, on by default); a chip
+  own `/feed/subscriptions` page whenever the list has groups (no switch); a chip
   hides the cards of channels outside it, matched by handle, then by name.
   Its choice is its own key, not the popup's Feeds chip.
 - **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
@@ -121,10 +121,22 @@ asks.
   dismissible line above the panels, and the bottom of Settings reopens the
   page at any time. It carries the headline features with a picture each,
   three of them, in both languages, and links to the CHANGELOG for the rest.
-- **Uninstall page** is `site/uninstall.html` on GitHub Pages, published from
-  `main`. Its address carries only the language and version. Its tick boxes
-  fill in a GitHub issue that the person posts themselves; nothing is
-  collected.
+- **Uninstall and feedback pages** are `site/uninstall.html` and
+  `site/feedback.html` on GitHub Pages, published from `main`; Settings'
+  Send feedback link opens the second. Their address carries only the
+  language and version. Each is one text box and Send, with no GitHub
+  account and no email: the page posts the text, version and language to
+  the Cloudflare Worker in `server/feedback/`
+  (`feedback.ammarshahin.dev`), which opens an issue in the private repo
+  `ashahinL/companion-feedback`. Spam is stopped by Turnstile, a 2000
+  character cap and a per-IP rate limit; no IP is stored and the worker's
+  logs are off. The extension itself never sends anything there.
+- **Settings**, top to bottom: Appearance (Language, Theme as segmented
+  rows), Notifications, Feed (check interval, keep-newest), Audio mode (the
+  open-in-audio switch, the shortcut with Change, and Overlay look folded),
+  Backup, then one line of links: Support ♥ · Send feedback · What's new.
+  No Advanced part. One check interval for every channel; alerts always use
+  the channel picture; the only keyboard command is audio mode's.
 - **Follow card**: when the focused tab is a YouTube channel or video whose
   channel is not on the list, the top of the Player tab names it with a Follow
   button. It is the same add; deciding whether to show it fetches nothing. A
@@ -138,8 +150,12 @@ asks.
   for this open only.
 - **Clicking a video** opens a new focused tab on youtube.com and closes the
   popup. A channel name opens the in-popup channel sheet, which shows stored
-  videos and never fetches on open; its ↗ opens the channel's own page on
-  youtube.com the same way.
+  videos and never fetches on open: its feed rows plus the channel's own
+  newest 5 normal videos (`channel.recent`, kept outside the feed cap,
+  refreshed only from the RSS feed, not in backups). **See more** fetches
+  older ones from the Videos tab, a page at a time, only when pressed, and
+  honours the backoff. Its ↗ opens the channel's own page on youtube.com the
+  same way.
 - **Alerts**: one notification per check, never one per video or per channel.
   One channel with new videos gets its own alert ("3 new videos"); two or
   more share one ("5 new videos", channel names as the body, extension icon),
@@ -149,7 +165,7 @@ asks.
   the feed. The mute goes into backups. An alert has two buttons, Listen
   (audio mode) and Add to Up next, both for the newest video; a live or
   premiere alert has none.
-- **Shorts** hidden by default behind a setting, tagged `SHORT` when shown.
+- **Shorts** are stored but never shown, counted or alerted (no setting).
   **Live and premieres** are shown and tagged (`LIVE` red, `PREMIERE <time>`).
   A premiere past its start leaves Feeds and the badge once its channel is
   live on another video, or an hour after its start; it stays stored and
@@ -194,7 +210,7 @@ asks.
   queue, removes rows. While the page has a queue, YouTube advances it.
   Not in backups. Live streams and premieres cannot be queued from a feed row.
 - **Name, icon, accent**: see the top of this file. **Support**: a heart in the
-  popup header and a Support group at the bottom of Settings open one sheet
+  popup header and a Support ♥ link at the bottom of Settings open one sheet
   (PayPal, InstaPay with address, Copy and QR); the README and store text
   mention it. No `.github/FUNDING.yml`.
 
@@ -438,10 +454,16 @@ Most live as comments at the line they protect. These span files or tools:
   goes down, because it is what keeps old rows quiet when a removed channel
   makes room for them. A check also calls an extension API every 25 seconds:
   Chrome stops a worker that only has fetches in flight.
+  A check writes the feed and that batch's channel patches every 25
+  channels (`SWEEP_BATCH`), and alerts once at the end, only for rows
+  still in the feed; a channel's `seeded` can therefore be stored before
+  its check's alert goes out.
 - **Installed copies link to `site/uninstall.html` forever.** The worker's
   `UNINSTALL_PAGE` is set in every install, so renaming or moving that page,
   or turning off GitHub Pages, breaks the link for everyone who already has
-  the extension.
+  the extension. Its Send needs the feedback worker live and
+  `TURNSTILE_SITE_KEY` set in `site/feedback.js`; without them Send stays
+  off, so neither goes to `main` before the worker is deployed.
 - **Compressed bytes differ between Node builds.** Homebrew's Node links system
   zlib and packs the same tree to a different zip hash than a Node with its own
   zlib. Compare files or pixels, never deflate output, across machines.

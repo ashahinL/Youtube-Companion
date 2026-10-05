@@ -137,14 +137,14 @@ FEEDS
 • A New tag marks what arrived since you last opened the popup
 • Put channels in groups and show one group at a time; rename, merge or delete a group whenever you like
 • Your groups also show as chips on YouTube's own Subscriptions page, so one tap narrows it there too
-• Live streams and premieres are tagged; Shorts stay hidden unless you want them
+• Live streams and premieres are tagged; Shorts are left out
 • Filter by title or channel, or show only your favourites
 
 WATCHLIST
 • Add a channel by pasting its link or @handle, or press Add while you are on its page
 • On a YouTube channel or video you do not follow yet, a Follow button adds it in one press — every channel of a collab video too
 • Import all your YouTube subscriptions from your signed-in YouTube tab, choosing the Google account if you have several. Signed out? A Google Takeout file works too. Both are read on your device
-• Star your favourites: they sit at the top and are checked more often
+• Star your favourites: they sit at the top and always alert
 • Mute a channel to keep it in your feed but out of your alerts
 • Open any channel to see its latest videos without leaving the popup, or jump to it on YouTube
 • Channels whose check fails are marked, and one tap shows just those
@@ -165,7 +165,7 @@ PLAYER, WITH AUDIO MODE
 • A sleep timer: pause after 15, 30 or 60 minutes, even with the popup closed
 • Open videos from your feed straight into audio mode
 • See how much data you saved this month and all time
-• Keyboard shortcuts: Alt+Shift+A for audio mode, Alt+Shift+Y to open the popup
+• Keyboard shortcut: Alt+Shift+A for audio mode
 
 UP NEXT
 • A listen-later queue in the Player tab: add a video from your feed or an alert, and drag to reorder
@@ -201,14 +201,14 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • وسم «جديد» يميّز ما وصل منذ آخر مرة فتحت فيها النافذة
 • ضع قنواتك في مجموعات، واعرض مجموعة واحدة في كل مرة؛ وأعد تسمية أي مجموعة أو ادمجها أو احذفها متى شئت
 • تظهر مجموعاتك أيضًا شرائحَ في صفحة الاشتراكات على يوتيوب نفسه، فتصفّيها هناك بضغطة
-• البث المباشر والعروض الأولى عليها وسم واضح، والفيديوهات القصيرة مخفية إلا إذا أردتها
+• البث المباشر والعروض الأولى عليها وسم واضح، والفيديوهات القصيرة لا تظهر
 • صفِّ حسب العنوان أو القناة، أو اعرض المفضلة فقط
 
 قائمة المتابعة
 • أضف قناة بلصق رابطها أو ‎@handle، أو اضغط «إضافة» وأنت على صفحتها
 • على قناة أو فيديو لا تتابعه بعد، يظهر زر «متابعة» يضيفها بضغطة واحدة — وكل قنوات الفيديو المشترك أيضًا
 • استورد كل اشتراكاتك في يوتيوب من تبويب يوتيوب الذي سجّلت الدخول إليه، واختر حساب Google إن كان لديك أكثر من حساب. غير مسجّل الدخول؟ يعمل ملف Google Takeout أيضًا. وكلاهما يُقرأ على جهازك
-• ميّز قنواتك المفضلة بنجمة: تظهر في الأعلى وتُفحص أكثر
+• ميّز قنواتك المفضلة بنجمة: تظهر في الأعلى وتنبّهك دائمًا
 • اكتم قناة لتبقى في موجزك دون أن ترسل لك تنبيهات
 • افتح أي قناة لترى أحدث فيديوهاتها دون مغادرة النافذة، أو انتقل إليها على يوتيوب
 • القنوات التي يفشل التحقق منها عليها علامة، وضغطة واحدة تعرضها وحدها
@@ -229,7 +229,7 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • مؤقت نوم: إيقاف بعد 15 أو 30 أو 60 دقيقة، حتى والنافذة مغلقة
 • افتح فيديوهات الموجز مباشرة في وضع الصوت
 • اعرف كم وفّرت من البيانات هذا الشهر وطوال الوقت
-• اختصارات لوحة المفاتيح: Alt+Shift+A لوضع الصوت، وAlt+Shift+Y لفتح النافذة
+• اختصار لوحة المفاتيح: Alt+Shift+A لوضع الصوت
 
 التالي
 • قائمة «استمع لاحقًا» في تبويب المشغّل: أضف فيديو من موجزك أو من التنبيه، واسحب لتغيير الترتيب

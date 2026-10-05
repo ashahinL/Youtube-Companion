@@ -38,19 +38,15 @@
     poll: {
       enabled: true,
       intervalMinutes: 30,
-      favoriteIntervalMinutes: 10,
     },
     alerts: {
       enabled: true,
       notifyNormal: true,
-      useAvatarIcon: true,
     },
     feed: {
       maxItems: 500,
-      showShorts: false,
       favoritesOnly: false,
       group: '',
-      groupsOnYouTube: true,
     },
     ui: {
       locale: 'auto',
@@ -198,7 +194,6 @@
     pollState: {
       running: false,
       lastPollAt: ago(12 * 60 * 1000),
-      lastFavPollAt: ago(5 * 60 * 1000),
       // Hours ago, not now: isNewSince is a strict `at > lastSeenAt`, and the
       // popup holds that value for the whole open.
       lastSeenAt: ago(12 * H),

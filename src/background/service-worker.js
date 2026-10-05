@@ -11,6 +11,7 @@ import {
   normalizeVideoInput,
   resolveChannelId,
   fetchLatestUploads,
+  fetchChannelVideosPage,
   fetchChannelHeader,
   classifyVideo,
   isPushback,
@@ -126,13 +127,12 @@ const OVERLAY_MESSAGE_KEYS = [
 ];
 
 const ALARM_ALL = 'poll-all';
+// Older installs scheduled this. syncAlarms clears it; nothing else uses it.
 const ALARM_FAV = 'poll-fav';
 // The icon's deep purple; Chrome's white badge text sits on it at 6.7:1.
 const BADGE_COLOR = '#5b3fd6';
 const EXT_ICON = 'icons/icon128.png';
 const AUDIO_TOGGLE_COMMAND = 'toggle-audio-mode';
-// Chrome opens the popup for this one itself; it never reaches onCommand.
-const POPUP_COMMAND = '_execute_action';
 
 // Innertube POSTs from the worker carry Origin: chrome-extension://… and
 // YouTube 403s that Origin. Fetch cannot override it; this rule can.
@@ -142,6 +142,10 @@ const YT_ORIGIN_RULE_ID = 1;
 // between channel fetches in each lane, is a choice, not a measured ceiling.
 const LANES = 3;
 const CHANNEL_FETCH_DELAY_MS = 250;
+// A check of hundreds used to write the feed once, at the end, so Feeds
+// stayed empty for the whole fetch. Writing every 25 lets videos show up
+// as they arrive.
+const SWEEP_BATCH = 25;
 
 // A channel imported from a file has a name but no picture or handle, and
 // filling one in is a Videos-tab browse of about 35 KB. A few per check keeps
@@ -200,9 +204,9 @@ const QUEUE_PLAY_KEY = 'queuePlay';
 // pass the storage read. The durable twin is pollState.running.
 let sweepActive = false;
 
-// A poll-all or poll-fav that fired while another sweep was in flight.
+// A scheduled poll that fired while a partial sweep was in flight.
 // Memory only: a killed worker just waits for the next period.
-let skippedScheduled = null;
+let skippedScheduled = false;
 let activeCoverage = null;
 
 // Channel ids added while a check is running, or after Add replies and
@@ -210,19 +214,18 @@ let activeCoverage = null;
 const pendingSeeds = new Set();
 let seeding = false;
 
-function sweepCoverage({ scope, onlyId, onlyIds }) {
+function sweepCoverage({ onlyId, onlyIds }) {
   if (onlyId || (onlyIds && onlyIds.length)) return 'partial';
-  return scope === 'favorites' ? 'favorites' : 'all';
+  return 'all';
 }
 
-function scheduledCoveredBy(running, incoming) {
-  if (running === 'all') return incoming === 'all' || incoming === 'favorites';
-  return running === incoming;
+// A full sweep already checks every channel a scheduled poll would.
+function scheduledCoveredBy(running) {
+  return running === 'all';
 }
 
-function rememberSkipped(scope) {
-  if (scope === 'all') skippedScheduled = 'all';
-  else if (scope === 'favorites' && skippedScheduled !== 'all') skippedScheduled = 'favorites';
+function rememberSkipped() {
+  skippedScheduled = true;
 }
 
 // Fast path for the video that was announced. MV3 kills the worker shortly
@@ -679,8 +682,8 @@ function alertHasButtons(item) {
   return !!item && item.k !== 'live' && item.k !== 'premiere';
 }
 
-function iconUrlFor(channel, settings) {
-  if (settings.alerts.useAvatarIcon && channel?.avatar) return channel.avatar;
+function iconUrlFor(channel) {
+  if (channel?.avatar) return channel.avatar;
   return chromeApi().runtime.getURL(EXT_ICON);
 }
 
@@ -711,7 +714,7 @@ function newestForChannel(feed, channelId) {
  * at script start cannot belong to a live sweep.
  */
 export async function reconcileRunning() {
-  await writePollState({ running: false });
+  await writePollState({ running: false, progress: null });
 }
 
 // Alarm and popup-message wakes do not fire onStartup. Reconcile before
@@ -790,28 +793,20 @@ async function ensureAlarm(name, periodMinutes, lastAt) {
 export async function syncAlarms() {
   const settings = await readSettings();
   const alarms = chromeApi().alarms;
+  await alarms.clear(ALARM_FAV);
   if (!settings.poll.enabled) {
     await alarms.clear(ALARM_ALL);
-    await alarms.clear(ALARM_FAV);
     return;
   }
-  // No channels means no sweep has anything to fetch, so the alarms stay
+  // No channels means no sweep has anything to fetch, so the alarm stays
   // cleared until the first channel lands again.
   if ((await readChannels()).length === 0) {
     await alarms.clear(ALARM_ALL);
-    await alarms.clear(ALARM_FAV);
     return;
   }
   const poll = await readPollState();
   const lastAll = Number(poll.lastPollAt) || 0;
-  const lastFav = Math.max(Number(poll.lastFavPollAt) || 0, lastAll);
   await ensureAlarm(ALARM_ALL, settings.poll.intervalMinutes, lastAll);
-  const favPeriod = settings.poll.favoriteIntervalMinutes;
-  if (!(favPeriod > 0)) {
-    await alarms.clear(ALARM_FAV);
-    return;
-  }
-  await ensureAlarm(ALARM_FAV, favPeriod, lastFav);
 }
 
 export async function refreshBadge() {
@@ -826,7 +821,7 @@ export async function refreshBadge() {
     const channels = await readChannels();
     channelIds = feedChannelIds(channels, settings);
   }
-  const n = newSinceCount(feed, poll.lastSeenAt, settings.feed.showShorts, channelIds);
+  const n = newSinceCount(feed, poll.lastSeenAt, channelIds);
   const text = n > 0 ? String(n) : '';
   await chromeApi().action.setBadgeText({ text });
   await chromeApi().action.setTitle({ title: await actionTitleText(n, settings) });
@@ -845,13 +840,12 @@ async function collectState() {
   return { settings, channels, feed, pollState, queue, queueOpen, whatsNewSeen };
 }
 
-function pickChannels(channels, { scope, onlyId, onlyIds }) {
+function pickChannels(channels, { onlyId, onlyIds }) {
   if (onlyIds && onlyIds.length) {
     const want = new Set(onlyIds);
     return channels.filter((ch) => want.has(ch.id));
   }
   if (onlyId) return channels.filter((ch) => ch.id === onlyId);
-  if (scope === 'favorites') return channels.filter((ch) => ch.favorite);
   return channels.slice();
 }
 
@@ -960,6 +954,24 @@ async function fillHeaders(channels, patchChannel, fetchImpl, shouldStop) {
   return pushedBack;
 }
 
+// The merged feed keeps the newest maxItems across every channel, so a quiet
+// channel's own sheet would be empty. Five newest normal uploads stay on the
+// channel, outside that cap. Shorts are never shown.
+function recentFromEntries(entries) {
+  const rows = [];
+  for (const entry of entries || []) {
+    if (!entry || entry.short || !(entry.at > 0) || !entry.v) continue;
+    rows.push(entry);
+  }
+  rows.sort((a, b) => b.at - a.at);
+  return rows.slice(0, 5).map((entry) => ({
+    v: entry.v,
+    t: String(entry.title || '').slice(0, 200),
+    at: entry.at,
+    vw: Number(entry.views) || 0,
+  }));
+}
+
 function itemFromEntry(entry, channelId, rec) {
   return {
     v: entry.v,
@@ -986,7 +998,7 @@ function channelError(err) {
 function shouldNotifyItem(item, channel, settings, poll) {
   if (!channel) return false;
   if (!settings.alerts.enabled) return false;
-  if (item.k === 'short' && !settings.feed.showShorts) return false;
+  if (item.k === 'short') return false;
   if (hasNotified(poll, item.v)) return false;
   // Muting beats the star: the channel stays a favourite in the list and the
   // feed, just without alerts.
@@ -1033,7 +1045,7 @@ async function notifyChannel(channel, items, settings) {
     title: channel.title || channel.handle || channel.id,
     message: items.length === 1 ? newest.t : await nNewVideosText(items.length, settings),
     newest,
-    iconCandidates: [iconUrlFor(channel, settings)],
+    iconCandidates: [iconUrlFor(channel)],
     settings,
   });
 }
@@ -1115,12 +1127,12 @@ async function notifyNewItems({ added, unseeded, quiet, settings, generations })
   }
 }
 
-async function performSweep({ scope, onlyId, onlyIds }) {
+async function performSweep({ onlyId, onlyIds }) {
   const settings = await readSettings();
   const fetchImpl = globalThis.fetch;
   const allChannels = await readChannels();
   const generations = listingGenerations(allChannels);
-  const list = pickChannels(allChannels, { scope, onlyId, onlyIds });
+  const list = pickChannels(allChannels, { onlyId, onlyIds });
   const unseeded = new Set();
   const silentNew = new Set();
   for (const ch of list) {
@@ -1130,7 +1142,6 @@ async function performSweep({ scope, onlyId, onlyIds }) {
     // seed would also hide uploads posted after the file was written.
     if (!(Number(ch.lastVideoAt) > 0)) silentNew.add(ch.id);
   }
-  const incoming = [];
   let pushedBack = false;
   let innertube403 = 0;
   let originRetried = false;
@@ -1150,157 +1161,202 @@ async function performSweep({ scope, onlyId, onlyIds }) {
     return true;
   };
 
-  // Every channel's changes go out in one write after the fetches. A write
-  // per change rewrote the whole list about twice per channel per check.
-  const patches = new Map();
+  // One write per batch, not per channel. A write per change rewrote the
+  // whole list about twice per channel per check. The batch's channel
+  // patches go out with its rows, so a kill mid-check leaves those
+  // channels matching the videos already stored.
+  let patches = new Map();
   const patchChannel = (id, fields) => patches.set(id, { ...patches.get(id), ...fields });
 
-  const fetched = new Array(list.length);
-  await inLanes(list, LANES, CHANNEL_FETCH_DELAY_MS, async (ch, i) => {
-    try {
-      const uploads = await fetchLatestUploads(ch.id, { fetch: fetchImpl });
-      patchChannel(ch.id, { lastError: null, lastFetchAt: Date.now() });
-      fetched[i] = { channel: ch, entries: uploads.entries || [], via: uploads.via };
-    } catch (err) {
-      // The channel is fine; YouTube is refusing this IP. Every further
-      // request deepens the block, and marking the rest as broken would
-      // be wrong, so stop here and keep what already arrived.
-      if (isPushback(err) || await shouldStop(err)) {
-        pushedBack = true;
-        return true;
-      }
-      patchChannel(ch.id, { lastError: channelError(err) });
-    }
-    return false;
-  });
-  const succeeded = fetched.filter(Boolean);
-
   let videoMeta = await readVideoMeta();
-  const atById = new Map();
-  for (const { entries } of succeeded) {
-    for (const entry of entries) {
-      if (entry?.v && entry.at > 0) atById.set(entry.v, entry.at);
-    }
-  }
-  const feedBefore = await readFeed();
-  const floor = feedFloor(feedBefore, atById, settings.feed.maxItems);
-  const toClassify = new Set();
-  const tooOld = new Set();
-  for (const { entries } of succeeded) {
-    for (const entry of entries) {
-      if (!entry?.v || videoMeta[entry.v]) continue;
-      // A Videos-tab row has no time until the player gives it one.
-      if (atById.get(entry.v) < floor) tooOld.add(entry.v);
-      else toClassify.add(entry.v);
-    }
-  }
-  const inFeed = new Set();
-  for (const row of feedBefore) {
-    if (row?.v) inFeed.add(row.v);
-  }
-  for (const id of pendingLiveIds(videoMeta, Date.now(), inFeed)) toClassify.add(id);
-
-  if (!pushedBack) {
-    const classified = await classifyIds([...toClassify], videoMeta, fetchImpl, atById, shouldStop);
-    videoMeta = classified.meta;
-    pushedBack = classified.pushedBack;
-  }
-  await saveVideoMeta(videoMeta);
-
-  const feedNow = await readFeed();
-  const feedByV = new Map(feedNow.map((item) => [item.v, item]));
-  const incomingIds = new Set();
+  const added = [];
   const quiet = new Set();
+  const succeededAll = [];
+  const trackProgress = list.length > SWEEP_BATCH;
+  if (trackProgress) {
+    await writePollState({ progress: { done: 0, total: list.length } });
+  }
 
-  // Each channel's newest upload this check, including ones too old for the
-  // feed. An upload that failed to classify is left out: counted now, it
-  // would arrive next check as old news and never alert.
-  const newestSeen = new Map();
-  for (const { channel, entries } of succeeded) {
-    // An upload no newer than one already seen from this channel is not new.
-    // It is a row the feed's cap pushed out, back because a removed channel
-    // made room, or a Videos-tab row reaching past the feed's window because
-    // that tab leaves out shorts. Either would alert for old videos.
-    const newestBefore = Math.max(Number(channel.lastVideoAt) || 0, newestAt(feedNow, channel.id));
-    // A restored backup can be months old. lastVideoAt only quiets rows the
-    // file already knew; anything posted after it but long before this
-    // listing would otherwise fire one alert per channel.
-    const restoreFloor = (!channel.seeded && Number(channel.lastVideoAt) > 0)
-      ? (Number(channel.addedAt) || 0) - 24 * 60 * 60_000
-      : -Infinity;
-    let newest = 0;
-    for (const entry of entries) {
-      if (tooOld.has(entry.v)) newest = Math.max(newest, atById.get(entry.v));
-      const rec = videoMeta[entry.v];
-      if (!rec || !rec.k) continue;
-      const at = entry.at > 0 ? entry.at : Number(rec.at);
-      if (!(at > 0)) continue;
-      newest = Math.max(newest, at);
-      if (at <= newestBefore || at < restoreFloor) quiet.add(entry.v);
-      incoming.push(itemFromEntry({ ...entry, at }, channel.id, rec));
-      incomingIds.add(entry.v);
+  for (let start = 0; start < list.length; start += SWEEP_BATCH) {
+    const batch = list.slice(start, start + SWEEP_BATCH);
+    const first = start === 0;
+    patches = new Map();
+
+    const fetched = new Array(batch.length);
+    await inLanes(batch, LANES, CHANNEL_FETCH_DELAY_MS, async (ch, i) => {
+      try {
+        const uploads = await fetchLatestUploads(ch.id, { fetch: fetchImpl });
+        patchChannel(ch.id, { lastError: null, lastFetchAt: Date.now() });
+        fetched[i] = { channel: ch, entries: uploads.entries || [], via: uploads.via };
+      } catch (err) {
+        // The channel is fine; YouTube is refusing this IP. Every further
+        // request deepens the block, and marking the rest as broken would
+        // be wrong, so stop here and keep what already arrived.
+        if (isPushback(err) || await shouldStop(err)) {
+          pushedBack = true;
+          return true;
+        }
+        patchChannel(ch.id, { lastError: channelError(err) });
+      }
+      return false;
+    });
+    const succeeded = fetched.filter(Boolean);
+    for (const row of succeeded) succeededAll.push(row);
+
+    const atById = new Map();
+    for (const { entries } of succeeded) {
+      for (const entry of entries) {
+        if (entry?.v && entry.at > 0) atById.set(entry.v, entry.at);
+      }
     }
-    newestSeen.set(channel.id, newest);
-  }
+    const feedBefore = await readFeed();
+    const floor = feedFloor(feedBefore, atById, settings.feed.maxItems);
+    const toClassify = new Set();
+    const tooOld = new Set();
+    for (const { entries } of succeeded) {
+      for (const entry of entries) {
+        if (!entry?.v || videoMeta[entry.v]) continue;
+        // A Videos-tab row has no time until the player gives it one.
+        if (atById.get(entry.v) < floor) tooOld.add(entry.v);
+        else toClassify.add(entry.v);
+      }
+    }
+    // Lives already in the feed are looked at once, up front, so a row
+    // that settled is updated before later batches fill the cap.
+    if (first) {
+      const inFeed = new Set();
+      for (const row of feedBefore) {
+        if (row?.v) inFeed.add(row.v);
+      }
+      for (const id of pendingLiveIds(videoMeta, Date.now(), inFeed)) toClassify.add(id);
+    }
 
-  // Live/premiere rows that settled this pass but dropped off the RSS
-  // window still need their feed row updated.
-  for (const [id, rec] of Object.entries(videoMeta)) {
-    if (!rec || rec.k === 'live' || rec.k === 'premiere') continue;
-    if (incomingIds.has(id)) continue;
-    const existing = feedByV.get(id);
-    if (!existing) continue;
-    if (existing.k === rec.k && existing.d === rec.d && existing.st === rec.st) continue;
-    incoming.push({ ...existing, k: rec.k, d: rec.d, st: rec.st });
-  }
+    if (!pushedBack) {
+      const classified = await classifyIds([...toClassify], videoMeta, fetchImpl, atById, shouldStop);
+      videoMeta = classified.meta;
+      pushedBack = classified.pushedBack;
+    }
+    await saveVideoMeta(videoMeta);
 
-  const { feed, added } = await applyFeedMerge(
-    incoming,
-    settings.feed.maxItems,
-    generations,
-  );
+    const feedNow = await readFeed();
+    const feedByV = new Map(feedNow.map((item) => [item.v, item]));
+    const incoming = [];
+    const incomingIds = new Set();
 
-  for (const { channel } of succeeded) {
-    // Never lowered: a channel whose rows the cap pushed out still knows its
-    // newest upload, and that is what keeps those rows quiet if they return.
-    const lastVideoAt = Math.max(
-      Number(channel.lastVideoAt) || 0,
-      newestAt(feed, channel.id),
-      newestSeen.get(channel.id) || 0,
+    // Each channel's newest upload this check, including ones too old for the
+    // feed. An upload that failed to classify is left out: counted now, it
+    // would arrive next check as old news and never alert.
+    const newestSeen = new Map();
+    for (const { channel, entries } of succeeded) {
+      // An upload no newer than one already seen from this channel is not new.
+      // It is a row the feed's cap pushed out, back because a removed channel
+      // made room, or a Videos-tab row reaching past the feed's window because
+      // that tab leaves out shorts. Either would alert for old videos.
+      const newestBefore = Math.max(Number(channel.lastVideoAt) || 0, newestAt(feedNow, channel.id));
+      // A restored backup can be months old. lastVideoAt only quiets rows the
+      // file already knew; anything posted after it but long before this
+      // listing would otherwise fire one alert per channel.
+      const restoreFloor = (!channel.seeded && Number(channel.lastVideoAt) > 0)
+        ? (Number(channel.addedAt) || 0) - 24 * 60 * 60_000
+        : -Infinity;
+      let newest = 0;
+      for (const entry of entries) {
+        if (tooOld.has(entry.v)) newest = Math.max(newest, atById.get(entry.v));
+        const rec = videoMeta[entry.v];
+        if (!rec || !rec.k) continue;
+        const at = entry.at > 0 ? entry.at : Number(rec.at);
+        if (!(at > 0)) continue;
+        newest = Math.max(newest, at);
+        if (at <= newestBefore || at < restoreFloor) quiet.add(entry.v);
+        incoming.push(itemFromEntry({ ...entry, at }, channel.id, rec));
+        incomingIds.add(entry.v);
+      }
+      newestSeen.set(channel.id, newest);
+    }
+
+    if (first) {
+      // Live/premiere rows that settled this pass but dropped off the RSS
+      // window still need their feed row updated.
+      for (const [id, rec] of Object.entries(videoMeta)) {
+        if (!rec || rec.k === 'live' || rec.k === 'premiere') continue;
+        if (incomingIds.has(id)) continue;
+        const existing = feedByV.get(id);
+        if (!existing) continue;
+        if (existing.k === rec.k && existing.d === rec.d && existing.st === rec.st) continue;
+        incoming.push({ ...existing, k: rec.k, d: rec.d, st: rec.st });
+      }
+    }
+
+    const { feed, added: batchAdded } = await applyFeedMerge(
+      incoming,
+      settings.feed.maxItems,
+      generations,
     );
-    const fields = { lastVideoAt };
-    // A pushback can stop classification before a new channel's backfill is
-    // all in. Left unseeded, the rest arrives silently next time instead of
-    // as a burst of alerts for old videos.
-    if (unseeded.has(channel.id) && !pushedBack) fields.seeded = true;
-    patchChannel(channel.id, fields);
+    for (const row of batchAdded) added.push(row);
+
+    for (const { channel, via, entries } of succeeded) {
+      // Never lowered: a channel whose rows the cap pushed out still knows its
+      // newest upload, and that is what keeps those rows quiet if they return.
+      const lastVideoAt = Math.max(
+        Number(channel.lastVideoAt) || 0,
+        newestAt(feed, channel.id),
+        newestSeen.get(channel.id) || 0,
+      );
+      const fields = { lastVideoAt };
+      // The Videos tab has no upload time and no short mark, so it must not
+      // replace a list the feed already stored.
+      if (via === 'feed') fields.recent = recentFromEntries(entries);
+      // A pushback can stop classification before a new channel's backfill is
+      // all in. Left unseeded, the rest arrives silently next time instead of
+      // as a burst of alerts for old videos.
+      if (unseeded.has(channel.id) && !pushedBack) fields.seeded = true;
+      patchChannel(channel.id, fields);
+    }
+    await updateChannels(patches, generations);
+    if (trackProgress) {
+      await writePollState({ progress: { done: start + batch.length, total: list.length } });
+    }
+    if (pushedBack) break;
   }
+
+  patches = new Map();
   if (!pushedBack) {
-    pushedBack = await fillHeaders(succeeded.map((s) => s.channel), patchChannel, fetchImpl, shouldStop);
+    pushedBack = await fillHeaders(
+      succeededAll.map((row) => row.channel),
+      patchChannel,
+      fetchImpl,
+      shouldStop,
+    );
   }
   await updateChannels(patches, generations);
 
-  await notifyNewItems({ added, unseeded: silentNew, quiet, settings, generations });
+  // A later batch can push an earlier row out through the cap. Alerting
+  // it would point at a video the feed no longer holds.
+  const storedIds = new Set((await readFeed()).map((row) => row && row.v));
+  const stillAdded = added.filter((row) => row && storedIds.has(row.v));
+  await notifyNewItems({ added: stillAdded, unseeded: silentNew, quiet, settings, generations });
 
   const now = Date.now();
   if (pushedBack) {
-    const level = (Number((await readPollState()).backoffLevel) || 0) + 1;
-    const until = now + backoffDelayMs(level);
     // Before the badge, which can throw: a lost write here would let the
     // next alarm walk straight back into the block.
-    await writePollState({ backoffLevel: level, backoffUntil: until });
+    const until = await notePushback(now);
     await refreshBadge();
-    return { ok: false, error: 'slow down', until, added: added.length };
+    return { ok: false, error: 'slow down', until, added: stillAdded.length };
   }
   const patch = { backoffLevel: 0, backoffUntil: 0 };
-  if (!onlyId && !(onlyIds && onlyIds.length)) {
-    if (scope === 'favorites') patch.lastFavPollAt = now;
-    else patch.lastPollAt = now;
-  }
+  if (!onlyId && !(onlyIds && onlyIds.length)) patch.lastPollAt = now;
   await writePollState(patch);
 
   await refreshBadge();
-  return { ok: true, added: added.length };
+  return { ok: true, added: stillAdded.length };
+}
+
+async function notePushback(now = Date.now()) {
+  const level = (Number((await readPollState()).backoffLevel) || 0) + 1;
+  const until = now + backoffDelayMs(level);
+  await writePollState({ backoffLevel: level, backoffUntil: until });
+  return until;
 }
 
 /**
@@ -1308,7 +1364,6 @@ async function performSweep({ scope, onlyId, onlyIds }) {
  * upload as new and fire duplicate alerts.
  */
 export async function runSweep({
-  scope = 'all',
   onlyId = null,
   onlyIds = null,
   scheduled = false,
@@ -1322,13 +1377,12 @@ export async function runSweep({
   await ensureYtOriginRule().catch(() => {});
   if (sweepActive) {
     if (scheduled && !onlyId && !(onlyIds && onlyIds.length)) {
-      const incoming = scope === 'favorites' ? 'favorites' : 'all';
-      if (!scheduledCoveredBy(activeCoverage, incoming)) rememberSkipped(incoming);
+      if (!scheduledCoveredBy(activeCoverage)) rememberSkipped();
     }
     return { ok: false, error: 'already running' };
   }
   sweepActive = true;
-  activeCoverage = sweepCoverage({ scope, onlyId, onlyIds });
+  activeCoverage = sweepCoverage({ onlyId, onlyIds });
   try {
     const state = await readPollState();
     if (state.running) {
@@ -1344,21 +1398,21 @@ export async function runSweep({
       chromeApi().runtime.getPlatformInfo?.().catch?.(() => {});
     }, KEEPALIVE_MS);
     try {
-      return await performSweep({ scope, onlyId, onlyIds });
+      return await performSweep({ onlyId, onlyIds });
     } finally {
       clearInterval(keepAlive);
-      await writePollState({ running: false });
+      await writePollState({ running: false, progress: null });
     }
   } finally {
     sweepActive = false;
     const next = skippedScheduled;
-    skippedScheduled = null;
+    skippedScheduled = false;
     activeCoverage = null;
     if (next) {
       // Do not await: the caller (Refresh, a seed follow-up) would sit on
       // the reply until this extra check finishes. The follow-up has its
       // own keepalive; its finally flushes pendingSeeds.
-      void runSweep({ scope: next, scheduled: true }).catch(() => {});
+      void runSweep({ scheduled: true }).catch(() => {});
     } else {
       void flushSeeds();
     }
@@ -1391,7 +1445,7 @@ async function flushSeeds() {
       if (!targets.length) continue;
       let result;
       try {
-        result = await runSweep({ scope: 'all', onlyIds: targets });
+        result = await runSweep({ onlyIds: targets });
       } catch {
         // Stored unseeded; the next check retries.
         continue;
@@ -1928,7 +1982,7 @@ export async function importFromYouTube() {
         avatar,
       });
       // Not awaited: a first check of hundreds of channels takes minutes.
-      void runSweep({ scope: 'all' }).catch(() => {});
+      void runSweep().catch(() => {});
       last = { ok: true, added: imported.added, skipped: imported.skipped, removed };
     }
     return last || { ok: false, error: 'failed' };
@@ -2005,6 +2059,36 @@ export async function clearChannels() {
   return { ok: true, removed, state: await collectState() };
 }
 
+const MORE_TOKEN_MAX = 2000;
+
+async function moreChannelVideos(msg) {
+  const id = msg && msg.id;
+  const token = msg && msg.token;
+  const channels = await readChannels();
+  const known = channels.some((ch) => ch && ch.id === id);
+  const tokenOk = token == null || (typeof token === 'string' && token.length < MORE_TOKEN_MAX);
+  if (!known || !tokenOk) return { ok: false, error: 'invalid' };
+  const poll = await readPollState();
+  const untilNow = Number(poll.backoffUntil) || 0;
+  if (untilNow > Date.now()) return { ok: false, error: 'slow down', until: untilNow };
+  const settings = await readSettings();
+  const hl = resolveLocale(settings?.ui?.locale, globalThis.navigator?.language);
+  try {
+    const page = await fetchChannelVideosPage(id, {
+      token: typeof token === 'string' ? token : '',
+      hl,
+      fetch: globalThis.fetch,
+    });
+    return { ok: true, rows: page.entries, token: page.token || '' };
+  } catch (err) {
+    if (isPushback(err)) {
+      const until = await notePushback();
+      return { ok: false, error: 'slow down', until };
+    }
+    return { ok: false, error: 'failed' };
+  }
+}
+
 /**
  * Chrome fills `sender` in the browser process, so a page cannot claim an
  * extension URL. The popup's sender.url is chrome-extension://<id>/…; a
@@ -2038,9 +2122,11 @@ export async function handleMessage(msg, sender) {
       }
       case 'sweep':
         return await runSweep({
-          scope: msg.scope || 'all',
           onlyId: msg.onlyId || null,
         });
+      case 'channel.more':
+        // Popup-only. A page must not be able to spend this IP's browse budget.
+        return await moreChannelVideos(msg);
       case 'addChannel':
         return await addChannelByInput(msg.input);
       case 'importTakeout':
@@ -2111,8 +2197,8 @@ export async function handleMessage(msg, sender) {
         return { ok: true };
       }
       case 'updateSettings': {
-        // Alarms and the badge both derive from settings (poll periods,
-        // showShorts). Writing storage from the popup would leave them stale.
+        // Alarms and the badge both derive from settings. Writing storage
+        // from the popup would leave them stale.
         await writeSettings(msg.patch || {});
         await syncAlarms();
         await refreshBadge();
@@ -2404,8 +2490,7 @@ export async function onNotificationClicked(id) {
 }
 
 function onAlarm(alarm) {
-  if (alarm?.name === ALARM_ALL) return runSweep({ scope: 'all', scheduled: true }).catch(() => {});
-  if (alarm?.name === ALARM_FAV) return runSweep({ scope: 'favorites', scheduled: true }).catch(() => {});
+  if (alarm?.name === ALARM_ALL) return runSweep({ scheduled: true }).catch(() => {});
 }
 
 /**
@@ -2472,24 +2557,22 @@ onSettingsChanged(() => {
 chromeApi().action.setBadgeBackgroundColor({ color: BADGE_COLOR });
 
 /**
- * The keys Chrome actually bound: `shortcut` toggles audio mode, `popup` opens
- * the popup. Either is empty when the suggested combination was taken —
- * Chrome registers the command with no shortcut instead of the suggested_key.
+ * The key Chrome bound for audio mode. Empty when the suggested combination
+ * was taken — Chrome registers the command with no shortcut instead of the
+ * suggested_key.
  */
 async function readAudioModeShortcut() {
   const api = chromeApi();
   const getAll = api?.commands?.getAll;
-  if (typeof getAll !== 'function') return { ok: true, shortcut: '', popup: '' };
+  if (typeof getAll !== 'function') return { ok: true, shortcut: '' };
   try {
     const list = await getAll.call(api.commands);
-    const bound = (name) => {
-      const found = (Array.isArray(list) ? list : []).find((c) => c && c.name === name);
-      const raw = found && found.shortcut;
-      return typeof raw === 'string' ? raw.trim() : '';
-    };
-    return { ok: true, shortcut: bound(AUDIO_TOGGLE_COMMAND), popup: bound(POPUP_COMMAND) };
+    const found = (Array.isArray(list) ? list : []).find((c) => c && c.name === AUDIO_TOGGLE_COMMAND);
+    const raw = found && found.shortcut;
+    const shortcut = typeof raw === 'string' ? raw.trim() : '';
+    return { ok: true, shortcut };
   } catch {
-    return { ok: true, shortcut: '', popup: '' };
+    return { ok: true, shortcut: '' };
   }
 }
 

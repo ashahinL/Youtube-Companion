@@ -157,7 +157,8 @@ export default async function run(t) {
   t.section('the uninstall page');
 
   const siteHtml = read('site/uninstall.html');
-  const siteJs = read('site/uninstall.js');
+  const feedbackHtml = read('site/feedback.html');
+  const siteJs = read('site/feedback.js');
   const pages = read('.github/workflows/pages.yml');
   const pageUrl = (worker.match(/const UNINSTALL_PAGE = '([^']+)'/) || [])[1] || '';
   t.check(
@@ -166,9 +167,23 @@ export default async function run(t) {
     pageUrl,
   );
   t.check('the site is published from main only', /branches: \[main\]/.test(pages) && /path: site\n/.test(pages));
-  const siteLoads = [...siteHtml.matchAll(/<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
-  t.check('it loads nothing from anywhere else', JSON.stringify(siteLoads) === JSON.stringify(['uninstall.js']), JSON.stringify(siteLoads));
-  t.check('it sends nothing by itself', !/\bfetch\(|XMLHttpRequest|sendBeacon|new Image/.test(siteJs));
+  const turnstile = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+  const pageLoads = (html) => [...html.matchAll(/<(?:script|link|img)\b[^>]*(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
+  const expectedLoads = [turnstile, 'feedback.js'];
+  t.check(
+    'each page loads feedback.js and Turnstile',
+    JSON.stringify(pageLoads(siteHtml)) === JSON.stringify(expectedLoads)
+      && JSON.stringify(pageLoads(feedbackHtml)) === JSON.stringify(expectedLoads),
+    JSON.stringify({ uninstall: pageLoads(siteHtml), feedback: pageLoads(feedbackHtml) }),
+  );
+  t.check(
+    'feedback.js posts only to the feedback worker',
+    /const FEEDBACK_URL = 'https:\/\/feedback\.ammarshahin\.dev\/'/.test(siteJs)
+      && /fetch\(FEEDBACK_URL,/.test(siteJs)
+      && /credentials: 'omit'/.test(siteJs)
+      && !/sendBeacon|XMLHttpRequest|new Image/.test(siteJs)
+      && (siteJs.match(/\bfetch\(/g) || []).length === 1,
+  );
   t.check(
     'it offers Chrome and Edge store links',
     /chromewebstore\.google\.com\/detail\/hpajekcplhidhjidohfmebpeianbhcgd/.test(siteHtml)
@@ -176,9 +191,16 @@ export default async function run(t) {
       && /data-text="storeChrome"/.test(siteHtml)
       && /data-text="storeEdge"/.test(siteHtml),
   );
-  t.check('its answers go to a GitHub issue the person posts', /github\.com\/ashahinL\/Youtube-Companion\/issues\/new/.test(siteJs) && /window\.open\(/.test(siteJs));
+  t.check(
+    'the feedback page is its own kind',
+    fs.existsSync(path.join(ROOT, 'site/feedback.html'))
+      && /id="send-form"[^>]*data-kind="feedback"/.test(feedbackHtml)
+      && /id="send-form"[^>]*data-kind="uninstall"/.test(siteHtml),
+  );
   t.check('a version that is not a version is dropped', /\^\\d\+\(\\\.\\d\+\)\{0,3\}\$/.test(siteJs));
-  const siteKeys = [...siteHtml.matchAll(/data-text="([^"]+)"/g)].map((m) => m[1]);
+  const siteKeys = [...new Set(
+    [siteHtml, feedbackHtml].flatMap((html) => [...html.matchAll(/data-text="([^"]+)"/g)].map((m) => m[1])),
+  )];
   const textBlock = (lang) => (siteJs.match(new RegExp(`${lang}: \\{([\\s\\S]*?)\\n    \\}`)) || [])[1] || '';
   for (const lang of ['en', 'ar']) {
     const missing = siteKeys.filter((key) => !new RegExp(`\\b${key}:`).test(textBlock(lang)));

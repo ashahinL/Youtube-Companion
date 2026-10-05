@@ -9,3 +9,6 @@ dist/
 .local/
 
 .impeccable/
+
+# Wrangler local state
+.wrangler/

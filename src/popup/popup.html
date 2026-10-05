@@ -256,13 +256,6 @@
             </div>
           </div>
         </div>
-        <button
-          id="audio-shortcut"
-          class="audio-shortcut"
-          type="button"
-          title="Click to set the keyboard shortcut."
-          data-i18n-title="audioShortcutTitle"
-        ></button>
       </div>
       <div id="queue" class="queue">
         <div class="queue__head">
@@ -528,6 +521,82 @@
     </section>
 
     <section id="settings" class="panel" role="tabpanel" aria-labelledby="tab-settings" hidden>
+      <fieldset class="group" id="settings-appearance">
+        <legend class="group__legend" data-i18n="settingsAppearance">Appearance</legend>
+        <div class="row row--inline settings-choice">
+          <span id="settings-locale-label" data-i18n="settingsLanguage">Language</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="settings-locale-label">
+            <label class="segmented__opt" lang="en" dir="ltr">
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="ui-locale"
+                value="en"
+                data-setting="ui.locale"
+              />
+              <span data-i18n="settingsLocaleEn">English</span>
+            </label>
+            <label class="segmented__opt" lang="ar" dir="rtl">
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="ui-locale"
+                value="ar"
+                data-setting="ui.locale"
+              />
+              <span data-i18n="settingsLocaleAr">العربية</span>
+            </label>
+            <label class="segmented__opt">
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="ui-locale"
+                value="auto"
+                data-setting="ui.locale"
+                checked
+              />
+              <span data-i18n="settingsThemeSystem">System</span>
+            </label>
+          </div>
+        </div>
+        <div class="row row--inline settings-choice">
+          <span id="settings-theme-label" data-i18n="settingsTheme">Theme</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="settings-theme-label">
+            <label class="segmented__opt">
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="ui-theme"
+                value="light"
+                data-setting="ui.theme"
+              />
+              <span data-i18n="settingsThemeLight">Light</span>
+            </label>
+            <label class="segmented__opt">
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="ui-theme"
+                value="dark"
+                data-setting="ui.theme"
+              />
+              <span data-i18n="settingsThemeDark">Dark</span>
+            </label>
+            <label class="segmented__opt">
+              <input
+                class="visually-hidden"
+                type="radio"
+                name="ui-theme"
+                value="system"
+                data-setting="ui.theme"
+                checked
+              />
+              <span data-i18n="settingsThemeSystem">System</span>
+            </label>
+          </div>
+        </div>
+      </fieldset>
+
       <fieldset class="group" id="settings-notifications">
         <legend class="group__legend" data-i18n="settingsNotifications">Notifications</legend>
         <label
@@ -555,46 +624,15 @@
         <p class="settings-note" data-i18n="settingsNotifyNormalNote">
           Favourites always alert while notifications are on.
         </p>
-        <label
-          class="row row--switch"
-          title="When off, alerts use the extension icon instead."
-          data-i18n-title="settingsUseAvatarTitle"
-        >
-          <span data-i18n="settingsUseAvatar">Use the channel's avatar as the alert icon</span>
-          <span class="switch">
-            <input type="checkbox" data-setting="alerts.useAvatarIcon" />
-            <span class="switch__track" aria-hidden="true"></span>
-          </span>
-        </label>
-      </fieldset>
-
-      <fieldset class="group" id="settings-checking">
-        <legend class="group__legend" data-i18n="settingsChecking">Checking</legend>
-        <label
-          class="row row--inline"
-          title="YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache."
-          data-i18n-title="settingsPollAllTitle"
-        >
-          <span data-i18n="settingsPollAllBefore">Check all channels every</span>
-          <input class="settings-num" type="number" step="1" data-setting="poll.intervalMinutes" />
-          <span data-i18n="settingsPollAllAfter">minutes</span>
-        </label>
-        <label
-          class="row row--inline"
-          title="0 turns this extra check off. YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache."
-          data-i18n-title="settingsPollFavTitle"
-        >
-          <span data-i18n="settingsPollFavBefore">Check favourites every</span>
-          <input class="settings-num" type="number" step="1" data-setting="poll.favoriteIntervalMinutes" />
-          <span data-i18n="settingsPollFavAfter">minutes</span>
-        </label>
-        <p class="settings-note" data-i18n="settingsPollCacheNote">
-          YouTube caches the feed for 15 minutes, so a shorter interval only helps because the request bypasses that cache.
-        </p>
       </fieldset>
 
       <fieldset class="group" id="settings-feed">
         <legend class="group__legend" data-i18n="settingsFeed">Feed</legend>
+        <label class="row row--inline">
+          <span data-i18n="settingsPollAllBefore">Check channels every</span>
+          <input class="settings-num" type="number" step="1" data-setting="poll.intervalMinutes" />
+          <span data-i18n="settingsPollAllAfter">minutes</span>
+        </label>
         <label
           class="row row--inline"
           title="Oldest videos fall off the feed when this cap is reached."
@@ -604,129 +642,6 @@
           <input class="settings-num" type="number" min="50" max="5000" step="50" data-setting="feed.maxItems" />
           <span data-i18n="settingsFeedMaxAfter">videos</span>
         </label>
-        <label
-          class="row row--switch"
-          title="Off hides shorts from the feed and from the toolbar badge."
-          data-i18n-title="settingsShowShortsTitle"
-        >
-          <span data-i18n="settingsShowShorts">Show shorts</span>
-          <span class="switch">
-            <input type="checkbox" data-setting="feed.showShorts" />
-            <span class="switch__track" aria-hidden="true"></span>
-          </span>
-        </label>
-        <label
-          class="row row--switch"
-          title="Puts your group chips on YouTube's subscriptions page."
-          data-i18n-title="settingsGroupsOnYouTubeTitle"
-        >
-          <span data-i18n="settingsGroupsOnYouTube">My groups on YouTube</span>
-          <span class="switch">
-            <input type="checkbox" data-setting="feed.groupsOnYouTube" />
-            <span class="switch__track" aria-hidden="true"></span>
-          </span>
-        </label>
-      </fieldset>
-
-      <fieldset class="group" id="settings-language">
-        <legend class="group__legend" data-i18n="settingsLanguage">Language</legend>
-        <div class="theme-cards">
-          <label class="theme-card">
-            <input
-              class="visually-hidden"
-              type="radio"
-              name="ui-locale"
-              value="en"
-              data-setting="ui.locale"
-            />
-            <span class="theme-card__preview" lang="en" dir="ltr" aria-hidden="true">Aa</span>
-            <span class="theme-card__label" lang="en" dir="ltr" data-i18n="settingsLocaleEn">English</span>
-          </label>
-          <label class="theme-card">
-            <input
-              class="visually-hidden"
-              type="radio"
-              name="ui-locale"
-              value="ar"
-              data-setting="ui.locale"
-            />
-            <span class="theme-card__preview" lang="ar" dir="rtl" aria-hidden="true">أب</span>
-            <span class="theme-card__label" lang="ar" dir="rtl" data-i18n="settingsLocaleAr">العربية</span>
-          </label>
-          <label class="theme-card">
-            <input
-              class="visually-hidden"
-              type="radio"
-              name="ui-locale"
-              value="auto"
-              data-setting="ui.locale"
-              checked
-            />
-            <span class="theme-card__preview theme-card__preview--split" aria-hidden="true">
-              <span lang="en" dir="ltr">Aa</span>
-              <span lang="ar" dir="rtl">أب</span>
-            </span>
-            <span class="theme-card__label" data-i18n="settingsThemeSystem">System</span>
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="group" id="settings-theme">
-        <legend class="group__legend" data-i18n="settingsTheme">Theme</legend>
-        <div class="theme-cards">
-          <label class="theme-card">
-            <input
-              class="visually-hidden"
-              type="radio"
-              name="ui-theme"
-              value="light"
-              data-setting="ui.theme"
-            />
-            <span class="theme-card__preview" data-theme-preview="light" aria-hidden="true"></span>
-            <span class="theme-card__label" data-i18n="settingsThemeLight">Light</span>
-          </label>
-          <label class="theme-card">
-            <input
-              class="visually-hidden"
-              type="radio"
-              name="ui-theme"
-              value="dark"
-              data-setting="ui.theme"
-            />
-            <span class="theme-card__preview" data-theme-preview="dark" aria-hidden="true"></span>
-            <span class="theme-card__label" data-i18n="settingsThemeDark">Dark</span>
-          </label>
-          <label class="theme-card">
-            <input
-              class="visually-hidden"
-              type="radio"
-              name="ui-theme"
-              value="system"
-              data-setting="ui.theme"
-              checked
-            />
-            <span class="theme-card__preview theme-card__preview--split" aria-hidden="true">
-              <span data-theme-preview="light"></span>
-              <span data-theme-preview="dark"></span>
-            </span>
-            <span class="theme-card__label" data-i18n="settingsThemeSystem">System</span>
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="group" id="settings-keys">
-        <legend class="group__legend" data-i18n="settingsKeys">Keyboard shortcuts</legend>
-        <p class="row row--inline settings-key">
-          <span data-i18n="settingsKeyPopup">Open this popup</span>
-          <kbd id="settings-key-popup" class="settings-key__keys"></kbd>
-        </p>
-        <p class="row row--inline settings-key">
-          <span data-i18n="settingsKeyAudio">Audio mode on or off</span>
-          <kbd id="settings-key-audio" class="settings-key__keys"></kbd>
-        </p>
-        <button id="settings-keys-change" class="btn" type="button" data-i18n="settingsKeysChange">
-          Change shortcuts
-        </button>
       </fieldset>
 
       <fieldset class="group" id="settings-audio">
@@ -742,140 +657,153 @@
             <span class="switch__track" aria-hidden="true"></span>
           </span>
         </label>
-        <label
-          class="row row--inline"
-          title="Colour paints a gradient or a custom colour. Image uses a picture you choose."
-          data-i18n-title="settingsAudioBgTypeTitle"
-        >
-          <span data-i18n="settingsAudioBgType">Background type</span>
-          <select class="settings-select" data-setting="audio.backgroundType">
-            <option value="color" data-i18n="settingsAudioBgColor">Colour</option>
-            <option value="image" data-i18n="settingsAudioBgImage">Image</option>
-          </select>
-        </label>
-        <div id="settings-audio-color">
-          <div
-            class="row"
-            title="The overlay on the page uses the same colours as these swatches."
-            data-i18n-title="settingsAudioPresetsTitle"
+        <p class="row row--inline settings-key">
+          <span data-i18n="settingsKeyAudio">Audio mode on or off</span>
+          <span class="settings-key__side">
+            <kbd id="settings-key-audio" class="settings-key__keys"></kbd>
+            <button id="settings-keys-change" class="btn btn--small" type="button" data-i18n="settingsKeysChange">
+              Change
+            </button>
+          </span>
+        </p>
+        <!-- The open flag stays on the element, so it lasts only while this popup is open. -->
+        <details id="settings-overlay" class="fold">
+          <summary data-i18n="settingsOverlayLook">Overlay look</summary>
+          <label
+            class="row row--inline"
+            title="Colour paints a gradient or a custom colour. Image uses a picture you choose."
+            data-i18n-title="settingsAudioBgTypeTitle"
           >
-            <span data-i18n="settingsAudioPresets">Presets</span>
+            <span data-i18n="settingsAudioBgType">Background type</span>
+            <select class="settings-select" data-setting="audio.backgroundType">
+              <option value="color" data-i18n="settingsAudioBgColor">Colour</option>
+              <option value="image" data-i18n="settingsAudioBgImage">Image</option>
+            </select>
+          </label>
+          <div id="settings-audio-color">
             <div
-              class="swatches"
-              role="group"
-              data-i18n-label="settingsAudioPresets"
-              aria-label="Presets"
+              class="row"
+              title="The overlay on the page uses the same colours as these swatches."
+              data-i18n-title="settingsAudioPresetsTitle"
             >
-              <button
-                type="button"
-                class="swatch"
-                data-preset="midnight"
-                data-i18n-title="audioPresetMidnight"
-                data-i18n-label="audioPresetMidnight"
-                title="Midnight"
-                aria-label="Midnight"
-                aria-pressed="true"
-              ></button>
-              <button
-                type="button"
-                class="swatch"
-                data-preset="slate"
-                data-i18n-title="audioPresetSlate"
-                data-i18n-label="audioPresetSlate"
-                title="Slate"
-                aria-label="Slate"
-                aria-pressed="false"
-              ></button>
-              <button
-                type="button"
-                class="swatch"
-                data-preset="ember"
-                data-i18n-title="audioPresetEmber"
-                data-i18n-label="audioPresetEmber"
-                title="Ember"
-                aria-label="Ember"
-                aria-pressed="false"
-              ></button>
-              <button
-                type="button"
-                class="swatch"
-                data-preset="amber"
-                data-i18n-title="audioPresetAmber"
-                data-i18n-label="audioPresetAmber"
-                title="Amber"
-                aria-label="Amber"
-                aria-pressed="false"
-              ></button>
-              <button
-                type="button"
-                class="swatch"
-                data-preset="forest"
-                data-i18n-title="audioPresetForest"
-                data-i18n-label="audioPresetForest"
-                title="Forest"
-                aria-label="Forest"
-                aria-pressed="false"
-              ></button>
-              <button
-                type="button"
-                class="swatch"
-                data-preset="sunset"
-                data-i18n-title="audioPresetSunset"
-                data-i18n-label="audioPresetSunset"
-                title="Sunset"
-                aria-label="Sunset"
-                aria-pressed="false"
-              ></button>
-              <label
-                class="swatch swatch--custom"
-                data-i18n-title="audioPresetCustom"
-                title="Custom"
+              <span data-i18n="settingsAudioPresets">Presets</span>
+              <div
+                class="swatches"
+                role="group"
+                data-i18n-label="settingsAudioPresets"
+                aria-label="Presets"
               >
-                <input
-                  id="audio-custom-color"
-                  type="color"
-                  value="#0f0f14"
-                  data-i18n-label="audioPresetCustom"
-                  aria-label="Custom"
-                />
-              </label>
+                <button
+                  type="button"
+                  class="swatch"
+                  data-preset="midnight"
+                  data-i18n-title="audioPresetMidnight"
+                  data-i18n-label="audioPresetMidnight"
+                  title="Midnight"
+                  aria-label="Midnight"
+                  aria-pressed="true"
+                ></button>
+                <button
+                  type="button"
+                  class="swatch"
+                  data-preset="slate"
+                  data-i18n-title="audioPresetSlate"
+                  data-i18n-label="audioPresetSlate"
+                  title="Slate"
+                  aria-label="Slate"
+                  aria-pressed="false"
+                ></button>
+                <button
+                  type="button"
+                  class="swatch"
+                  data-preset="ember"
+                  data-i18n-title="audioPresetEmber"
+                  data-i18n-label="audioPresetEmber"
+                  title="Ember"
+                  aria-label="Ember"
+                  aria-pressed="false"
+                ></button>
+                <button
+                  type="button"
+                  class="swatch"
+                  data-preset="amber"
+                  data-i18n-title="audioPresetAmber"
+                  data-i18n-label="audioPresetAmber"
+                  title="Amber"
+                  aria-label="Amber"
+                  aria-pressed="false"
+                ></button>
+                <button
+                  type="button"
+                  class="swatch"
+                  data-preset="forest"
+                  data-i18n-title="audioPresetForest"
+                  data-i18n-label="audioPresetForest"
+                  title="Forest"
+                  aria-label="Forest"
+                  aria-pressed="false"
+                ></button>
+                <button
+                  type="button"
+                  class="swatch"
+                  data-preset="sunset"
+                  data-i18n-title="audioPresetSunset"
+                  data-i18n-label="audioPresetSunset"
+                  title="Sunset"
+                  aria-label="Sunset"
+                  aria-pressed="false"
+                ></button>
+                <label
+                  class="swatch swatch--custom"
+                  data-i18n-title="audioPresetCustom"
+                  title="Custom"
+                >
+                  <input
+                    id="audio-custom-color"
+                    type="color"
+                    value="#0f0f14"
+                    data-i18n-label="audioPresetCustom"
+                    aria-label="Custom"
+                  />
+                </label>
+              </div>
             </div>
           </div>
-        </div>
-        <div id="settings-audio-image" hidden>
-          <div
-            class="row row--inline"
-            title="Pick a PNG, JPEG, WebP or GIF. It stays on this device and is not in backups."
-            data-i18n-title="settingsAudioCoverTitle"
-          >
-            <input
-              id="audio-cover-file"
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif"
+          <div id="settings-audio-image" hidden>
+            <div
+              class="row row--inline"
+              title="Pick a PNG, JPEG, WebP or GIF. It stays on this device and is not in backups."
+              data-i18n-title="settingsAudioCoverTitle"
+            >
+              <input
+                id="audio-cover-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                hidden
+                data-i18n-label="settingsAudioChooseImage"
+                aria-label="Choose image"
+              />
+              <button id="audio-cover-choose" class="btn" type="button" data-i18n="settingsAudioChooseImage">
+                Choose image
+              </button>
+              <button id="audio-cover-remove" class="btn" type="button" data-i18n="settingsAudioCoverRemove">
+                Remove
+              </button>
+            </div>
+            <canvas
+              id="audio-cover-preview"
+              class="audio-cover-preview"
+              width="96"
+              height="54"
               hidden
-              data-i18n-label="settingsAudioChooseImage"
-              aria-label="Choose image"
-            />
-            <button id="audio-cover-choose" class="btn" type="button" data-i18n="settingsAudioChooseImage">
-              Choose image
-            </button>
-            <button id="audio-cover-remove" class="btn" type="button" data-i18n="settingsAudioCoverRemove">
-              Remove
-            </button>
+              aria-hidden="true"
+            ></canvas>
+            <p id="audio-cover-hint" class="footnote" data-i18n="settingsAudioCoverHint">
+              Choose a picture to cover the video. It stays on this device.
+            </p>
+            <p id="audio-cover-error" class="banner banner--error" role="status" hidden></p>
           </div>
-          <canvas
-            id="audio-cover-preview"
-            class="audio-cover-preview"
-            width="96"
-            height="54"
-            hidden
-            aria-hidden="true"
-          ></canvas>
-          <p id="audio-cover-hint" class="footnote" data-i18n="settingsAudioCoverHint">
-            Choose a picture to cover the video. It stays on this device.
-          </p>
-          <p id="audio-cover-error" class="banner banner--error" role="status" hidden></p>
-        </div>
+        </details>
       </fieldset>
 
       <fieldset class="group" id="settings-backup">
@@ -972,24 +900,19 @@
         </div>
       </fieldset>
 
-      <fieldset class="group" id="settings-support">
-        <legend class="group__legend" data-i18n="settingsSupport">Support</legend>
-        <p class="footnote" data-i18n="settingsSupportText">
-          Free, with no ads. Chip in if it helps you.
-        </p>
-        <button id="settings-support-open" class="btn" type="button" data-i18n="supportOpen">
-          Support this project
-        </button>
-      </fieldset>
+      <p class="settings-links">
+        <button id="settings-support-open" class="link-btn" type="button" data-i18n="settingsSupportLink">Support ♥</button>
+        <span aria-hidden="true">·</span>
+        <button id="settings-feedback" class="link-btn" type="button" data-i18n="settingsFeedback">Send feedback</button>
+        <span aria-hidden="true">·</span>
+        <button id="settings-whats-new" class="link-btn" type="button"></button>
+      </p>
 
       <footer class="settings-footer">
         <p id="settings-stat-channels"></p>
         <p id="settings-stat-feed"></p>
         <p id="settings-stat-last"></p>
         <p id="settings-stat-version"></p>
-        <p>
-          <button id="settings-whats-new" class="link-btn" type="button"></button>
-        </p>
       </footer>
     </section>
 
@@ -1049,6 +972,7 @@
           </button>
         </div>
         <div id="channel-sheet-videos" class="list sheet__videos"></div>
+        <button id="channel-sheet-more" class="btn sheet__more" type="button" data-i18n="channelSeeMore">See more</button>
         <p id="channel-sheet-empty" class="empty" data-i18n="channelEmpty" hidden>No videos</p>
       </div>
     </div>

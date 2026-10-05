@@ -344,6 +344,36 @@ async function scenarios(ctx) {
     'a check the worker is running shows as sweeping: refresh hides, spinner shows',
     $('feed-refresh').hidden && !$('feed-refresh-spinner').hidden,
   );
+  await chrome.storage.local.set({
+    pollState: {
+      ...state.pollState,
+      running: true,
+      lastPollAt: NOW - 2 * HOUR,
+      progress: { done: 120, total: 480 },
+    },
+  });
+  await settle();
+  check(
+    'a long check says how many channels are loaded',
+    $('feed-last-poll').textContent === 'Loading videos: 120 of 480 channels'
+      && !$('feed-last-poll').hidden
+      && !$('feed-last-poll').hasAttribute('title'),
+    $('feed-last-poll').textContent,
+  );
+  await chrome.storage.local.set({
+    pollState: {
+      ...state.pollState,
+      running: false,
+      lastPollAt: NOW - 2 * HOUR,
+      progress: null,
+    },
+  });
+  await settle();
+  check(
+    'when the check ends the last-check line comes back',
+    $('feed-last-poll').textContent === 'Last check 2h ago' && $('feed-last-poll').hasAttribute('title'),
+    $('feed-last-poll').textContent,
+  );
   await chrome.storage.local.set({ pollState: { ...state.pollState, running: false } });
   await settle();
   check('refresh comes back when the check ends', !$('feed-refresh').hidden && $('feed-refresh-spinner').hidden);
@@ -558,6 +588,77 @@ async function scenarios(ctx) {
   await settle();
   check('closing the sheet returns focus to the row that opened it', active() === rowOf(C).querySelector('.channel-row__main'));
 
+  // A quiet channel has no feed rows. Its own recent list fills the sheet,
+  // and See more pages older ones from the worker.
+  const D = 'UCdddddddddddddddddddddd';
+  state.channels.push(channel(D, 'Delta', {
+    recent: [
+      { v: 'dddddddddd1', t: 'Old one', at: NOW - 100 * HOUR, vw: 10 },
+      { v: 'dddddddddd2', t: 'Old two', at: NOW - 80 * HOUR, vw: 20 },
+      { v: 'dddddddddd3', t: 'Old three', at: NOW - 90 * HOUR, vw: 30 },
+    ],
+  }));
+  await chrome.storage.local.set({ channels: structuredClone(state.channels) });
+  await settle();
+  sent.length = 0;
+  replies['channel.more'] = (msg) => {
+    if (!msg.token) {
+      return {
+        ok: true,
+        rows: [
+          { v: 'eeeeeeeeee1', title: 'Older', views: 1500, ago: '2 years ago' },
+          { v: 'dddddddddd2', title: 'Already shown', views: 1, ago: 'skip' },
+        ],
+        token: 'page-2',
+      };
+    }
+    return {
+      ok: true,
+      rows: [{ v: 'eeeeeeeeee2', title: 'Oldest', views: 3, ago: '3 years ago' }],
+      token: '',
+    };
+  };
+  rowOf(D).querySelector('.channel-row__main').click();
+  await settle();
+  const sheetList = $('channel-sheet-videos');
+  check(
+    'a channel with no feed rows shows its recent videos and no empty line',
+    rowKeys(sheetList).join() === 'dddddddddd2,dddddddddd3,dddddddddd1'
+      && $('channel-sheet-empty').hidden
+      && !$('channel-sheet-more').hidden
+      && $('channel-sheet-more').textContent === 'See more',
+    rowKeys(sheetList).join(),
+  );
+  $('channel-sheet-more').click();
+  await settle();
+  check(
+    'See more asks with an empty token, appends the new rows, and keeps focus',
+    sentOf('channel.more').length === 1
+      && sentOf('channel.more')[0].token === ''
+      && sentOf('channel.more')[0].id === D
+      && rowKeys(sheetList).join() === 'dddddddddd2,dddddddddd3,dddddddddd1,eeeeeeeeee1'
+      && sheetList.querySelector('[data-row-key="eeeeeeeeee1"]').textContent.includes('2 years ago')
+      && active() === $('channel-sheet-more'),
+    `${rowKeys(sheetList).join()} focus=${active().id}`,
+  );
+  sent.length = 0;
+  $('channel-sheet-more').click();
+  await settle();
+  check(
+    'the next press sends the returned token and hides the button when it is empty',
+    sentOf('channel.more').length === 1
+      && sentOf('channel.more')[0].token === 'page-2'
+      && rowKeys(sheetList).join() === 'dddddddddd2,dddddddddd3,dddddddddd1,eeeeeeeeee1,eeeeeeeeee2'
+      && $('channel-sheet-more').hidden,
+    rowKeys(sheetList).join(),
+  );
+  delete replies['channel.more'];
+  $('channel-sheet-close').click();
+  await settle();
+  state.channels = state.channels.filter((ch) => ch.id !== D);
+  await chrome.storage.local.set({ channels: structuredClone(state.channels) });
+  await settle();
+
   // Open on YouTube
   rowOf(A).querySelector('.channel-row__main').click();
   await settle();
@@ -697,6 +798,56 @@ async function scenarios(ctx) {
     active().id,
   );
   layout.direction = 'ltr';
+
+  $('tab-settings').click();
+  await settle();
+  sent.length = 0;
+  const keepUpdate = replies.updateSettings;
+  replies.updateSettings = (msg) => {
+    if (msg.patch?.ui) state.settings.ui = { ...state.settings.ui, ...msg.patch.ui };
+    if (msg.patch?.feed) state.settings.feed = { ...state.settings.feed, ...msg.patch.feed };
+    return snapshot();
+  };
+  const darkOpt = document.querySelector('#settings-appearance input[name="ui-theme"][value="dark"]');
+  darkOpt.closest('label').click();
+  await settle();
+  check(
+    'clicking a Theme option saves ui.theme',
+    sentOf('updateSettings')[0]?.patch?.ui?.theme === 'dark'
+      && darkOpt.checked
+      && state.settings.ui.theme === 'dark',
+    JSON.stringify(sentOf('updateSettings')[0]?.patch),
+  );
+  document.querySelector('#settings-appearance input[name="ui-theme"][value="system"]').closest('label').click();
+  await settle();
+  replies.updateSettings = keepUpdate;
+
+  mock.tabsCreated.length = 0;
+  $('settings-feedback').click();
+  await settle();
+  const feedbackUrl = mock.tabsCreated[0]?.url || '';
+  let feedbackKeys = [];
+  try {
+    feedbackKeys = [...new URL(feedbackUrl).searchParams.keys()];
+  } catch {
+    feedbackKeys = [];
+  }
+  check(
+    'Send feedback opens the feedback page with only lang and v',
+    feedbackUrl.startsWith('https://ashahinl.github.io/Youtube-Companion/feedback.html')
+      && feedbackKeys.length === 2
+      && feedbackKeys.includes('lang')
+      && feedbackKeys.includes('v')
+      && new URL(feedbackUrl).searchParams.get('lang') === 'en'
+      && new URL(feedbackUrl).searchParams.get('v') === '9.9.9',
+    feedbackUrl,
+  );
+
+  $('settings-support-open').click();
+  await settle();
+  check('Support opens the support sheet', !$('support-sheet').hidden);
+  $('support-sheet-close').click();
+  await settle();
 
   await reorderQueue(ctx);
   await playingRowHidden(ctx);

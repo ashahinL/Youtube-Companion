@@ -618,31 +618,7 @@ export default async function run(t) {
   // Replace pathname by mutating the location object the sandbox was given.
   store._path = '/watch';
 
-  t.section('setting off, no groups, and leaving the page');
-
-  const offStore = {
-    channels,
-    settings: { feed: { groupsOnYouTube: false }, ui: { locale: 'en' } },
-    subsPageGroup: 'Tech',
-    writes: [],
-  };
-  const off = loadPage(offStore);
-  const offCard = card({ href: '/@mkbhd', text: 'Marques' });
-  off.contents.appendChild(offCard);
-  await off.api.refreshSubsGroups();
-  t.check('the switch off builds no chips', off.doc.getElementById('ytc-subs-groups') == null);
-  t.check('the switch off hides nothing', !hidden(offCard));
-  t.check('the switch off installs no observer', off.built.length === 0, String(off.built.length));
-
-  const missingStore = {
-    channels,
-    settings: { feed: { groupsOnYouTube: 0 }, ui: { locale: 'en' } },
-    writes: [],
-  };
-  const missing = loadPage(missingStore);
-  missing.contents.appendChild(card({ href: '/@mkbhd', text: 'Marques' }));
-  await missing.api.refreshSubsGroups();
-  t.check('groupsOnYouTube 0 is off', missing.doc.getElementById('ytc-subs-groups') == null && missing.built.length === 0);
+  t.section('no groups, and leaving the page');
 
   const emptyStore = {
     channels: [{ id: '9', handle: '@solo', title: 'Solo', groups: [] }],

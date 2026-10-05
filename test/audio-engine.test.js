@@ -1232,13 +1232,13 @@ export default async function run(t) {
       picked.ok === true && picked.shortcut === 'Ctrl+Shift+Y',
       JSON.stringify(picked),
     );
-    t.check('and the popup\'s own shortcut beside it', picked.popup === 'Alt+Shift+Y', JSON.stringify(picked));
+    t.check('the reply has no popup shortcut', !('popup' in picked), JSON.stringify(picked));
 
     cmdMock.commandList = [{ name: 'other', shortcut: 'Ctrl+K' }];
     const missing = await handleMessage({ type: 'audioMode.shortcut' });
     t.check(
       'missing toggle-audio-mode is an empty shortcut, not another command',
-      missing.ok === true && missing.shortcut === '' && missing.popup === '',
+      missing.ok === true && missing.shortcut === '' && !('popup' in missing),
       JSON.stringify(missing),
     );
 

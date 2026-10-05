@@ -19,6 +19,31 @@ shipped yet waits under Unreleased. How a version ships:
 - One desktop alert per check. When several channels have new videos, they
   share a single alert that counts the videos and names the channels; a click
   or Listen acts on the newest one. One channel still gets its own alert.
+- A Send feedback link at the bottom of Settings. Type a note and press
+  Send: no GitHub account and no email needed. The page shown when you
+  remove the extension works the same way now, one box instead of tick
+  boxes that filled in a GitHub issue.
+
+- A channel's sheet always shows its newest videos, even when the
+  rest of your feed has pushed them out, and **See more** loads older
+  ones from YouTube.
+- After importing hundreds of channels, videos appear in Feeds as they
+  load, 25 channels at a time, and Feeds says how far it has got
+  ("Loading videos: 120 of 480 channels"). It used to stay empty for
+  minutes until the whole check was done.
+
+**Changes**
+- Settings is shorter. These options are gone, and each now works one
+  fixed way:
+  - Checking favourites on their own schedule: every channel is checked on
+    one schedule.
+  - Show shorts: shorts are left out of Feeds, the badge and alerts.
+  - Use the channel's picture as the alert icon: alerts always use it.
+  - My groups on YouTube: the chips show whenever you have groups.
+  - The Alt+Shift+Y shortcut to open the popup. Audio mode's Alt+Shift+A
+    stays, and Settings still lets you change it.
+- The Player tab no longer shows the shortcut hint under the player; it is
+  in Settings.
 
 **Fixes**
 - Settings' number boxes are wide enough for four digits, so 1000 or
@@ -26,6 +51,8 @@ shipped yet waits under Unreleased. How a version ships:
 - Grey secondary text in the light theme and the purple used for error
   and warning lines in the dark theme are easier to read, and the small
   labels under the Player tab's stats are a little larger.
+- The popup keeps the same width on every tab. On Windows a long tab
+  used to grow a scrollbar and push the layout sideways.
 
 ## 2.1.0 — 2026-09-26
 
