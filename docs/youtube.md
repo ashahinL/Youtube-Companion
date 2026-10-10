@@ -54,7 +54,7 @@ GET https://www.youtube.com/feeds/videos.xml?channel_id=UC...
 
 ```
 POST https://www.youtube.com/youtubei/v1/navigation/resolve_url
-{"context":{"client":{"clientName":"WEB","clientVersion":"2.20260925.01.00","hl":"en","gl":"US"}},
+{"context":{"client":{"clientName":"WEB","clientVersion":"2.20261009.01.00","hl":"en","gl":"US"}},
  "url":"https://www.youtube.com/@mkbhd"}
 ```
 
@@ -65,7 +65,10 @@ POST https://www.youtube.com/youtubei/v1/navigation/resolve_url
   every parser read both answers the same. On 2026-09-26 the homepage carried
   `2.20260925.01.00`; `resolve_url` for `@mkbhd` answered `200` with the same
   body under it and under `2.20260911.01.00` (1,993 bytes as served,
-  pretty-printed), so the pinned version moved up.
+  pretty-printed), so the pinned version moved up. On 2026-10-11 the homepage
+  carried `2.20261009.01.00`; `resolve_url` for `@mkbhd` answered `200`,
+  1,170 bytes, under it and under `2.20260925.01.00`, and the two bodies
+  differed only in tracking ids, so the pinned version moved up again.
 
 - `200`, **1,170 bytes**. The id is `endpoint.browseEndpoint.browseId`.
 - `endpoint.commandMetadata.resolveUrlCommandMetadata.isVanityUrl` tells a
