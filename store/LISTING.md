@@ -9,7 +9,7 @@ words. The name and the short description come from `_locales/*/messages.json`
 
 | Store | State | Record |
 |---|---|---|
-| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **live by 2026-09-26** (submitted 2026-09-22) · 2.1.0 **in review** (submitted 2026-09-27) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
+| Edge Add-ons | 1.0.0 **live by 2026-09-16** (submitted 2026-09-13) · 2.0.0 **live by 2026-09-26** (submitted 2026-09-22) · 2.1.0 **live by 2026-10-10** (submitted 2026-09-27) | Store ID `0RDCKC7S7L34` · listing `https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh` · CRX ID `neaandgimpffglakmlbmmkmmmlahibfh` · Partner Center product `e18b9c0b-72f4-4359-b6a0-620c848f1b34` · publisher **Ammar Shahin** (Individual, Egypt) |
 | Chrome Web Store | 1.0.0 **live 2026-09-14** (submitted 2026-09-13) · 2.0.0 **live 2026-09-20** · 2.1.0 **live by 2026-10-02** (submitted 2026-09-27) | Item ID `hpajekcplhidhjidohfmebpeianbhcgd` · listing `https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd` · developer account declared **non-trader** |
 | مرتكز (Mortakaz) | **Listed 2026-09-17** · still shows 1.0.0's text; updated only for a major version (owner, 2026-09-26) | Arabic showcase for Arab makers, not an extension store · project `https://www.mortakaz.com/projects/6aaaa1a71ecfb2f590982a3e` · section أدوات الإنتاجية · main link points at the Chrome listing |
 
@@ -127,7 +127,7 @@ the earlier file.
 
 ## Description — English
 
-Written for 2.1. The stores cap this at 16,000 characters; it is well under.
+Written for 2.2. The stores cap this at 16,000 characters; it is well under.
 
 ```text
 Keep up with the YouTube channels you care about without signing in to anything, and listen with a fraction of the data.
@@ -146,7 +146,7 @@ WATCHLIST
 • Import all your YouTube subscriptions from your signed-in YouTube tab, choosing the Google account if you have several. Signed out? A Google Takeout file works too. Both are read on your device
 • Star your favourites: they sit at the top and always alert
 • Mute a channel to keep it in your feed but out of your alerts
-• Open any channel to see its latest videos without leaving the popup, or jump to it on YouTube
+• Open any channel to see its latest videos without leaving the popup, load older ones with See more, or jump to it on YouTube
 • Channels whose check fails are marked, and one tap shows just those
 • Removed one by mistake? Undo puts it back with its star, its place in the list and its videos
 • Clear the whole list in one go, after a confirm that offers to export it first
@@ -183,6 +183,7 @@ PRIVATE BY DESIGN
 
 SUPPORT
 • Free, with no ads and no tracking. If it saves you time or data, the heart in the popup opens PayPal and InstaPay
+• Send feedback from the bottom of Settings: one box, no account and no email needed
 
 In English and Arabic, with a full right-to-left layout. Light, dark, or follow your system.
 
@@ -210,13 +211,13 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 • استورد كل اشتراكاتك في يوتيوب من تبويب يوتيوب الذي سجّلت الدخول إليه، واختر حساب Google إن كان لديك أكثر من حساب. غير مسجّل الدخول؟ يعمل ملف Google Takeout أيضًا. وكلاهما يُقرأ على جهازك
 • ميّز قنواتك المفضلة بنجمة: تظهر في الأعلى وتنبّهك دائمًا
 • اكتم قناة لتبقى في موجزك دون أن ترسل لك تنبيهات
-• افتح أي قناة لترى أحدث فيديوهاتها دون مغادرة النافذة، أو انتقل إليها على يوتيوب
+• افتح أي قناة لترى أحدث فيديوهاتها دون مغادرة النافذة، وحمّل الأقدم بزر «عرض المزيد»، أو انتقل إليها على يوتيوب
 • القنوات التي يفشل التحقق منها عليها علامة، وضغطة واحدة تعرضها وحدها
 • أزلت قناة بالخطأ؟ «تراجع» يعيدها بنجمتها وترتيبها في القائمة وفيديوهاتها
 • امسح القائمة بالكامل بضغطة واحدة بعد تأكيد يعرض عليك تصديرها أولًا
 
 التنبيهات
-• إشعار على سطح المكتب عندما ترفع قناة فيديو: تنبيه واحد لكل قناة، لا لكل فيديو
+• إشعار على سطح المكتب عندما ترفع قناة فيديو: تنبيه واحد لكل فحص، حتى لو نشرت عدة قنوات
 • زرّا «استمع» و«إضافة إلى التالي» على التنبيه نفسه
 • شارة شريط الأدوات تعدّ الفيديوهات الجديدة منذ آخر مرة نظرت فيها
 
@@ -247,6 +248,7 @@ Companion for YouTube is not affiliated with, endorsed by or sponsored by YouTub
 
 الدعم
 • الإضافة مجانية بلا إعلانات ولا تتبّع. إن وفّرت عليك وقتًا أو بيانات، فأيقونة القلب في النافذة تفتح PayPal وInstaPay
+• أرسل ملاحظاتك من أسفل الإعدادات: مربع واحد، بلا حساب وبلا بريد إلكتروني
 
 بالعربية والإنجليزية، مع واجهة كاملة من اليمين إلى اليسار. بسمة فاتحة أو داكنة، أو كما في نظامك.
 

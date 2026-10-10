@@ -83,14 +83,14 @@ export const STORE_SHOTS = [
     name: 'screenshot-7-queue',
     img: 'queue.png',
     title: 'A list that plays itself',
-    sub: 'Queue videos to hear later. Play all works through them in one tab, even with the popup closed.',
+    sub: 'Queue videos to hear later. It stays in step with YouTube\'s own queue and plays through in one tab.',
     dir: 'ltr',
   },
   {
     name: 'screenshot-8-alerts',
     img: 'settings.png',
     title: 'Told when they upload',
-    sub: 'One desktop alert per channel, not one per video. Favourites always alert.',
+    sub: 'One desktop alert per check, however many channels posted. Favourites always alert.',
     dir: 'ltr',
   },
 ];

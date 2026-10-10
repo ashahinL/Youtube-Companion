@@ -55,6 +55,11 @@ shipped yet waits under Unreleased. How a version ships:
 - The popup keeps the same width on every tab. On Windows a long tab
   used to grow a scrollbar and push the layout sideways.
 
+**For contributors**
+- A 3-minute tour on the website plays the real popup through every
+  feature (`site/tour/`, `node scripts/tour.js`), and `npm run tour:record`
+  records it to a 1080p MP4 with subtitles.
+
 ## 2.1.0 — 2026-09-26
 
 **New**
