@@ -1,6 +1,7 @@
 /**
- * Draws the extension icon — headphones around a short feed list on an
- * indigo-to-purple tile — and writes it as PNG. The icon is geometry rather
+ * Draws the extension icon — a C with a small moon in its open side, the
+ * companion that goes along, on an indigo-to-purple tile — and writes it
+ * as PNG. The icon is geometry rather
  * than a hand-exported image so every size is rendered from the same shapes,
  * with the detail each size can carry.
  *
@@ -49,19 +50,23 @@ function roundRect(x, y, cx, cy, hw, hh, r) {
   return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
 }
 
-// The upper half of a ring, with round ends where it meets the ear cups.
-function band(x, y, cx, cy, radius, half) {
-  if (y <= cy) return Math.abs(Math.hypot(x - cx, y - cy) - radius) - half;
-  return Math.min(Math.hypot(x - (cx - radius), y - cy), Math.hypot(x - (cx + radius), y - cy)) - half;
+// A ring with an opening centred on the right, with round ends.
+function openRing(x, y, cx, cy, radius, half, openDeg) {
+  const angle = Math.abs(Math.atan2(cy - y, x - cx)) * 180 / Math.PI;
+  if (angle >= openDeg) return Math.abs(Math.hypot(x - cx, y - cy) - radius) - half;
+  const a = openDeg * Math.PI / 180;
+  const ex = cx + radius * Math.cos(a);
+  const ey = radius * Math.sin(a);
+  return Math.min(Math.hypot(x - ex, y - (cy - ey)), Math.hypot(x - ex, y - (cy + ey))) - half;
 }
 
-/* At 16px the feed lines smear into a grey block and the band goes thin, so
- * the smallest size is headphones alone, drawn heavier. 32px has room for two
- * lines, 48px and up for three. Chrome wants 16px of transparent margin
- * around the 128px icon; the toolbar sizes fill their square. */
+/* At 16px the ring goes thin and the moon closes the gap, so the smallest
+ * size draws both heavier and opens the ring wider. Chrome wants 16px of
+ * transparent margin around the 128px icon; the toolbar sizes fill their
+ * square. */
 function layoutFor(size) {
   if (size <= 16) return { pad: 0, radius: 26, detail: 'min' };
-  if (size <= 32) return { pad: 2, radius: 28, detail: 'mid' };
+  if (size <= 32) return { pad: 2, radius: 28, detail: 'full' };
   if (size <= 48) return { pad: 4, radius: 28, detail: 'full' };
   if (size <= 128) return { pad: 16, radius: 28, detail: 'full' };
   return { pad: 8, radius: 28, detail: 'full' };
@@ -69,22 +74,14 @@ function layoutFor(size) {
 
 // Signed distance to the white mark, in a 128-unit square.
 function markFor(detail) {
-  const cy = 58;
-  const radius = 40;
-  const half = detail === 'min' ? 9.5 : 7.5;
-  const cupW = detail === 'min' ? 24 : 19;
-  const cupH = detail === 'min' ? 36 : 31;
-  const lineH = detail === 'mid' ? 10 : 8;
-  const lines = detail === 'full' ? [[36, 62], [28, 78], [20, 94]]
-    : detail === 'mid' ? [[34, 66], [22, 88]]
-      : [];
-  return (x, y) => {
-    let d = band(x, y, 64, cy, radius, half);
-    d = Math.min(d, roundRect(x, y, 64 - radius + cupW / 2 - half, cy + cupH / 2 - 1, cupW / 2, cupH / 2, cupW / 2.3));
-    d = Math.min(d, roundRect(x, y, 64 + radius - cupW / 2 + half, cy + cupH / 2 - 1, cupW / 2, cupH / 2, cupW / 2.3));
-    for (const [w, ly] of lines) d = Math.min(d, roundRect(x, y, 47 + w / 2, ly, w / 2, lineH / 2, lineH / 2));
-    return d;
-  };
+  const ring = 33;
+  const half = detail === 'min' ? 10 : 8;
+  const open = detail === 'min' ? 58 : 42;
+  const moon = detail === 'min' ? 11 : 8.5;
+  return (x, y) => Math.min(
+    openRing(x, y, 64, 64, ring, half, open),
+    Math.hypot(x - (64 + ring), y - 64) - moon,
+  );
 }
 
 export function renderIcon(size) {

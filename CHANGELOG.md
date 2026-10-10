@@ -33,6 +33,7 @@ shipped yet waits under Unreleased. How a version ships:
   minutes until the whole check was done.
 
 **Changes**
+- A new icon: a C with a small moon beside it, in the same purple.
 - Settings is shorter. These options are gone, and each now works one
   fixed way:
   - Checking favourites on their own schedule: every channel is checked on
