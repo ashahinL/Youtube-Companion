@@ -1224,7 +1224,19 @@ try {
 }
 requestAnimationFrame(frame);
 
-window.__tour = { clock, player, stage, chapters: CHAPTERS };
+// The chapter card covers the caption, so a recording skips that stretch.
+function tourNow() {
+  const step = CHAPTERS[player.ci]?.steps[player.si];
+  const card = RECORD && player.si === 0 && player.phase === 'setup';
+  return {
+    chapter: player.ci,
+    step: player.si,
+    title: card || !step ? '' : step.title,
+    caption: card || !step ? '' : step.caption,
+  };
+}
+
+window.__tour = { clock, player, stage, chapters: CHAPTERS, now: tourNow };
 
 if (RECORD) {
   document.body.classList.add('record');

@@ -90,8 +90,8 @@ function resolveRequest(pathname) {
   return { file };
 }
 
-function serve() {
-  const server = http.createServer((req, res) => {
+function createServer() {
+  return http.createServer((req, res) => {
     let pathname;
     try {
       pathname = decodeURIComponent(new URL(req.url || '/', 'http://127.0.0.1').pathname);
@@ -119,12 +119,25 @@ function serve() {
     res.writeHead(200, { 'Content-Type': type, 'Content-Length': body.length, 'Cache-Control': 'no-store' });
     res.end(body);
   });
-  server.listen(PORT, '127.0.0.1', () => {
-    console.log(`tour: http://127.0.0.1:${PORT}/tour/`);
+}
+
+// `port` 0 asks the OS for a free port. The recorder uses that so it can
+// run beside `node scripts/tour.js`, which keeps 8790.
+export function startServer(port = 0) {
+  const server = createServer();
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, '127.0.0.1', () => {
+      resolve({ server, port: server.address().port });
+    });
   });
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes('--build')) console.log(`tour: wrote ${path.relative(ROOT, buildApp())}`);
-  else serve();
+  else {
+    startServer(PORT).then(({ port }) => {
+      console.log(`tour: http://127.0.0.1:${port}/tour/`);
+    });
+  }
 }

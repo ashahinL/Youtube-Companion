@@ -14,6 +14,7 @@
     "check": "node test/check-syntax.js",
     "test:live": "node test/live.js",
     "pack": "node scripts/pack.js",
-    "shots": "node scripts/shots.js"
+    "shots": "node scripts/shots.js",
+    "tour:record": "node scripts/tour-record.js"
   }
 }
