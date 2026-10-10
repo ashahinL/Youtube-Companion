@@ -44,14 +44,19 @@ it. Chrome published it on 2026-09-20; Edge had it live by 2026-09-26.
 
 **2.1.0 was tagged and released on 2026-09-26**: Import from YouTube, groups
 on YouTube's own Subscriptions page, the theme setting, and the audit's
-fixes. The store uploads are clicked through by hand from `store/LISTING.md`,
-which records where each store stands. The version files read 2.1.0 and do
-not change again until the next ship day.
+fixes. Chrome had it live by 2026-10-02; Edge by 2026-10-10.
 
-**The next store version is 2.2.0.** The owner chose that for the queue
-sync; the settings number-box fix ships with it. Nothing ships until the
-owner says so, and not while a store still has a version in review.
-Finished work waits under `## Unreleased` in the CHANGELOG.
+**2.2.0 was tagged and released on 2026-10-11**: Up next mirrored with
+YouTube's own queue, one alert per check, Send feedback, the shorter
+Settings, and the new icon. The store uploads are clicked through by hand
+from `store/LISTING.md`, which records where each store stands. The version
+files read 2.2.0 and do not change again until the next ship day. Nothing
+ships until the owner says so, and not while a store still has a version in
+review. Finished work waits under `## Unreleased` in the CHANGELOG.
+
+The tour on the site (`site/tour/`) plays the real popup through every
+feature; `npm run tour:record` turns it into the MP4 for YouTube and the
+store listings.
 
 **How versions work: `RELEASING.md`.** A version number is what users get
 from the stores. The version, its tag, its GitHub release and its store upload

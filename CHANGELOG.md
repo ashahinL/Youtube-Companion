@@ -6,6 +6,8 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+## 2.2.0 — 2026-10-11
+
 **New**
 - Up next and YouTube's own queue stay in step on the Player tab. Add,
   remove, reorder or clear on either side and the other follows; a video
