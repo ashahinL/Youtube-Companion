@@ -32,6 +32,8 @@
   </tr>
 </table>
 
+<p align="center"><a href="https://ashahinl.github.io/Youtube-Companion/tour/">Watch the 3-minute tour</a>: the real popup, playing through every feature.</p>
+
 ## What it does
 
 - On first install, a welcome page helps you bring your channels, try audio

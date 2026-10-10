@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Companion for YouTube — a 3-minute tour</title>
+    <meta name="description" content="A three-minute tour of Companion for YouTube: follow channels without an account, one merged feed, alerts, audio mode and Up next." />
+    <link rel="icon" href="app/icons/icon32.png" />
+    <link rel="stylesheet" href="tour.css" />
+    <!-- The same demo data the popup's stub shows, for the page mocks around it. -->
+    <script src="app/scripts/shots/demo.js"></script>
+    <script type="module" src="tour.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top__in">
+        <button type="button" class="brand" id="home" aria-label="Tour home">
+          <img src="app/icons/icon128.png" width="32" height="32" alt="" />
+          <span class="brand__name">Companion for YouTube <span class="brand__sub">— a 3-minute tour</span></span>
+        </button>
+        <div class="top__r">
+          <div class="viewtog" role="group" aria-label="View">
+            <button type="button" id="v-watch" aria-pressed="true">▶ Watch</button>
+            <button type="button" id="v-read" aria-pressed="false">☰ Read</button>
+          </div>
+          <span class="pill" id="total"></span>
+          <a class="btn btn--pri" id="get-chrome" href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd">Add to Chrome</a>
+          <a class="btn" id="get-edge" href="https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh">Get it for Edge</a>
+        </div>
+      </div>
+    </header>
+    <main id="landing" class="wrap"></main>
+    <main id="watch" class="wrap" hidden></main>
+    <main id="doc-view" class="wrap" hidden></main>
+    <noscript>
+      <p class="wrap">The tour plays with JavaScript. The extension itself is on the
+        <a href="https://chromewebstore.google.com/detail/hpajekcplhidhjidohfmebpeianbhcgd">Chrome Web Store</a> and
+        <a href="https://microsoftedge.microsoft.com/addons/detail/companion-for-youtube/neaandgimpffglakmlbmmkmmmlahibfh">Edge Add-ons</a>.</p>
+    </noscript>
+  </body>
+</html>

@@ -20,6 +20,7 @@ const SUITES = [
   ['feedback server',    './feedback-server.test.js'],
   ["what's new page",    './whatsnew.test.js'],
   ['shots',              './shots.test.js'],
+  ['tour page',          './tour.test.js'],
   ['formatting',         './fmt.test.js'],
   ['i18n',               './i18n.test.js'],
   ['yt wire layer',      './yt.test.js'],

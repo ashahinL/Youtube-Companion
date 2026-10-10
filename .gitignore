@@ -12,3 +12,6 @@ dist/
 
 # Wrangler local state
 .wrangler/
+
+# Built by scripts/tour.js --build for the Pages deploy
+site/tour/app/

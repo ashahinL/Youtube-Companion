@@ -7,9 +7,16 @@
 (function (root) {
   'use strict';
 
+  // The popup's <base> is src/popup/ inside the extension tree, which sits
+  // at the server root for shots and under /…/tour/app/ for the tour page.
+  function fromRoot(rel) {
+    var url = new URL('../../' + String(rel || '').replace(/^\//, ''), document.baseURI);
+    return url.pathname + url.search + url.hash;
+  }
+
   if (!root.SHOTS_DEMO) {
     var demoXhr = new XMLHttpRequest();
-    demoXhr.open('GET', '/scripts/shots/demo.js', false);
+    demoXhr.open('GET', fromRoot('scripts/shots/demo.js'), false);
     demoXhr.send(null);
     if (demoXhr.status < 200 || demoXhr.status >= 300) {
       throw new Error('shots demo.js failed to load');
@@ -70,7 +77,7 @@
   function readManifest() {
     try {
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/manifest.json', false);
+      xhr.open('GET', fromRoot('manifest.json'), false);
       xhr.send(null);
       if (xhr.status >= 200 && xhr.status < 300) return JSON.parse(xhr.responseText);
     } catch (err) {
@@ -194,7 +201,7 @@
       id: 'shots',
       lastError: undefined,
       getManifest: function () { return clone(manifest); },
-      getURL: function (p) { return '/' + String(p || '').replace(/^\//, ''); },
+      getURL: function (p) { return fromRoot(p); },
       sendMessage: function (message) { return Promise.resolve(handleRuntime(message)); },
     },
     tabs: {
