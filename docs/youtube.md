@@ -380,6 +380,22 @@ that un-gzips request bodies recorded everything below.
 - **When a queued video ends,** YouTube plays the next one itself
   (`watch?v=…&list=TLPQ…&index=N`), and the finished one is gone from the
   queue (measured 2026-10-04 by hand, earlier in the day).
+- **Once the queue plays into its own videos, the playing row has a set
+  id.** Measured 2026-10-10 in a signed-out Chrome on `watch?v=jNQXAC9IVRw`,
+  with two videos queued by the page action above. When the first video
+  ended, the page went to `watch?v=<first queued>&list=TLPQ…&index=1`, the
+  original video's row left the panel, and the playing row kept its
+  `playlistSetVideoId` with `data.selected === true`
+  (`panel.data.currentIndex` pointed at it too). When that one ended, it
+  **stayed in the panel above** the next one, which became `selected`. After
+  the last queued video, YouTube autoplayed a recommendation and appended it
+  as a new playing row, first without a set id, then `selected`. So the
+  rows above the `selected` row are history, and only the rows below it are
+  still queued. This contradicts the hand measurement of 2026-10-04 above
+  (signed in, "the finished one is gone"); the code handles both. In one run
+  the page skipped the first queued video (`dQw4w9WgXcQ`) and went straight
+  to `index=2`; with two other videos it went to `index=1`, so that was the
+  video, not the queue.
 - **What to listen to:** `yt-playlist-data-updated` (document event) fired
   for add, refresh and Clear; the page's own drag and row Remove fire page
   action `yt-update-playlist-action`; moving to another video fires

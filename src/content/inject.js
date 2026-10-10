@@ -489,6 +489,15 @@
           const v = data.videoId;
           if (!isVideoId(v)) continue;
           const set = data.playlistSetVideoId;
+          // Once the queue has played into one of its own videos, that row
+          // keeps its set id and is the `selected` one, and the rows above
+          // it are videos already played or skipped. Only the rows below
+          // the playing one are still queued.
+          if (data.selected === true || (!(typeof set === 'string' && set) && !playing)) {
+            playing = v;
+            queued.length = 0;
+            continue;
+          }
           if (typeof set === 'string' && set) {
             queued.push({
               v: v,
@@ -496,7 +505,7 @@
               t: readQueueTitle(data),
               ct: readQueueChannel(data),
             });
-          } else if (!playing) playing = v;
+          }
         }
       }
     }

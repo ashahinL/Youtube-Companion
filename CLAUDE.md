@@ -420,8 +420,10 @@ Most live as comments at the line they protect. These span files or tools:
 - **YouTube's queue is the `TLPQ…` playlist panel, and its rows are the
   truth.** `#movie_player.getPlaylist()` goes stale (it kept four ids after
   Clear) and `getPlaylistId()` is null where the queue was made. The
-  playing row has no `playlistSetVideoId`; edits need that set id, so it
-  stays inside `inject.js` and never reaches the worker. A scripted move or
+  playing row is the `selected` one, or the row with no
+  `playlistSetVideoId` before the queue has played into its own videos;
+  rows above it are already played and are not queued. Edits need the set
+  id, so it stays inside `inject.js` and never reaches the worker. A scripted move or
   remove reaches the server but the panel shows it only after
   `yt-refresh-playlist-command`. Measured in `docs/youtube.md`.
 - **The mirror syncs by ops, never by copying lists.** Copying let a stale

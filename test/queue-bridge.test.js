@@ -75,6 +75,7 @@ function loadQueue(opts) {
   const trace = [];
   const clock = makeClock();
   let setN = 0;
+  let current = '';
   const panels = [];
   const server = [];
   let listId = '';
@@ -147,13 +148,27 @@ function loadQueue(opts) {
     return { data: { videoId: item.v, playlistSetVideoId: item.set } };
   }
 
+  // Once the queue plays into one of its own videos, that row keeps its
+  // set id and is `selected`, and the rows above it stay as history.
+  function panelRows() {
+    if (!current) return [playingRow()].concat(server.map(queuedRow));
+    return server.map(function (item) {
+      if (item.v !== current) return queuedRow(item);
+      return { data: { videoId: item.v, playlistSetVideoId: item.set, selected: true } };
+    });
+  }
+
+  function playInto(v) {
+    current = v;
+    panel.rows = panelRows();
+  }
+
   function showQueue(ids) {
     server.length = 0;
     for (let i = 0; i < ids.length; i++) server.push({ v: ids[i], set: nextSet() });
     listId = LIST;
     panel.data = { playlistId: listId };
-    panel.rows = [playingRow()];
-    for (let i = 0; i < server.length; i++) panel.rows.push(queuedRow(server[i]));
+    panel.rows = panelRows();
     if (panels.indexOf(panel) === -1) panels.push(panel);
   }
 
@@ -166,8 +181,7 @@ function loadQueue(opts) {
   }
 
   function copyServerToPanel() {
-    panel.rows = [playingRow()];
-    for (let i = 0; i < server.length; i++) panel.rows.push(queuedRow(server[i]));
+    panel.rows = panelRows();
     panel.data = { playlistId: listId };
     if (listId && panels.indexOf(panel) === -1) panels.push(panel);
   }
@@ -363,6 +377,7 @@ function loadQueue(opts) {
     bridge: sandbox.AudioModeBridge,
     showQueue,
     hideQueue,
+    playInto,
     fireDoc,
     panel,
     panels,
@@ -562,6 +577,23 @@ export default async function run(t) {
     'move to the top is the snapshot after refresh',
     JSON.stringify(idsOf(got[0])) === JSON.stringify([C, A, B]),
     JSON.stringify({ ids: idsOf(got[0]), server: top.serverIds() }),
+  );
+
+  const played = loadQueue({ queued: [D, A, B, C] });
+  played.adopt(TOKEN);
+  played.playInto(A);
+  const playedSnap = played.bridge.readQueueSnapshot();
+  t.check(
+    'after the queue plays into its own row, that row is playing and the rows above it are left out',
+    playedSnap.playing === A && JSON.stringify(playedSnap.ids) === JSON.stringify([B, C]),
+    JSON.stringify(playedSnap),
+  );
+  got = await runOps(played, [{ op: 'move', v: C, after: null }]);
+  t.check(
+    'move to the top lands right under the playing row',
+    JSON.stringify(idsOf(got[0])) === JSON.stringify([C, B])
+      && JSON.stringify(played.serverIds()) === JSON.stringify([D, A, C, B]),
+    JSON.stringify({ ids: idsOf(got[0]), server: played.serverIds() }),
   );
 
   const removed = loadQueue({ queued: [A, B, C] });
