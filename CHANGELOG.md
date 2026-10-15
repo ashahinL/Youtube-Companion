@@ -7,6 +7,8 @@ shipped yet waits under Unreleased. How a version ships:
 ## Unreleased
 
 **Fixes**
+- A channel that has not posted for a long time shows its newest videos in
+  its sheet again, even when the rest of your feed is full of newer ones.
 - Up next and YouTube's queue no longer drift apart after a reorder that
   moves several videos at once, or when the two lists differ by more than
   100 videos.

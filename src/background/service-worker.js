@@ -146,6 +146,9 @@ const CHANNEL_FETCH_DELAY_MS = 250;
 // stayed empty for the whole fetch. Writing every 25 lets videos show up
 // as they arrive.
 const SWEEP_BATCH = 25;
+// Each classification asks YouTube once. Thirty a check lets a big import
+// fill quiet sheets over a few checks, instead of one burst.
+const RECENT_FILL_PER_CHECK = 30;
 
 // A channel imported from a file has a name but no picture or handle, and
 // filling one in is a Videos-tab browse of about 35 KB. A few per check keeps
@@ -1270,6 +1273,8 @@ async function performSweep({ onlyId, onlyIds }) {
   if (trackProgress) {
     await writePollState({ progress: { done: 0, total: list.length } });
   }
+  // Shared across batches: a later batch must not start another 30.
+  let recentFillLeft = RECENT_FILL_PER_CHECK;
 
   for (let start = 0; start < list.length; start += SWEEP_BATCH) {
     const batch = list.slice(start, start + SWEEP_BATCH);
@@ -1325,6 +1330,44 @@ async function performSweep({ onlyId, onlyIds }) {
       for (const id of pendingLiveIds(videoMeta, Date.now(), inFeed)) toClassify.add(id);
     }
 
+    // Uploads under the floor never reach the feed, so a quiet channel's
+    // sheet stays empty until something classifies them. Newest first,
+    // emptiest channels first, and only what this check has left. They stay
+    // in tooOld: the feed and the alerts must not see them.
+    const recentOnly = new Set();
+    if (recentFillLeft > 0) {
+      const needy = [];
+      for (const row of succeeded) {
+        if (row.via !== 'feed') continue;
+        const have = Array.isArray(row.channel.recent) ? row.channel.recent.length : 0;
+        if (have >= 5) continue;
+        needy.push({ row, have });
+      }
+      needy.sort((a, b) => a.have - b.have);
+      for (const { row, have } of needy) {
+        if (recentFillLeft <= 0) break;
+        const seen = new Set();
+        if (Array.isArray(row.channel.recent)) {
+          for (const rec of row.channel.recent) {
+            if (rec?.v) seen.add(rec.v);
+          }
+        }
+        const candidates = [];
+        for (const entry of row.entries) {
+          if (!entry?.v || seen.has(entry.v) || videoMeta[entry.v] || !tooOld.has(entry.v)) continue;
+          seen.add(entry.v);
+          candidates.push(entry);
+        }
+        candidates.sort((a, b) => atById.get(b.v) - atById.get(a.v));
+        const want = Math.min(5 - have, recentFillLeft);
+        for (const entry of candidates.slice(0, want)) {
+          toClassify.add(entry.v);
+          recentOnly.add(entry.v);
+          recentFillLeft -= 1;
+        }
+      }
+    }
+
     if (!pushedBack) {
       const classified = await classifyIds([...toClassify], videoMeta, fetchImpl, atById, shouldStop);
       videoMeta = classified.meta;
@@ -1356,6 +1399,9 @@ async function performSweep({ onlyId, onlyIds }) {
       let newest = 0;
       for (const entry of entries) {
         if (tooOld.has(entry.v)) newest = Math.max(newest, atById.get(entry.v));
+        // Classified only so the sheet has rows. Same age rule as any other
+        // too-old upload: not a feed row, and not an alert.
+        if (recentOnly.has(entry.v)) continue;
         const rec = videoMeta[entry.v];
         if (!rec || !rec.k) continue;
         const at = entry.at > 0 ? entry.at : Number(rec.at);

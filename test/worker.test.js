@@ -66,6 +66,12 @@ function feedIdsOf(calls) {
     .map((c) => decodeURIComponent((c.url.match(/channel_id=([^&]+)/) || [])[1] || ''));
 }
 
+function playerIdsOf(calls) {
+  return calls
+    .filter((c) => String(c.url).includes('/youtubei/v1/player'))
+    .map((c) => bodyOf(c.opts).videoId);
+}
+
 function jsonRes(body, { status = 200 } = {}) {
   return {
     ok: status >= 200 && status < 300,
@@ -1207,6 +1213,206 @@ export default async function run(t) {
       prem?.k === 'premiere' && prem?.st === premStart && prem?.t === 'Premiere',
       JSON.stringify(prem),
     );
+
+    t.section('a quiet channel fills recent from below the feed floor');
+    {
+
+    // The settings cap refuses anything under 50, so "full" is 50 newer rows.
+    const BUSY_AT = Date.parse('2026-06-01T00:00:00Z');
+    const QUIET_AT = Date.parse('2026-01-01T00:00:00Z');
+    const fullFeed = () => Array.from({ length: 50 }, (_, i) => ({
+      v: `busy${String(i).padStart(7, '0')}`,
+      c: 'UCbusybusybusybusybusybu',
+      t: 'Busy',
+      at: BUSY_AT + i * 1000,
+      d: 600,
+      vw: 1,
+      k: 'video',
+      st: 0,
+    }));
+    const quietChannel = (id, title, recent) => ({
+      id,
+      handle: '',
+      title,
+      avatar: 'https://yt3.ggpht.com/a',
+      favorite: false,
+      muted: false,
+      groups: [],
+      addedAt: 1,
+      lastFetchAt: 0,
+      lastVideoAt: 0,
+      lastError: null,
+      seeded: true,
+      ...(recent ? { recent } : {}),
+    });
+    const quietId = ucId(1);
+    const quietEntries = [
+      { v: 'quietvid001', t: 'Quiet one', at: QUIET_AT, views: 3 },
+      { v: 'quietvid002', t: 'Quiet two', at: QUIET_AT - 1000, views: 2 },
+      { v: 'quietvid003', t: 'Quiet three', at: QUIET_AT - 2000, views: 1 },
+    ];
+
+    await wipe();
+    await writeSettings({ feed: { maxItems: 50 } });
+    await saveFeed(fullFeed());
+    await writeChannels([quietChannel(quietId, 'Quiet')]);
+    installFetch({ feeds: { [quietId]: rssXml(quietId, 'Quiet', quietEntries) } });
+    const quietSweep = await runSweep({ scope: 'all' });
+    t.check('a quiet channel below the floor still checks', quietSweep.ok === true, JSON.stringify(quietSweep));
+    const quietRecent = (await readChannels())[0].recent || [];
+    t.check(
+      'recent holds the three normal videos, newest first',
+      quietRecent.map((row) => row.v).join() === 'quietvid001,quietvid002,quietvid003'
+        && quietRecent.every((row) => row.k === 'video'),
+      JSON.stringify(quietRecent),
+    );
+    const quietFeed = await readFeed();
+    t.check(
+      'those videos stay out of the full feed',
+      quietFeed.length === 50 && quietEntries.every((e) => !quietFeed.some((row) => row.v === e.v)),
+      JSON.stringify(quietFeed.map((row) => row.v)),
+    );
+    t.check(
+      'a quiet backfill does not notify',
+      mock.notifications.length === 0,
+      JSON.stringify(mock.notifications),
+    );
+
+    await wipe();
+    await writeSettings({ feed: { maxItems: 50 } });
+    await saveFeed(fullFeed());
+    await writeChannels([quietChannel(quietId, 'Quiet')]);
+    installFetch({
+      feeds: { [quietId]: rssXml(quietId, 'Quiet', quietEntries) },
+      players: {
+        quietvid002: playerJson('quietvid002', {
+          lengthSeconds: 30,
+          title: 'Quiet two',
+          channelId: quietId,
+        }),
+      },
+      shorts: { quietvid002: 'short' },
+    });
+    await runSweep({ scope: 'all' });
+    const shortRecent = (await readChannels())[0].recent || [];
+    t.check(
+      'a short below the floor is left out of recent',
+      shortRecent.map((row) => row.v).join() === 'quietvid001,quietvid003',
+      JSON.stringify(shortRecent),
+    );
+    t.check(
+      'the short is remembered so a later check can skip it',
+      (await readVideoMeta()).quietvid002?.k === 'short',
+      JSON.stringify((await readVideoMeta()).quietvid002),
+    );
+    const again = installFetch({
+      feeds: { [quietId]: rssXml(quietId, 'Quiet', quietEntries) },
+      players: {
+        quietvid002: playerJson('quietvid002', {
+          lengthSeconds: 30,
+          title: 'Quiet two',
+          channelId: quietId,
+        }),
+      },
+      shorts: { quietvid002: 'short' },
+    });
+    await runSweep({ scope: 'all' });
+    t.check(
+      'the next check does not classify that short again',
+      !playerIdsOf(again.calls).includes('quietvid002'),
+      JSON.stringify(playerIdsOf(again.calls)),
+    );
+
+    // 25 channels in the first batch, 5 in the next. The 30 cap has to
+    // carry across that boundary, and emptier channels win inside a batch
+    // even when fuller ones are listed first.
+    await wipe();
+    await writeSettings({ feed: { maxItems: 50 } });
+    await saveFeed(fullFeed());
+    const channels = [];
+    const feeds = {};
+    const expectIds = [];
+    const storedRows = (prefix, count) => Array.from({ length: count }, (_, i) => ({
+      v: `${prefix}${i}`,
+      t: 'Kept',
+      at: QUIET_AT - 100_000 - i * 1000,
+      vw: 1,
+    }));
+    const oldEntries = (prefix, n) => Array.from({ length: n }, (_, i) => ({
+      v: `${prefix}${i}`,
+      t: prefix,
+      at: QUIET_AT - i * 1000,
+      views: 1,
+    }));
+
+    const fullId = ucId(100);
+    const fullRecent = storedRows('fullkept', 5);
+    const fullEntries = oldEntries('fullnew', 2);
+    channels.push(quietChannel(fullId, 'Full', fullRecent));
+    feeds[fullId] = rssXml(fullId, 'Full', fullEntries);
+
+    const midIds = [];
+    for (let n = 0; n < 6; n++) {
+      const id = ucId(200 + n);
+      midIds.push(id);
+      const entries = oldEntries(`mid${n}v`, 2);
+      channels.push(quietChannel(id, `Mid ${n}`, storedRows(`mid${n}k`, 3)));
+      feeds[id] = rssXml(id, `Mid ${n}`, entries);
+    }
+
+    const emptyIds = [];
+    for (let n = 0; n < 18; n++) {
+      const id = ucId(300 + n);
+      emptyIds.push(id);
+      const entries = oldEntries(`e${String(n).padStart(2, '0')}v`, 2);
+      channels.push(quietChannel(id, `Empty ${n}`));
+      feeds[id] = rssXml(id, `Empty ${n}`, entries);
+      if (n < 15) expectIds.push(...entries.map((e) => e.v));
+    }
+
+    const laterIds = [];
+    for (let n = 0; n < 5; n++) {
+      const id = ucId(400 + n);
+      laterIds.push(id);
+      const entries = oldEntries(`lat${n}v`, 2);
+      channels.push(quietChannel(id, `Later ${n}`));
+      feeds[id] = rssXml(id, `Later ${n}`, entries);
+    }
+
+    await writeChannels(channels);
+    const budgetFetch = installFetch({ feeds });
+    const budgetSweep = await runSweep({ scope: 'all' });
+    t.check('the capped fill still checks', budgetSweep.ok === true, JSON.stringify(budgetSweep));
+    const classified = playerIdsOf(budgetFetch.calls);
+    const classifiedSet = new Set(classified);
+    t.check(
+      'one check classifies 30 old uploads and no more',
+      classified.length === 30
+        && classifiedSet.size === 30
+        && expectIds.every((id) => classifiedSet.has(id)),
+      JSON.stringify(classified),
+    );
+    const stored = await readChannels();
+    const byId = new Map(stored.map((ch) => [ch.id, ch]));
+    t.check(
+      'a channel that already has five costs no classification',
+      fullEntries.every((e) => !classifiedSet.has(e.v))
+        && (byId.get(fullId).recent || []).map((row) => row.v).join() === fullRecent.map((row) => row.v).join(),
+      JSON.stringify(byId.get(fullId)?.recent),
+    );
+    t.check(
+      'channels with more stored rows wait behind the empty ones',
+      midIds.every((id) => (byId.get(id).recent || []).length === 3)
+        && emptyIds.slice(0, 15).every((id) => (byId.get(id).recent || []).length === 2)
+        && emptyIds.slice(15).every((id) => (byId.get(id).recent || []).length === 0),
+      JSON.stringify(emptyIds.map((id) => (byId.get(id).recent || []).length)),
+    );
+    t.check(
+      'a later batch stores nothing once the 30 are spent',
+      laterIds.every((id) => (byId.get(id).recent || []).length === 0),
+      JSON.stringify(laterIds.map((id) => byId.get(id)?.recent)),
+    );
+    }
 
     t.section('channel.more');
 
@@ -4460,7 +4666,7 @@ export default async function run(t) {
     t.check('the feed stays empty', (await readFeed()).length === 0, JSON.stringify(await readFeed()));
     t.check('no desktop alert', mock.notifications.length === 0, JSON.stringify(mock.notifications));
 
-    t.section('only videos that can stay in the feed are looked up');
+    t.section('a full feed looks up one new upload and five for the sheet');
 
     await wipe();
     await writeSettings({ feed: { maxItems: 50 } });
@@ -4476,9 +4682,13 @@ export default async function run(t) {
     let floorFetch = installFetch({ feeds: { [MKBHD]: floorFeed } });
     await runSweep({ scope: 'all' });
     const floorPlayers = floorFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).map((c) => bodyOf(c.opts).videoId);
+    const floorSet = new Set(floorPlayers);
     t.check(
-      'a full feed asks only about the upload new enough to get in',
-      JSON.stringify(floorPlayers) === JSON.stringify(['mkbhdnew001']),
+      'a full feed asks about the new upload, and the five newest older ones for the sheet',
+      floorPlayers.length === 6
+        && floorSet.size === 6
+        && floorSet.has('mkbhdnew001')
+        && [0, 1, 2, 3, 4].every((i) => floorSet.has(`mkbhdold${String(i).padStart(3, '0')}`)),
       JSON.stringify(floorPlayers),
     );
     t.check('which lands on top and alerts', (await readFeed())[0]?.v === 'mkbhdnew001' && mock.notifications.length === 1, JSON.stringify(mock.notifications));
@@ -4492,7 +4702,10 @@ export default async function run(t) {
     await handleMessage({ type: 'removeChannel', id: BEAST });
     floorFetch = installFetch({ feeds: { [MKBHD]: floorFeed } });
     await runSweep({ scope: 'all' });
-    t.check('with room again, the older uploads are looked up', floorFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 15);
+    t.check(
+      'with room again, the older uploads not already classified are looked up',
+      floorFetch.calls.filter((c) => c.url.includes('/youtubei/v1/player')).length === 10,
+    );
     t.check('and join the feed', (await readFeed()).length === 16, String((await readFeed()).length));
     t.check('without an alert', mock.notifications.length === 1, JSON.stringify(mock.notifications.map((n) => n.message)));
     await writeSettings({ feed: { maxItems: 500 } });
