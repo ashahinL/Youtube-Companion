@@ -100,8 +100,8 @@ in 600px.
 
 **The What's new page's pictures are not store images, and still need the same
 look.** `npm run shots` writes six 400×600 popup frames into
-`src/whatsnew/img/` — Player, Feeds and Watchlist in English, then the same
-three in Arabic. They ship inside the zip, because the page showing them is an
+`src/whatsnew/img/` — Up next, a channel's sheet and Settings in English, then
+the same three in Arabic. They ship inside the zip, because the page showing them is an
 extension page, so a blank one reaches everyone who updates rather than one
 store reviewer. Check them in the same pass as the store images.
 
