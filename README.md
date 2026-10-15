@@ -32,7 +32,7 @@
   </tr>
 </table>
 
-<p align="center"><a href="https://ashahinl.github.io/Youtube-Companion/tour/">Watch the 3-minute tour</a>: the real popup, playing through every feature.</p>
+<p align="center"><a href="https://ashahinl.github.io/Youtube-Companion/tour/">Watch the 3-minute tour</a> (or <a href="https://www.youtube.com/watch?v=T2mHhopbh30">on YouTube</a>): the real popup, playing through every feature.</p>
 
 <p align="center"><code>npm run tour:record</code> writes <code>dist/tour.mp4</code> and <code>dist/tour.srt</code> from that page.</p>
 
