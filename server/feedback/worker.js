@@ -34,6 +34,37 @@ function invalid() {
   return reply(400, { ok: false, error: 'invalid' });
 }
 
+// A 2000-character note is at most 8000 bytes of UTF-8, plus the token and
+// a few short fields. The body is read in chunks and dropped past the cap,
+// so an oversized POST is never held in memory whole.
+const MAX_BODY_BYTES = 16000;
+
+async function readBody(request) {
+  const declared = Number(request.headers.get('Content-Length'));
+  if (declared > MAX_BODY_BYTES) return null;
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > MAX_BODY_BYTES) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 export default {
   fetch(request, env) {
     return handle(request, env);
@@ -60,8 +91,15 @@ export async function handle(request, env, fetchImpl = fetch) {
     return reply(403, { ok: false, error: 'invalid' });
   }
 
-  const raw = await request.text();
-  if (raw.length > 8000) return invalid();
+  // Before the body is read, so a flood of junk costs the sender their
+  // quota instead of costing the worker a read and a parse each time.
+  if (env.LIMITER) {
+    const { success } = await env.LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'none' });
+    if (!success) return reply(429, { ok: false, error: 'limited' });
+  }
+
+  const raw = await readBody(request);
+  if (raw == null) return invalid();
 
   let data;
   try {
@@ -81,11 +119,6 @@ export async function handle(request, env, fetchImpl = fetch) {
   const version = typeof data.v === 'string' && /^\d+(\.\d+){0,3}$/.test(data.v) ? data.v : '';
   const token = data.token;
   if (typeof token !== 'string' || token.length === 0 || token.length >= 4096) return invalid();
-
-  if (env.LIMITER) {
-    const { success } = await env.LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') || 'none' });
-    if (!success) return reply(429, { ok: false, error: 'limited' });
-  }
 
   const form = new URLSearchParams();
   form.set('secret', env.TURNSTILE_SECRET);

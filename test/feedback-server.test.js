@@ -96,10 +96,43 @@ export default async function run(t) {
     t.check(`${label} is 400 and does not fetch`, res.status === 400 && data.error === 'invalid' && fake.calls.length === 0, JSON.stringify({ status: res.status, data, calls: fake.calls.length }));
   }
 
+  // A valid note padded past the cap, so only the size can refuse it.
+  const padded = JSON.stringify(note({ pad: 'x'.repeat(16000) }));
   const huge = routed();
-  const hugeRes = await handle(post('x'.repeat(9000)), ENV, huge.impl);
+  const hugeRes = await handle(post(padded), ENV, huge.impl);
   const hugeBody = await hugeRes.json();
-  t.check('a 9000-character body is 400', hugeRes.status === 400 && hugeBody.error === 'invalid' && huge.calls.length === 0);
+  t.check('a body over 16000 bytes is 400', hugeRes.status === 400 && hugeBody.error === 'invalid' && huge.calls.length === 0);
+
+  // Streamed with no Content-Length, the cap still holds while reading.
+  let pulled = 0;
+  const stream = new ReadableStream({
+    pull(controller) {
+      pulled += 1;
+      if (pulled > 100) controller.close();
+      else controller.enqueue(new TextEncoder().encode('x'.repeat(1000)));
+    },
+  });
+  const streamed = new Request(ENDPOINT, {
+    method: 'POST',
+    headers: { Origin: PAGE, 'Content-Type': 'application/json', 'CF-Connecting-IP': IP },
+    body: stream,
+    duplex: 'half',
+  });
+  const streamedRes = await handle(streamed, ENV, routed().impl);
+  t.check('a streamed body stops being read past the cap', streamedRes.status === 400 && pulled < 30, String(pulled));
+
+  const declared = post(note(), { 'Content-Length': '999999' });
+  const declaredRes = await handle(declared, ENV, routed().impl);
+  t.check('a declared length over the cap is 400 before reading', declaredRes.status === 400 && declared.bodyUsed === false);
+
+  const arabic = routed();
+  const arabicRes = await handle(post(note({ text: 'ب'.repeat(2000), token: 't'.repeat(2048) })), ENV, arabic.impl);
+  t.check('a full 2000-character Arabic note fits', arabicRes.status === 200, String(arabicRes.status));
+
+  const junkLimited = routed();
+  const junkEnv = { ...ENV, LIMITER: { async limit() { return { success: false }; } } };
+  const junkRes = await handle(post('not json'), junkEnv, junkLimited.impl);
+  t.check('the limiter runs before the body is parsed', junkRes.status === 429, String(junkRes.status));
 
   let limitedKey = '';
   const limited = routed();
