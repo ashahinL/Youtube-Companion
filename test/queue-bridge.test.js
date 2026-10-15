@@ -19,6 +19,7 @@ const A = 'aaaaaaaaaaa';
 const B = 'bbbbbbbbbbb';
 const C = 'ccccccccccc';
 const D = 'ddddddddddd';
+const E = 'eeeeeeeeeee';
 const LIST = 'TLPQtestlist0001';
 
 function makeClock() {
@@ -579,6 +580,55 @@ export default async function run(t) {
     JSON.stringify({ ids: idsOf(got[0]), server: top.serverIds() }),
   );
 
+  const reordered = loadQueue({ queued: [A, B, C, D] });
+  reordered.adopt(TOKEN);
+  got = await runOps(reordered, [
+    { op: 'move', v: C, after: null },
+    { op: 'move', v: D, after: C },
+  ]);
+  t.check(
+    'two moves use the order after the first move',
+    JSON.stringify(idsOf(got[0])) === JSON.stringify([C, D, A, B])
+      && JSON.stringify(reordered.serverIds()) === JSON.stringify([C, D, A, B]),
+    JSON.stringify({ ids: idsOf(got[0]), server: reordered.serverIds() }),
+  );
+  t.check(
+    'two moves refresh once',
+    reordered.trace.filter((name) => name === 'yt-refresh-playlist-command').length === 1,
+    JSON.stringify(reordered.trace),
+  );
+
+  const mixed = loadQueue({ queued: [A, B, C, D] });
+  mixed.adopt(TOKEN);
+  got = await runOps(mixed, [
+    { op: 'remove', v: B },
+    { op: 'move', v: C, after: null },
+    { op: 'move', v: D, after: C },
+    { op: 'add', v: E, after: D },
+  ]);
+  t.check(
+    'a remove, two moves and a placed add use the current server order',
+    JSON.stringify(idsOf(got[0])) === JSON.stringify([C, D, E, A])
+      && JSON.stringify(mixed.serverIds()) === JSON.stringify([C, D, E, A]),
+    JSON.stringify({ ids: idsOf(got[0]), server: mixed.serverIds() }),
+  );
+  t.check(
+    'the mixed batch refreshes once',
+    mixed.trace.filter((name) => name === 'yt-refresh-playlist-command').length === 1,
+    JSON.stringify(mixed.trace),
+  );
+
+  const longIds = Array.from({ length: 100 }, (_, i) => String(i).padStart(11, '0'));
+  const longQueue = loadQueue({ queued: longIds });
+  longQueue.adopt(TOKEN);
+  got = await runOps(longQueue, [{ op: 'add', v: E, after: null }]);
+  t.check(
+    'an add beyond the snapshot cap can move to the top',
+    JSON.stringify(idsOf(got[0])) === JSON.stringify([E].concat(longIds).slice(0, 100))
+      && JSON.stringify(longQueue.serverIds()) === JSON.stringify([E].concat(longIds)),
+    JSON.stringify({ ids: idsOf(got[0]), server: longQueue.serverIds() }),
+  );
+
   const played = loadQueue({ queued: [D, A, B, C] });
   played.adopt(TOKEN);
   played.playInto(A);
@@ -682,8 +732,9 @@ export default async function run(t) {
 
   const gate = page.bridge;
   t.check('zero ops is rejected', gate.isAllowedCall('queueOps', [[]]) === false);
-  t.check('101 ops is rejected', gate.isAllowedCall('queueOps', [Array(101).fill({ op: 'clear' })]) === false);
-  t.check('100 ops is accepted', gate.isAllowedCall('queueOps', [Array(100).fill({ op: 'clear' })]) === true);
+  t.check('501 ops is rejected', gate.isAllowedCall('queueOps', [Array(501).fill({ op: 'clear' })]) === false);
+  t.check('101 ops is accepted', gate.isAllowedCall('queueOps', [Array(101).fill({ op: 'clear' })]) === true);
+  t.check('500 ops is accepted', gate.isAllowedCall('queueOps', [Array(500).fill({ op: 'clear' })]) === true);
   t.check('a bad id is rejected', gate.isAllowedCall('queueOps', [[{ op: 'add', v: 'short' }]]) === false);
   t.check('an unknown op is rejected', gate.isAllowedCall('queueOps', [[{ op: 'nope' }]]) === false);
   t.check('an extra key is rejected', gate.isAllowedCall('queueOps', [[{ op: 'clear', extra: 1 }]]) === false);

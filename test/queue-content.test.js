@@ -197,7 +197,7 @@ function sameIds(got, want) {
   return Array.isArray(got) && got.length === want.length && got.every((id, i) => id === want[i]);
 }
 
-// Runs a 60s bridge timeout on the next turn. Records every delay so a
+// Runs long bridge timeouts on the next turn. Records every delay so a
 // normal player call can be told apart from a queue edit.
 function timeoutStub(extraFast, hold) {
   const delays = [];
@@ -210,7 +210,7 @@ function timeoutStub(extraFast, hold) {
     const row = { ms, cleared: false, fn: fn };
     rows.set(id, row);
     if (!hold) {
-      const wait = ms === 60000 || (extraFast && ms === 1500) ? 0 : ms;
+      const wait = ms >= 60000 || (extraFast && ms === 1500) ? 0 : ms;
       row.realId = globalThis.setTimeout(function () {
         if (row.cleared) return;
         if (ms === 1500) fired[1500] += 1;
@@ -393,10 +393,26 @@ export default async function run(t) {
   const emptyOps = bootPage();
   const emptyReply = await emptyOps.ask({ type: 'queue.ops', ops: [] });
   t.check('an empty batch is invalid', emptyReply && emptyReply.ok === false && emptyReply.error === 'invalid', JSON.stringify(emptyReply));
-  const tooMany = [];
-  for (let i = 0; i < 101; i++) tooMany.push({ op: 'add' });
+  const largeOps = Array.from({ length: 101 }, (_, i) => ({ op: 'remove', v: vid(i) }));
+  const largePage = bootPage({ opsResult: { listId: 'TLPQabc', ids: [], playing: A } });
+  const largeReply = await largePage.ask({ type: 'queue.ops', ops: largeOps });
+  t.check(
+    '101 ops is accepted and sent to the bridge',
+    largeReply && largeReply.ok === true
+      && largePage.calls.some((row) => row[0] === 'queueOps' && row[1] === largeOps),
+    JSON.stringify(largeReply),
+  );
+  const limitOps = Array.from({ length: 500 }, (_, i) => ({ op: 'remove', v: vid(i) }));
+  const limitReply = await largePage.ask({ type: 'queue.ops', ops: limitOps });
+  t.check(
+    '500 ops is accepted and sent to the bridge',
+    limitReply && limitReply.ok === true
+      && largePage.calls.some((row) => row[0] === 'queueOps' && row[1] === limitOps),
+    JSON.stringify(limitReply),
+  );
+  const tooMany = Array.from({ length: 501 }, (_, i) => ({ op: 'remove', v: vid(i) }));
   const tooManyReply = await emptyOps.ask({ type: 'queue.ops', ops: tooMany });
-  t.check('101 ops is invalid', tooManyReply && tooManyReply.error === 'invalid', JSON.stringify(tooManyReply));
+  t.check('501 ops is invalid', tooManyReply && tooManyReply.error === 'invalid', JSON.stringify(tooManyReply));
   const notArray = await emptyOps.ask({ type: 'queue.ops', ops: 'add' });
   t.check('a non-array is invalid', notArray && notArray.error === 'invalid', JSON.stringify(notArray));
   t.check('invalid ops do not call the bridge', emptyOps.calls.length === 0, JSON.stringify(emptyOps.calls));
@@ -412,12 +428,14 @@ export default async function run(t) {
     setTimeout: clock.setTimeout,
     clearTimeout: clock.clearTimeout,
   });
+  // 30 ops would need 310 s of give-ups; the wait stops at the 4 minute cap.
+  const thirty = Array.from({ length: 30 }, (_, i) => ({ op: 'add', v: vid(i) }));
   const started = Date.now();
-  const silentReply = await silentOps.ask({ type: 'queue.ops', ops: [{ op: 'add', id: A }] });
+  const silentReply = await silentOps.ask({ type: 'queue.ops', ops: thirty });
   const waited = Date.now() - started;
   t.check('a silent batch fails', silentReply && silentReply.ok === false && silentReply.error === 'failed', JSON.stringify(silentReply));
-  t.check('the silent batch used the 60s timeout', clock.delays.indexOf(60000) !== -1, JSON.stringify(clock.delays));
-  t.check('the silent batch did not wait 60s', waited < 5000, String(waited));
+  t.check('a long batch waits at most 4 minutes', clock.delays.indexOf(240000) !== -1 && !clock.delays.some((ms) => ms > 240000), JSON.stringify(clock.delays));
+  t.check('the silent batch timeout did not wait in real time', waited < 5000, String(waited));
 
   t.section('other bridge calls');
   const short = timeoutStub(true);
@@ -435,12 +453,12 @@ export default async function run(t) {
     'a player read still times out at 1500ms',
     playerReply && playerReply.ok === true
       && short.delays.indexOf(1500) !== -1
-      && short.delays.indexOf(60000) === -1
+      && short.delays.indexOf(5010000) === -1
       && short.fired[1500] >= 1
       && playerPage.calls.some((row) => row[0] === 'collaborators'),
     JSON.stringify({ delays: short.delays, fired: short.fired[1500], reply: playerReply, calls: playerPage.calls }),
   );
-  t.check('the player read did not wait 60s', playerWaited < 5000, String(playerWaited));
+  t.check('the player read did not use the batch timeout', playerWaited < 5000, String(playerWaited));
 
   t.section('snapshot from the tab');
   const fallback = bootPage({

@@ -6,6 +6,11 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+**Fixes**
+- Up next and YouTube's queue no longer drift apart after a reorder that
+  moves several videos at once, or when the two lists differ by more than
+  100 videos.
+
 ## 2.2.0 — 2026-10-11
 
 **New**

@@ -50,7 +50,8 @@
   const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
   // The panel can be longer; the snapshot the popup stores is capped.
   const MAX_QUEUE_IDS = 100;
-  const MAX_QUEUE_OPS = 100;
+  // Same cap as content.js: the page queue plus Up next's 100, with room.
+  const MAX_QUEUE_OPS = 500;
   // A quiet edit still has to finish the batch. Five seconds is the give-up,
   // not a failure the popup has to show.
   const QUEUE_WAIT_MS = 5000;
@@ -769,18 +770,18 @@
 
   function expectQueued(v) {
     return expectQueue(function () {
-      const snap = readQueueSnapshot();
-      return snap.ids.indexOf(v) !== -1;
+      return readQueueState().queued.some(function (row) { return row.v === v; });
     });
   }
 
-  async function runRemove(v) {
-    const state = readQueueState();
+  async function runRemove(state, v) {
     if (!state.listId) return false;
     let set = '';
+    let at = -1;
     for (let i = 0; i < state.queued.length; i++) {
       if (state.queued[i].v === v) {
         set = state.queued[i].set;
+        at = i;
         break;
       }
     }
@@ -791,11 +792,11 @@
       setVideoId: set,
     }], 'CAE%3D');
     await pending;
+    state.queued.splice(at, 1);
     return true;
   }
 
-  async function runMove(v, after) {
-    const state = readQueueState();
+  async function runMove(state, v, after) {
     if (!state.listId) return false;
     const rows = state.queued;
     let from = -1;
@@ -804,7 +805,7 @@
       if (from === -1 && rows[i].v === v) from = i;
       if (after != null && afterAt === -1 && rows[i].v === after) afterAt = i;
     }
-    if (from === -1) return false;
+    if (from === -1 || from === afterAt) return false;
     if (after == null) {
       if (from === 0) return false;
     } else if (afterAt === -1 || from === afterAt + 1) {
@@ -833,21 +834,26 @@
     const pending = expectSignal('yt-update-playlist-action');
     dispatchEdit(state.panel, state.listId, actions);
     await pending;
+    const row = rows.splice(from, 1)[0];
+    const to = after == null ? 0 : rows.findIndex(function (item) { return item.v === after; }) + 1;
+    rows.splice(to, 0, row);
     return true;
   }
 
-  async function runAdd(op) {
-    const snap = readQueueSnapshot();
-    if (snap.ids.indexOf(op.v) !== -1) return false;
+  async function runAdd(state, op) {
+    if (state.queued.some(function (row) { return row.v === op.v; })) return false;
     const pending = expectQueued(op.v);
     dispatchAdd(op.v);
     await pending;
+    const now = readQueueState();
+    const row = now.queued.find(function (item) { return item.v === op.v; });
+    if (!row) return false;
+    state.panel = now.panel;
+    state.listId = now.listId;
+    // Adds appear in the panel, but its other rows can still precede our edits.
+    state.queued.push(row);
     if (!Object.prototype.hasOwnProperty.call(op, 'after')) return false;
-    const now = readQueueSnapshot();
-    const at = now.ids.indexOf(op.v);
-    const before = at <= 0 ? null : now.ids[at - 1];
-    if (before === op.after) return false;
-    return runMove(op.v, op.after);
+    return runMove(state, op.v, op.after);
   }
 
   async function runClear() {
@@ -871,18 +877,23 @@
   }
 
   async function performQueueOps(ops) {
+    // Moves and removes reach the server before the panel redraws.
+    let state = readQueueState();
     let edited = false;
     let didClear = false;
     for (let i = 0; i < ops.length; i++) {
       const op = ops[i];
       if (op.op === 'add') {
-        if (await runAdd(op)) edited = true;
+        if (await runAdd(state, op)) edited = true;
       } else if (op.op === 'remove') {
-        if (await runRemove(op.v)) edited = true;
+        if (await runRemove(state, op.v)) edited = true;
       } else if (op.op === 'move') {
-        if (await runMove(op.v, op.after)) edited = true;
+        if (await runMove(state, op.v, op.after)) edited = true;
       } else if (op.op === 'clear') {
-        if (await runClear()) didClear = true;
+        if (await runClear()) {
+          didClear = true;
+          state = readQueueState();
+        }
       }
     }
     if (edited) await refreshQueue();

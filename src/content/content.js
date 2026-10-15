@@ -20,9 +20,17 @@
   const SAMPLE_MS = 5000;
   const FLUSH_MS = 30000;
   const CALL_TIMEOUT_MS = 1500;
-  // One queue edit can wait on the page for several seconds, and a batch
-  // runs them one after another.
-  const QUEUE_OPS_TIMEOUT_MS = 60000;
+  // Same cap as inject.js: the page queue plus Up next's 100, with room.
+  const MAX_QUEUE_OPS = 500;
+  // Each op can wait twice (an add, then its move) at inject.js's five
+  // second give-up, plus the final refresh. Capped below the five minutes
+  // Chrome allows a worker to wait on one reply: a page that stalls that
+  // long is not going to finish the batch.
+  const QUEUE_OP_WAIT_MS = 5000;
+  const QUEUE_OPS_TIMEOUT_CAP_MS = 4 * 60 * 1000;
+  function queueOpsTimeout(count) {
+    return Math.min((count * 2 + 2) * QUEUE_OP_WAIT_MS, QUEUE_OPS_TIMEOUT_CAP_MS);
+  }
   const QUEUE_LIST_RE = /^TLPQ[A-Za-z0-9_-]{0,60}$/;
   const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
   const QUEUE_MAX_IDS = 100;
@@ -3800,12 +3808,12 @@
         }
         if (msg.type === 'queue.ops') {
           const ops = msg.ops;
-          if (!Array.isArray(ops) || ops.length < 1 || ops.length > 100) {
+          if (!Array.isArray(ops) || ops.length < 1 || ops.length > MAX_QUEUE_OPS) {
             sendResponse({ ok: false, error: 'invalid' });
             return true;
           }
           ensureBridge().then(function () {
-            return callPlayer('queueOps', [ops], QUEUE_OPS_TIMEOUT_MS);
+            return callPlayer('queueOps', [ops], queueOpsTimeout(ops.length));
           }).then(function (result) {
             if (result === undefined) {
               sendResponse({ ok: false, error: 'failed' });
