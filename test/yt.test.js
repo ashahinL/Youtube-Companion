@@ -919,7 +919,7 @@ export default async function run(t) {
       body.context.client.hl === 'ar'
         && body.context.client.clientName === 'WEB'
         && body.context.client.gl === 'US'
-        && body.context.client.clientVersion === '2.20261009.01.00',
+        && body.context.client.clientVersion === '2.20261015.01.00',
       JSON.stringify(body.context.client),
     );
     t.check('the page parses', page.entries.length === 30 && page.token.startsWith('4qmFsgLd'));
