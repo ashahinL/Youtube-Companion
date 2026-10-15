@@ -580,6 +580,18 @@ export default async function run(t) {
         && !('lastFavPollAt' in written));
     t.check('writePollState persists', (await readPollState()).lastPollAt === 5);
 
+    // Two function patches at once: each sees the other's write, so
+    // neither entry is lost.
+    const addTarget = (id, v) => writePollState((poll) => ({
+      alertTargets: { ...(poll.alertTargets || {}), [id]: v },
+    }));
+    await Promise.all([addTarget('yt:a', 'aaaaaaaaaaa'), addTarget('yt:b', 'bbbbbbbbbbb')]);
+    const targets = (await readPollState()).alertTargets;
+    t.check('function patches run under the lock in turn',
+      targets['yt:a'] === 'aaaaaaaaaaa' && targets['yt:b'] === 'bbbbbbbbbbb',
+      JSON.stringify(targets));
+    await writePollState({ alertTargets: {} });
+
     const deduped = markNotified({ notified: ['a'] }, ['a', 'b', 'a']);
     t.check('markNotified dedupes', same(deduped.notified, ['a', 'b']));
     t.check('hasNotified is true for a recorded id', hasNotified(deduped, 'a') === true);

@@ -348,6 +348,7 @@ export default async function run(t) {
     addChannelByInput,
     onNotificationClicked,
     onNotificationButtonClicked,
+    notificationVideos,
     onInstalled,
     syncUninstallUrl,
     addImportedChannels,
@@ -1281,6 +1282,43 @@ export default async function run(t) {
     );
     await writePollState({ backoffUntil: 0, backoffLevel: 0 });
 
+    t.section('a sweep keeps a backoff See more set while it ran');
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    await putChannel({ id: BEAST, title: 'MrBeast', seeded: true });
+    let moreStarted = false;
+    let morePromise = null;
+    installFetch({
+      feeds: {
+        [MKBHD]: rssXml(MKBHD, 'Marques Brownlee', []),
+        [BEAST]: rssXml(BEAST, 'MrBeast', []),
+      },
+      async hook(u, opts) {
+        const body = bodyOf(opts);
+        if (String(u).includes('/youtubei/v1/browse') && body.continuation) {
+          return jsonRes({}, { status: 429 });
+        }
+        if (String(u).includes('/feeds/videos.xml') && !moreStarted) {
+          moreStarted = true;
+          morePromise = handleMessage({ type: 'channel.more', id: MKBHD, token: 'NEXTTOK' });
+          await morePromise;
+        }
+        return undefined;
+      },
+    });
+    const duringSweep = await runSweep({ scope: 'all' });
+    const moreDuring = await morePromise;
+    const duringPoll = await readPollState();
+    t.check(
+      'a sweep that succeeds keeps the wait See more was given',
+      duringSweep.ok === true
+        && moreDuring?.error === 'slow down'
+        && duringPoll.backoffUntil > Date.now()
+        && duringPoll.backoffLevel >= 1,
+      JSON.stringify({ duringSweep, moreDuring, until: duringPoll.backoffUntil, level: duringPoll.backoffLevel }),
+    );
+
     t.section('channel records are written once per sweep');
 
     await wipe();
@@ -1737,6 +1775,59 @@ export default async function run(t) {
       JSON.stringify(mergedPoll.notified),
     );
 
+    t.section('an alert still points at its video after a restart');
+
+    const alertAfterRestart = async () => {
+      await wipe();
+      await putChannel({ id: MKBHD, title: 'Alpha', seeded: true });
+      await putChannel({ id: BEAST, title: 'Beta', seeded: true });
+      installFetch({
+        feeds: {
+          [MKBHD]: rssXml(MKBHD, 'Alpha', [{ v: 'alpha000001', t: 'Alpha video', at: AT.newest }]),
+          [BEAST]: rssXml(BEAST, 'Beta', [{ v: 'beta0000001', t: 'Beta video', at: AT.mid }]),
+        },
+      });
+      await runSweep({ scope: 'all' });
+      const id = mock.notifications[0]?.id;
+      notificationVideos.clear();
+      const feedNow = await readFeed();
+      await saveFeed([
+        { v: 'othernew001', c: 'UCother0000000000000001', t: 'Newer other', at: AT.newest + 9000, d: 60, vw: 0, k: 'video', st: 0 },
+        { v: 'shortnew001', c: MKBHD, t: 'Newer short', at: AT.newest + 8000, d: 20, vw: 0, k: 'short', st: 0 },
+        ...feedNow,
+      ]);
+      return id;
+    };
+
+    const restartedId = await alertAfterRestart();
+    t.check(
+      'the alert stores the video it is about',
+      (await readPollState()).alertTargets?.[restartedId] === 'alpha000001',
+      JSON.stringify((await readPollState()).alertTargets),
+    );
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked(restartedId);
+    t.check(
+      'a click after a restart opens that video',
+      mock.tabsCreated.length === 1 && String(mock.tabsCreated[0]?.url).includes('alpha000001'),
+      JSON.stringify(mock.tabsCreated),
+    );
+    t.check(
+      'and the stored target is gone once the alert is used',
+      (await readPollState()).alertTargets?.[restartedId] == null,
+      JSON.stringify((await readPollState()).alertTargets),
+    );
+
+    const buttonId = await alertAfterRestart();
+    mock.tabsCreated.length = 0;
+    await onNotificationButtonClicked(buttonId, 1);
+    const queuedAlert = await readQueue();
+    t.check(
+      'Add to Up next after a restart queues that video',
+      queuedAlert.length === 1 && queuedAlert[0].v === 'alpha000001' && mock.tabsCreated.length === 0,
+      JSON.stringify({ queuedAlert, tabs: mock.tabsCreated }),
+    );
+
     await wipe();
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true, avatar: 'https://yt3.ggpht.com/mkbhd' });
     installFetch({
@@ -1970,9 +2061,20 @@ export default async function run(t) {
     mock.tabsCreated.length = 0;
     await onNotificationClicked(`yt:${CLICK_CH}`);
     t.check(
-      'empty Map click on a short opens /shorts/',
-      mock.tabsCreated[0]?.url === 'https://www.youtube.com/shorts/shortvid001',
+      'empty Map click skips a short and opens the newest video',
+      mock.tabsCreated[0]?.url === 'https://www.youtube.com/watch?v=older000001',
       mock.tabsCreated[0]?.url,
+    );
+
+    await saveFeed([
+      { v: 'shortvid001', c: CLICK_CH, t: 'A short', at: 50, d: 1, vw: 0, k: 'short', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    await onNotificationClicked(`yt:${CLICK_CH}`);
+    t.check(
+      'empty Map click with only a short opens nothing',
+      mock.tabsCreated.length === 0,
+      JSON.stringify(mock.tabsCreated),
     );
 
     await saveFeed([
@@ -1981,9 +2083,9 @@ export default async function run(t) {
     mock.tabsCreated.length = 0;
     await onNotificationClicked(`yt:${CLICK_CH}`);
     t.check(
-      'empty Map click with no rows for that channel opens the channel videos page',
-      mock.tabsCreated[0]?.url === `https://www.youtube.com/channel/${CLICK_CH}/videos`,
-      mock.tabsCreated[0]?.url,
+      'empty Map click with no rows for that channel opens nothing',
+      mock.tabsCreated.length === 0,
+      JSON.stringify(mock.tabsCreated),
     );
 
     mock.tabsCreated.length = 0;
@@ -2032,6 +2134,17 @@ export default async function run(t) {
     ]);
     await onNotificationButtonClicked(`yt:${CLICK_CH}`, 1);
     t.check('a live stream is never queued from an alert', (await readQueue()).length === 1);
+    await saveFeed([
+      { v: 'btnshort001', c: CLICK_CH, t: 'Short', at: 300, d: 20, vw: 0, k: 'short', st: 0 },
+      { v: 'btnvid00001', c: CLICK_CH, t: 'Button video', at: 100, d: 60, vw: 0, k: 'video', st: 0 },
+    ]);
+    mock.tabsCreated.length = 0;
+    await onNotificationButtonClicked(`yt:${CLICK_CH}`, 0);
+    t.check(
+      'Listen with no stored video skips a short',
+      mock.tabsCreated.length === 1 && String(mock.tabsCreated[0]?.url).includes('btnvid00001'),
+      JSON.stringify(mock.tabsCreated),
+    );
     mock.tabsCreated.length = 0;
     await onNotificationButtonClicked('not-a-notification', 0);
     t.check('an unknown alert id does nothing', mock.tabsCreated.length === 0);
@@ -4619,13 +4732,19 @@ export default async function run(t) {
 
     await wipe();
     await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const keptAt = (await readChannels()).find((ch) => ch.id === MKBHD).addedAt;
     const kept = { v: 'keptalert01', c: MKBHD, t: 'Kept alert', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 };
     const missing = { v: 'missing0001', c: MKBHD, t: 'Not stored', at: AT.mid, d: 60, vw: 1, k: 'video', st: 0 };
     const gone = { v: 'gonealert01', c: BEAST, t: 'Channel gone', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 };
     await saveFeed([kept, gone]);
     await writePollState({
       notified: [],
-      pendingAlert: { added: [kept, missing, gone], quiet: [], unseeded: [] },
+      pendingAlert: {
+        added: [kept, missing, gone],
+        quiet: [],
+        unseeded: [],
+        generations: { [MKBHD]: keptAt },
+      },
     });
     mock.notifications.length = 0;
     await replayPendingAlert();
@@ -4645,6 +4764,49 @@ export default async function run(t) {
     );
     await replayPendingAlert();
     t.check('a second replay creates nothing', mock.notifications.length === 1, String(mock.notifications.length));
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const replacedAt = (await readChannels()).find((ch) => ch.id === MKBHD).addedAt;
+    const replacedRow = { v: 'replaygen01', c: MKBHD, t: 'Old listing', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 };
+    await saveFeed([replacedRow]);
+    await writePollState({
+      notified: [],
+      pendingAlert: {
+        added: [replacedRow],
+        quiet: [],
+        unseeded: [],
+        generations: { [MKBHD]: replacedAt },
+      },
+    });
+    const replacedChannel = (await readChannels())[0];
+    await writeChannels([{ ...replacedChannel, addedAt: replacedAt + 1 }]);
+    mock.notifications.length = 0;
+    await replayPendingAlert();
+    const replacedPoll = await readPollState();
+    t.check(
+      'a channel added again does not get the old check\'s alert',
+      mock.notifications.length === 0
+        && replacedPoll.pendingAlert == null
+        && !replacedPoll.notified.includes('replaygen01'),
+      JSON.stringify({ notes: mock.notifications, notified: replacedPoll.notified, pending: replacedPoll.pendingAlert }),
+    );
+
+    await wipe();
+    await putChannel({ id: MKBHD, title: 'Marques Brownlee', seeded: true });
+    const oldRow = { v: 'replayold001', c: MKBHD, t: 'Before generations', at: AT.newest, d: 60, vw: 1, k: 'video', st: 0 };
+    await saveFeed([oldRow]);
+    await writePollState({
+      notified: [],
+      pendingAlert: { added: [oldRow], quiet: [], unseeded: [] },
+    });
+    mock.notifications.length = 0;
+    await replayPendingAlert();
+    t.check(
+      'a pending alert with no listings is dropped',
+      mock.notifications.length === 0 && (await readPollState()).pendingAlert == null,
+      JSON.stringify({ notes: mock.notifications, pending: (await readPollState()).pendingAlert }),
+    );
 
     await wipe();
     mock.notifications.length = 0;

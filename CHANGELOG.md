@@ -10,6 +10,10 @@ shipped yet waits under Unreleased. How a version ships:
 - Up next and YouTube's queue no longer drift apart after a reorder that
   moves several videos at once, or when the two lists differ by more than
   100 videos.
+- Clicking an alert, or its Listen or Add to Up next button, acts on the
+  video the alert was about, even after the browser has been idle for a while.
+- A check no longer clears the wait that YouTube asked for when See more
+  ran into it.
 
 ## 2.2.0 — 2026-10-11
 

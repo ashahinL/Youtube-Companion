@@ -229,8 +229,8 @@ function rememberSkipped() {
 }
 
 // Fast path for the video that was announced. MV3 kills the worker shortly
-// after idle, so the click handler must also rebuild from storage.
-const notificationVideos = new Map();
+// after idle, so the click handler also reads pollState.alertTargets.
+export const notificationVideos = new Map();
 
 // The tab starts loading as soon as tabs.create returns, so a very
 // fast content-script boot could ask before the flag exists.
@@ -703,8 +703,13 @@ function channelIdFromNotificationId(id) {
   return normalizeChannelInput(channelId)?.kind === 'id' ? channelId : '';
 }
 
+// A Short is stored and never alerted, so an old alert must not open one.
+function newestAlertable(items) {
+  return newestOf((items || []).filter((row) => row && row.k !== 'short'));
+}
+
 function newestForChannel(feed, channelId) {
-  return newestOf((feed || []).filter((row) => row && row.c === channelId));
+  return newestAlertable((feed || []).filter((row) => row && row.c === channelId));
 }
 
 /**
@@ -1044,13 +1049,45 @@ async function showAlert({ id, title, message, newest, iconCandidates, settings 
       const options = { type: 'basic', iconUrl, title, message };
       if (buttons) options.buttons = buttons;
       await chromeApi().notifications.create(id, options);
-      notificationVideos.set(id, newest.v);
-      return true;
     } catch {
       // Next icon, or give up.
+      continue;
     }
+    await rememberAlertVideo(id, newest.v);
+    return true;
   }
   return false;
+}
+
+function alertTargetsOf(poll) {
+  const map = poll?.alertTargets;
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return {};
+  return map;
+}
+
+// The id is fixed per channel, so a later alert for the same one replaces
+// this entry. Written as soon as the alert is on screen: the worker can
+// be killed before the click arrives.
+async function rememberAlertVideo(id, videoId) {
+  notificationVideos.set(id, videoId);
+  await writePollState((poll) => ({ alertTargets: { ...alertTargetsOf(poll), [id]: videoId } }));
+}
+
+// Memory wins when this worker showed the alert. Either way the stored
+// entry is spent, the same as the Map, so a second click rebuilds.
+async function takeAlertVideo(id) {
+  const memory = notificationVideos.get(id);
+  if (memory) notificationVideos.delete(id);
+  let stored = '';
+  await writePollState((poll) => {
+    const targets = alertTargetsOf(poll);
+    if (!Object.prototype.hasOwnProperty.call(targets, id)) return null;
+    stored = typeof targets[id] === 'string' ? targets[id] : '';
+    const next = { ...targets };
+    delete next[id];
+    return { alertTargets: next };
+  });
+  return memory || stored || '';
 }
 
 async function notifyChannel(channel, items, settings) {
@@ -1143,6 +1180,16 @@ async function notifyNewItems({ added, unseeded, quiet, settings, generations })
   }
 }
 
+// A plain object in storage, or the Map a check still holds. Missing means
+// the alert was stored before listings were kept: replaying it would judge
+// those rows against today's list, and a channel removed and added again
+// would alert under the new listing. One check old, so it is dropped.
+function generationsFromStored(raw) {
+  if (raw instanceof Map) return raw;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  return new Map(Object.entries(raw).map(([id, at]) => [id, Number(at) || 0]));
+}
+
 /**
  * A check stores each batch before it alerts. If the worker is killed in
  * between, those rows are already in the feed and the next check will not
@@ -1153,6 +1200,11 @@ export async function replayPendingAlert() {
   try {
     const pending = (await readPollState()).pendingAlert;
     if (!pending) return;
+    const generations = generationsFromStored(pending.generations);
+    if (!generations) {
+      await writePollState({ pendingAlert: null });
+      return;
+    }
     const storedIds = new Set((await readFeed()).map((row) => row && row.v));
     const added = pending.added.filter((row) => row && storedIds.has(row.v));
     await notifyNewItems({
@@ -1160,7 +1212,7 @@ export async function replayPendingAlert() {
       quiet: new Set(pending.quiet),
       unseeded: new Set(pending.unseeded),
       settings: await readSettings(),
-      generations: listingGenerations(await readChannels()),
+      generations,
     });
     await writePollState({ pendingAlert: null });
   } catch (err) {
@@ -1169,6 +1221,7 @@ export async function replayPendingAlert() {
 }
 
 async function performSweep({ onlyId, onlyIds }) {
+  const backoffAtStart = Number((await readPollState()).backoffUntil) || 0;
   const settings = await readSettings();
   const fetchImpl = globalThis.fetch;
   const allChannels = await readChannels();
@@ -1360,6 +1413,7 @@ async function performSweep({ onlyId, onlyIds }) {
       added: [...added],
       quiet: [...quiet],
       unseeded: [...silentNew],
+      generations: Object.fromEntries(generations),
     };
     const progressPatch = trackProgress
       ? { progress: { done: start + batch.length, total: list.length } }
@@ -1396,7 +1450,15 @@ async function performSweep({ onlyId, onlyIds }) {
     await refreshBadge();
     return { ok: false, error: 'slow down', until, added: stillAdded.length };
   }
-  const patch = { backoffLevel: 0, backoffUntil: 0 };
+  // See more can be refused while this check runs. That wait is newer than
+  // the one this check started with; clearing it would walk straight back
+  // into the block. A wait already in the past is this check's own leftover.
+  const storedUntil = Number((await readPollState()).backoffUntil) || 0;
+  const patch = {};
+  if (storedUntil === backoffAtStart || storedUntil <= now) {
+    patch.backoffLevel = 0;
+    patch.backoffUntil = 0;
+  }
   if (!onlyId && !(onlyIds && onlyIds.length)) patch.lastPollAt = now;
   await writePollState(patch);
 
@@ -2478,13 +2540,12 @@ export async function onNotificationButtonClicked(id, index) {
   const merged = id === MERGED_NOTIFICATION_ID;
   const channelId = merged ? '' : channelIdFromNotificationId(id);
   if (!channelId && !merged) return;
-  const mapped = notificationVideos.get(id);
-  if (mapped) notificationVideos.delete(id);
+  const videoId = await takeAlertVideo(id);
   const [feed, channels] = await Promise.all([readFeed(), readChannels()]);
-  const item = mapped
-    ? (feed || []).find((row) => row && row.v === mapped)
-    : merged ? newestOf(feed || []) : newestForChannel(feed, channelId);
-  const v = item?.v || mapped;
+  const item = videoId
+    ? (feed || []).find((row) => row && row.v === videoId)
+    : merged ? newestAlertable(feed) : newestForChannel(feed, channelId);
+  const v = item?.v || videoId;
   if (!v) return;
   if (index === 0) {
     await openVideoTab(v, 'video', { audio: true });
@@ -2505,24 +2566,21 @@ export async function onNotificationClicked(id) {
   } catch {
     // Opening the video matters more than removing the alert.
   }
-  const mapped = notificationVideos.get(id);
-  if (mapped) notificationVideos.delete(id);
+  const videoId = await takeAlertVideo(id);
 
   let url;
-  if (mapped) {
+  if (videoId) {
     const feed = await readFeed();
-    const item = (feed || []).find((row) => row && row.v === mapped);
-    url = watchUrl(mapped, item?.k);
+    const item = (feed || []).find((row) => row && row.v === videoId);
+    url = watchUrl(videoId, item?.k);
   } else {
     const merged = id === MERGED_NOTIFICATION_ID;
     const channelId = merged ? '' : channelIdFromNotificationId(id);
     if (!channelId && !merged) return;
     const feed = await readFeed();
-    const newest = merged ? newestOf(feed || []) : newestForChannel(feed, channelId);
-    if (merged && !newest) return;
-    url = newest?.v
-      ? watchUrl(newest.v, newest.k)
-      : `https://www.youtube.com/channel/${channelId}/videos`;
+    const newest = merged ? newestAlertable(feed) : newestForChannel(feed, channelId);
+    if (!newest?.v) return;
+    url = watchUrl(newest.v, newest.k);
   }
   // macOS can keep a clicked alert in Notification Center, so a later click
   // still arrives: go to the tab it already opened instead of a new one.

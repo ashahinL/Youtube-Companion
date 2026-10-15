@@ -449,10 +449,13 @@ export async function readPollState() {
   return merged;
 }
 
+// A patch that depends on the stored state (a map to add to or take from)
+// is passed as a function, so its read and its write share the lock.
 export async function writePollState(patch) {
   return withPollLock(async () => {
     const current = await readPollState();
-    const next = { ...current, ...(isPlainObject(patch) ? patch : {}) };
+    const change = typeof patch === 'function' ? patch(current) : patch;
+    const next = { ...current, ...(isPlainObject(change) ? change : {}) };
     if (!Array.isArray(next.notified)) next.notified = [];
     await setKey('pollState', next);
     return next;
