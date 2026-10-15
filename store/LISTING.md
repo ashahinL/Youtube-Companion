@@ -17,13 +17,22 @@ When a listing goes live, put its link in the README's install section.
 
 ## The package
 
-The same zip goes to both stores: `companion-for-youtube-2.1.0.zip`, 42
-entries, 704,426 bytes, SHA-256
-`b69f928b05b0f07a5662efa1037838015653f48de805fed225594c17acea5a5f`, packed on
-2026-09-26 from `main` at `v2.1.0`.
+The same zip goes to both stores: `companion-for-youtube-2.2.1.zip`, 43
+entries, 742,776 bytes, SHA-256
+`413e4c65f77569ee7a94d292b03c50d24a720b84ed9e4222cf18855635ec85ab`, packed on
+2026-10-16 from `v2.2.1`.
 
-- Download it from the [v2.1.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.1.0), or
-- run `npm run pack` on a fresh clone of the `v2.1.0` tag.
+- Download it from the [v2.2.1 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.2.1), or
+- run `npm run pack` on a fresh clone of the `v2.2.1` tag.
+
+2.2.0 (`companion-for-youtube-2.2.0.zip`, 43 entries, 741,033 bytes, SHA-256
+`59f20033f45840e39063962c64b491359b87ad26dff09f48580dc7da826d5f45`) was tagged
+and released on GitHub on 2026-10-11 but **never uploaded to a store**: a
+review found fixes first, and they shipped as 2.2.1.
+
+2.1.0 was `companion-for-youtube-2.1.0.zip`, 42 entries, 704,426 bytes,
+SHA-256 `b69f928b05b0f07a5662efa1037838015653f48de805fed225594c17acea5a5f`,
+on the [v2.1.0 release](https://github.com/ashahinL/Youtube-Companion/releases/tag/v2.1.0).
 
 2.0.0 was `companion-for-youtube-2.0.0.zip`, 38 entries, 652,434 bytes,
 SHA-256 `d939e0cb0871cb9ae2c55e362422909ecec9b7437e86f4e9c4573dc482a8924e`,
@@ -43,9 +52,9 @@ the same files inside. To check a zip against a tag, compare the files, not
 the hash:
 
 ```bash
-mkdir /tmp/z && unzip -q companion-for-youtube-2.1.0.zip -d /tmp/z
+mkdir /tmp/z && unzip -q companion-for-youtube-2.2.1.zip -d /tmp/z
 cd /tmp/z && find . -type f | sed 's|^\./||' | while read f; do
-  git -C <repo> show v2.1.0:"$f" | cmp -s - "$f" || echo "differs: $f"; done
+  git -C <repo> show v2.2.1:"$f" | cmp -s - "$f" || echo "differs: $f"; done
 ```
 
 A later version is packed on its ship day, from its tag, into

@@ -6,6 +6,11 @@ shipped yet waits under Unreleased. How a version ships:
 
 ## Unreleased
 
+## 2.2.1 — 2026-10-16
+
+2.2.0 never reached the stores: these fixes came first. Updating from 2.1.0
+brings everything listed under 2.2.0 below, plus these.
+
 **Fixes**
 - A channel that has not posted for a long time shows its newest videos in
   its sheet again, even when the rest of your feed is full of newer ones.
@@ -16,6 +21,10 @@ shipped yet waits under Unreleased. How a version ships:
   video the alert was about, even after the browser has been idle for a while.
 - A check no longer clears the wait that YouTube asked for when See more
   ran into it.
+
+**Safer**
+- The feedback form's server turns away an oversized note before reading
+  it, and counts every request against the rate limit.
 
 ## 2.2.0 — 2026-10-11
 

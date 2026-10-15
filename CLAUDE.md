@@ -48,9 +48,11 @@ fixes. Chrome had it live by 2026-10-02; Edge by 2026-10-10.
 
 **2.2.0 was tagged and released on 2026-10-11**: Up next mirrored with
 YouTube's own queue, one alert per check, Send feedback, the shorter
-Settings, and the new icon. The store uploads are clicked through by hand
+Settings, and the new icon. It never went to a store: a review found
+fixes first, and **2.2.1, tagged and released on 2026-10-16**, is the
+first store build of 2.2. The store uploads are clicked through by hand
 from `store/LISTING.md`, which records where each store stands. The version
-files read 2.2.0 and do not change again until the next ship day. Nothing
+files read 2.2.1 and do not change again until the next ship day. Nothing
 ships until the owner says so, and not while a store still has a version in
 review. Finished work waits under `## Unreleased` in the CHANGELOG.
 
