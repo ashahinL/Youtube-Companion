@@ -28,42 +28,11 @@ to edit its own queue with the page's own actions. Audio mode injects an isolate
 content script on youtube.com to pin the player to 144p; `#movie_player`
 methods are reached through a MAIN-world bridge.
 
-## Where things stand
+## Shipping
 
-**1.0.0 has shipped**: GitHub release `v1.0.0` with the store zip attached.
-Both stores got the same zip on 2026-09-13. Chrome published it on
-2026-09-14; Edge had it live by 2026-09-16. `store/LISTING.md`
-holds the store IDs and every answer given. Chrome blocks every extension from
-its Web Store pages, so the Chrome dashboard is clicked through by hand from
-that file; no browser automation reaches it.
-When a listing goes live, its link goes in the README's install section.
-Release notes are `CHANGELOG.md`.
-
-**2.0.0 was tagged and released on 2026-09-19**, after the owner hand-tested
-it. Chrome published it on 2026-09-20; Edge had it live by 2026-09-26.
-
-**2.1.0 was tagged and released on 2026-09-26**: Import from YouTube, groups
-on YouTube's own Subscriptions page, the theme setting, and the audit's
-fixes. Chrome had it live by 2026-10-02; Edge by 2026-10-10.
-
-**2.2.0 was tagged and released on 2026-10-11**: Up next mirrored with
-YouTube's own queue, one alert per check, Send feedback, the shorter
-Settings, and the new icon. It never went to a store: a review found
-fixes first, and **2.2.1, tagged and released on 2026-10-16**, is the
-first store build of 2.2. The store uploads are clicked through by hand
-from `store/LISTING.md`, which records where each store stands. The version
-files read 2.2.1 and do not change again until the next ship day. Nothing
-ships until the owner says so, and not while a store still has a version in
-review. Finished work waits under `## Unreleased` in the CHANGELOG.
-
-The tour on the site (`site/tour/`) plays the real popup through every
-feature; `npm run tour:record` turns it into the MP4 for YouTube and the
-store listings.
-
-**How versions work: `RELEASING.md`.** A version number is what users get
-from the stores. The version, its tag, its GitHub release and its store upload
-happen on the same day, only when the owner says so. Planned groups of work
-are not versions, and no tag is made between ships.
+Nothing ships until the owner says so, and not while a store still has a version in review.
+Finished work waits under `## Unreleased` in the CHANGELOG. The version files change only on
+ship day. How versions work: `RELEASING.md`. What has shipped: `docs/agent-notes/release-state.md`.
 
 `docs/youtube.md` is what YouTube actually serves, measured with byte counts —
 read it before touching `src/lib/yt.js` or the audio-mode player calls.
@@ -73,154 +42,6 @@ owner keeps that record outside the repo. Ask the owner before bringing code
 from any other extension into `src/`, and keep that discussion out of tracked
 files.
 
-## Settled product decisions — do not relitigate
-
-Agreed with the owner, question by question. Change one only when the owner
-asks.
-
-- **Popup**, 400×600, four tabs in this order: Player, Feeds, Watchlist,
-  Settings. From 2.0 the first tab reads **Player** (Arabic مشغّل); its ids,
-  classes and message types keep the `audio` spelling, because the tab is
-  still audio mode's home. It opens on Player only when a YouTube tab has a
-  video playing or paused partway, or audio mode is on, and on Feeds
-  otherwise — decided once per open, from a player probe with a 250 ms
-  window, and nothing moves the user afterwards.
-- **One list.** The Watchlist is the subscription list; Feeds is its merged
-  timeline, newest first, with **no read state** and no hiding. The newest
-  **500** videos are kept (a setting). Feeds draws them 50 at a time; more
-  come with scrolling or **Show more**. A video newer than the last popup
-  open wears a small accent **New** tag — the same rule as the badge, and
-  still not a read state: nothing is stored per video and nothing hides.
-- **Groups**: a channel can be in several named groups, put there from its ⋯
-  menu; Feeds narrows to one group with a row of chips, alongside the search
-  box and Favourites only, and the badge counts the same way. A group exists
-  only while a channel is in it. Rename and delete live in the Groups sheet:
-  renaming onto an existing name merges the two, and delete asks inline.
-  There is no groups screen in Settings. At most 20 groups, 8 on one channel, 24 characters a name.
-  Groups ride along in backups. The same groups show as chips on YouTube's
-  own `/feed/subscriptions` page whenever the list has groups (no switch); a chip
-  hides the cards of channels outside it, matched by handle, then by name.
-  Its choice is its own key, not the popup's Feeds chip.
-- **Adding** takes a channel URL, `@handle`, bare handle, `UC…` id, or a
-  watch / shorts / youtu.be URL (its uploader). Empty Add takes the focused
-  tab. **No name search, no bulk paste.** Typing in either box only filters.
-- **Import from YouTube**: the popup and the welcome page open the signed-in
-  YouTube tab on `/feed/channels` and read the subscription list there, on
-  the device, with no sign-in of ours. When more than one Google account is
-  signed in, the person picks which account to read, by name when the
-  account switcher gives one (names stay in the tab); an account with no
-  subscriptions is shown but not scanned. One account with subscriptions is
-  read without an extra click. Google Takeout's `subscriptions.csv` stays
-  on the welcome page for people who are signed out. Only channel ids,
-  titles and handles are kept. When the watchlist has channels the account
-  is not subscribed to, the person chooses Add new (merge) or Replace (an
-  inline warning that the current list will be deleted, with Export my list
-  first; channels in both lists keep favourite, mute and groups; there is
-  no undo; the result names the first three channels it removed). Takeout
-  stays add-only. Imported channels start unseeded, so their
-  first check is silent; pictures fill in a few per check, more in the
-  first day after they were added.
-- **Welcome page** opens once on a fresh install, never on an update: import
-  or follow channels, try audio mode, pin the icon.
-- **What's new page** (`src/whatsnew/`) is the update half of that. **No tab
-  opens by itself on an update** — a browser updates quietly in the
-  background, so a tab would interrupt. Instead the popup shows one
-  dismissible line above the panels, and the bottom of Settings reopens the
-  page at any time. It carries the headline features with a picture each,
-  three of them, in both languages, and links to the CHANGELOG for the rest.
-- **Uninstall and feedback pages** are `site/uninstall.html` and
-  `site/feedback.html` on GitHub Pages, published from `main`; Settings'
-  Send feedback link opens the second. Their address carries only the
-  language and version. Each is one text box and Send, with no GitHub
-  account and no email: the page posts the text, version and language to
-  the Cloudflare Worker in `server/feedback/`
-  (`feedback.ammarshahin.dev`), which opens an issue in the private repo
-  `ashahinL/companion-feedback`. Spam is stopped by Turnstile, a 2000
-  character cap and a per-IP rate limit; no IP is stored and the worker's
-  logs are off. The extension itself never sends anything there.
-- **Settings**, top to bottom: Appearance (Language, Theme as segmented
-  rows), Notifications, Feed (check interval, keep-newest), Audio mode (the
-  open-in-audio switch, the shortcut with Change, and Overlay look folded),
-  Backup, then one line of links: Support ♥ · Send feedback · What's new.
-  No Advanced part. One check interval for every channel; alerts always use
-  the channel picture; the only keyboard command is audio mode's.
-- **Follow card**: when the focused tab is a YouTube channel or video whose
-  channel is not on the list, the top of the Player tab names it with a Follow
-  button. It is the same add; deciding whether to show it fetches nothing. A
-  collab video lists every channel, each with its own Follow button, and a
-  check before the ones already followed; the card goes once all are.
-- **Followed mark**: the Player tab's player card puts the same check before
-  each channel name that is on the list.
-- **A failed channel** reads "Check failed" on its Watchlist row; its sheet
-  says why in a translated sentence, with Retry. While any channel is
-  failing, an "N failing" chip on the Watchlist narrows the list to them,
-  for this open only.
-- **Clicking a video** opens a new focused tab on youtube.com and closes the
-  popup. A channel name opens the in-popup channel sheet, which shows stored
-  videos and never fetches on open: its feed rows plus the channel's own
-  newest 5 normal videos (`channel.recent`, kept outside the feed cap,
-  refreshed only from the RSS feed, not in backups). **See more** fetches
-  older ones from the Videos tab, a page at a time, only when pressed, and
-  honours the backoff. Its ↗ opens the channel's own page on youtube.com the
-  same way.
-- **Alerts**: one notification per check, never one per video or per channel.
-  One channel with new videos gets its own alert ("3 new videos"); two or
-  more share one ("5 new videos", channel names as the body, extension icon),
-  and its click, Listen and Add to Up next act on the newest video. Favourites always alert while alerts are on;
-  other channels only if "Notify for non-favourite channels" is on. A video alerts once. A
-  channel muted from its ⋯ menu never alerts, favourite or not, and stays in
-  the feed. The mute goes into backups. An alert has two buttons, Listen
-  (audio mode) and Add to Up next, both for the newest video; a live or
-  premiere alert has none.
-- **Shorts** are stored but never shown, counted or alerted (no setting).
-  **Live and premieres** are shown and tagged (`LIVE` red, `PREMIERE <time>`).
-  A premiere past its start leaves Feeds and the badge once its channel is
-  live on another video, or an hour after its start; it stays stored and
-  comes back as live if it does start.
-- **Toolbar badge**: videos newer than the last popup open, counted with the
-  same filters the Feeds tab applies. It is always the feed count, audio mode
-  or not. The icon's tooltip says the same in words ("3 new videos").
-- **English and Arabic**, full RTL, with a language override in Settings.
-- **Theme**: System, Light or Dark in Settings; it applies to the popup,
-  welcome and What's new pages; the audio overlay and site/ keep their own
-  look; a localStorage mirror only prevents a flash, settings are the truth.
-- **Audio mode**: its switch lives only inside the Player tab. No recorder. The
-  overlay look is a group in Settings; Image uses a picture you pick on the
-  device, stored outside settings so it is not in backups. With two or more
-  YouTube tabs open, a picker chooses which one the player drives. The
-  keyboard command acts on the active tab only. The sleep timer (15, 30 or 60
-  minutes) sits in the player card and runs in the YouTube tab, not the popup
-  or the worker. After audio mode has saved 1 GB, the Player tab offers a
-  one-time store rating; either button dismisses it for good, and that flag
-  is not in backups. Each picker row has a go-to button that activates that
-  tab and focuses its window, then closes the popup; it does not change
-  which tab the player drives.
-- **Backup** exports settings and channels (merge or replace on import), not
-  the feed. **Clear watchlist** sits in the same group: an inline confirm
-  naming the count, with Export my list first, then every channel and the
-  whole feed go. Alert history
-  stays, so channels added back never alert twice. There is no undo; Export
-  is the way back.
-- **Up next** is a listen-later queue in the Player tab, under the player
-  card and above the stats, collapsible, with the open/closed choice
-  remembered. Auto-advance plays the list in one YouTube tab, audio mode
-  on or off. Add from a feed row (and so the channel sheet) or an alert's
-  button. Rows can be reordered by dragging their handle or with the arrow
-  keys on it. The video playing in the Player tab is never shown in Up next;
-  the player card already shows it, and Play all starts after it. Cap 100.
-  On the Player tab, Up next and YouTube's own queue mirror each other
-  live, both ways: the page holds Up next minus the playing video, and a
-  video leaves Up next once it starts playing. Only that one tab is read;
-  the popup tells the worker which it is, and Play all's tab becomes it.
-  Joining a tab (or a reload) merges the two lists and never removes;
-  only a normal page change, or the person pressing Clear on YouTube's
-  queue, removes rows. While the page has a queue, YouTube advances it.
-  Not in backups. Live streams and premieres cannot be queued from a feed row.
-- **Name, icon, accent**: see the top of this file. **Support**: a heart in the
-  popup header and a Support ♥ link at the bottom of Settings open one sheet
-  (PayPal, InstaPay with address, Copy and QR); the README and store text
-  mention it. No `.github/FUNDING.yml`.
-
 ## How the work gets done
 
 Implementation is **delegated to the Grok Build CLI** via the `grok-delegate`
@@ -229,21 +50,14 @@ skill, one job per dispatch, and reviewed and committed here. The pattern:
 1. Write a brief that assumes **zero** shared context — Grok sees only the text
    and the working tree. Point it at this file and the files in scope, name the
    exact scope, and list what to leave alone.
-2. Dispatch with `relay.mjs --brief … --cd <repo> --lane feature --timeout 1h`, backgrounded (Grok 4.7, medium effort, 500k window; see the global rules on delegating).
+2. Dispatch with `relay.mjs --brief … --cd <repo> --lane feature --timeout 1h`. Follow the global rules on delegating.
 3. **Re-run the gates here.** Never accept "gates passed" from the report.
 4. Read the diff against the brief — scope creep in both directions.
 5. Commit it here. Grok never commits.
 
 Rework goes out as a delta brief with `--resume-last`, not a restatement.
 
-**Lanes** (in `~/.config/delegate-skills/config.json`): `feature` is Grok, the
-first choice; `complex` is Claude; the third is the `opencode` lane, **Muse
-Spark 1.3 Free** (`opencode/muse-spark-1.3-contributor-free`, dispatched with
-`opencode-delegate`). Muse Spark is Grok's fallback, not a peer: use it only
-when the owner explicitly says to use opencode, or when Grok is not available
-(not signed in, sandbox error, out of quota). Then send the job to Muse Spark
-with the same brief and the same review. Do not pick a paid `opencode/*` model: the account has no funds
-and those fail with 402.
+Which model does what is set by the global fleet rules and `~/.config/delegate-skills/config.json`.
 
 ## Commands
 
@@ -280,202 +94,60 @@ touch the network.
 - Write down what you changed **and what you learned** in the same change.
   Measured facts about YouTube go into `docs/youtube.md` with the numbers and
   the date attached. A tripwire goes in a comment at the line it protects, or
-  in the list below when it spans files — but only if forgetting it would
+  the date attached. A tripwire goes in a comment at the line it protects, or in the
+  matching `docs/agent-notes/` file when it spans files — but only if forgetting it would
   break something.
 
-## Tripwires
+## Where the code is
 
-Most live as comments at the line they protect. These span files or tools:
+| Path | Job |
+| --- | --- |
+| `src/background/service-worker.js` | the worker: checks, alerts, messages, multi-step writes |
+| `src/popup/popup.js`, `popup.html`, `popup.css` | the popup and all four tabs |
+| `src/content/content.js`, `core.js`, `inject.js` | YouTube-page scripts; `inject.js` is the MAIN world |
+| `src/lib/yt.js` | every YouTube fetch and parser; see `docs/youtube.md` first |
+| `src/lib/store.js` | stored lists and their locks |
+| `src/lib/queue-sync.js` | the Up next mirror |
+| `src/lib/backup.js`, `view.js` | backup; shared page text and `errorText` |
+| `src/welcome/`, `src/whatsnew/`, `site/` | welcome, What's new, uninstall, feedback, tour |
+| `server/feedback/` | the Cloudflare feedback worker |
+| `test/`, `test/fixtures/`, `test/popup-run.js` | suites, fixtures, real-popup tests |
+| `store/LISTING.md` | store IDs, answers and listing state |
+| `scripts/shots/` | screenshots from the real popup |
 
-- **`DOMParser` does not exist in an MV3 service worker.** The channel-feed XML
-  parser must be hand-written. This is a constraint, not a preference.
-- **The channel feed has no `ETag` and no 304 path**, and is cached for 900
-  seconds. A poll without `cache: 'no-cache'` returns identical bytes and looks
-  like "nothing new" for 15 minutes.
-- **The row id in a Videos-tab `browse` response is `contentId`, not `videoId`.**
-  `videoId` is there 210 times on nested endpoint objects, so harvesting it
-  returns each video several times. `parseChannelVideos` reads the rows when a
-  channel's feed fails.
-- **Plain youtube.com is not the first Google account.** With several
-  accounts signed in, the tab can open on a later one (`SESSION_INDEX` was
-  1 on a browser whose first account held the real list).
-  `/feed/channels?authuser=N` selects account N. Past the last account
-  YouTube answers 200 and falls back to account 0, so a `SESSION_INDEX`
-  that is not N is the end of the list, not an error. `tabs.update` to
-  another account returns before the old page is gone, and that page is
-  on `/feed/channels` too, with its rows loaded: the scan names the
-  account it wants, and a page on another one answers `wrongAccount`
-  so the worker asks again.
-- **Subscription shelves on `/feed/channels` are translated and have no
-  stable id.** Take every `ytd-channel-renderer` whose
-  `.data.subscriptionButton.subscribed` is true. Matching the heading
-  "Subscribed" drops the list in Arabic, and it drops a purchased channel
-  the account is still subscribed to. `.data` is only readable from the
-  MAIN world, the same as a collab video's channel list.
-- **A collab video's channels are not in the DOM.** Its owner line is one
-  link with no address, "A and B", or "A and 2 more" with three or more
-  channels, so only the first name can be checked against it; the ids exist only in the owner renderer's
-  `.data`, which only `inject.js` (the MAIN world) can read. The avatar stack
-  stays in the page after moving on to a normal video, and on an in-page move
-  the address changes before the owner line does, so `content.js` trusts the
-  line only when `ytd-watch-flexy`'s `video-id` matches the address.
-- **A Videos-tab row is not a feed entry.** It has no upload time (the player
-  supplies it), and the tab leaves out shorts, so it reaches back past the
-  feed's window to videos never seen before. Those must merge silently, or a
-  feed outage turns into alerts for old uploads.
-- **The first `"channelId":"UC..."` in channel HTML belongs to a different
-  channel.** Use `resolve_url`; if you ever must parse HTML, trust only
-  `<link rel="canonical">` or `"externalId"`.
-- **`isShortsEligible` is not "is a short".** The exact test is a HEAD request
-  to `/shorts/<id>`: 200 means short, 303 means normal video.
-- **Never notify on the seed.** A newly added channel backfills up to 15
-  videos; those must be marked as already-alerted silently, or adding 40
-  channels fires 40 alerts. Add replies once the channel is stored; the seed
-  runs after. A kill between them is fine: the row stays unseeded, and the
-  next check fills it without alerts. Ids added during a check are queued
-  for one follow-up seed.
-- **A stranded `pollState.running: true` survives restarts forever.** MV3 kills
-  the worker, not only the browser, without warning between raising and
-  lowering a flag, and `storage.local` outlives reloads. Reconcile at every
-  worker start, before any sweep reads the flag. This is the exact bug poppo
-  hit. If that first write fails, a later sweep still treats stored
-  `running` as leftover when this worker is not sweeping.
-- **A listing is its `addedAt`.** A check that already snapshotted the list
-  must drop rows, stamps, and alerts for an id that was removed or added
-  again before it wrote. Re-read the list in the same storage get as the
-  feed write.
-- **Every read-change-write of stored lists goes through a lock.**
-  `store.js` runs changes to the channel list and feed on one chain
-  (`withListLock`), and poll state and Up next on their own. Two messages
-  at once used to read the same old list, and the second write wiped the
-  first change. The worker's multi-step writes (import, replace, undo,
-  clear, backup) take `withListLock` too. A job must never call a helper
-  that takes the same lock, or it waits on itself forever; a test that
-  injects a change inside a locked read hangs the same way.
-- **Only `at > 0` is a real upload time.** A missing RSS `<published>` is
-  `at: 0`. Treating 0 as finite overwrites the player's time, and that id
-  is never classified again.
-- **`confirm()` / `alert()` in a popup** blocks it and can wedge the extension.
-  Use inline confirm rows.
-- **`alarms.create` on an existing name restarts its countdown from now.**
-  Recreating alarms on every settings write meant any settings change pushed
-  the next check a full interval away.
-- **Chrome floors alarm periods at 1 minute** and silently clamps anything
-  lower.
-- **Innertube POSTs from the extension send `Origin: chrome-extension://…`
-  and YouTube 403s that Origin.** Fetch cannot override it. A DNR rule
-  rewrites Origin to `https://www.youtube.com` on this extension's own
-  requests. All YouTube fetches pass `credentials: 'omit'`.
-- **Headless Chromium will not lay out narrower than its minimum window
-  width**, whatever `--window-size` says. A 400px popup rendered directly
-  gets `position: fixed` sheets that run off its edge. `npm run shots`
-  renders the popup inside a 400×600 iframe for that reason.
-- **CRLF breaks tests.** Several popup checks regex the source with a length
-  bound (`[\s\S]{0,240}`), and a Windows `core.autocrlf` checkout adds a byte
-  per line. `.gitattributes` pins LF; a checkout made before it needs its
-  files rewritten with LF once.
-- **Reloading a YouTube page does not load new content-script code**; only
-  reloading the extension does, and the version on the extensions page follows
-  the manifest, so it can look current while a stale script runs. The isolated
-  world's `console` is not the page's either. Confirm the new code by Reload on
-  `chrome://extensions` (the version there) and by inspecting the content
-  scripts in DevTools' "Content scripts" section.
-- **A test that asserts a call exists is not a test.** A structural grep once
-  passed while the handler holding the call was unreachable. Popup behaviour
-  goes in `test/popup-run.js`, which loads the real `popup.html` into a fake
-  DOM (`test/helpers/fake-dom.js`) and clicks it. Anything that must
-  actually fire on youtube.com is checked in a browser by hand.
-- **Persist a durable flag the moment it changes**, not at the next convenient
-  write. MV3 can kill the worker in between; clearing a flag in memory and
-  letting a later batch carry it gave poppo an endless re-seed loop.
-- **The audio-mode cover is a `data:image/` URL on its own storage key, never
-  an https address.** A leftover `settings.audio.imageUrl` from 1.x is
-  migrated when it is already a data URL, and dropped when it is https, so
-  the YouTube page never loads a third-party picture. The cover is not in
-  backups.
-- **An extension cannot assign its own keyboard shortcut.** `suggested_key`
-  applies only at install, and when the combination is taken Chrome registers
-  the command with no shortcut, silently (Dark Reader had `Alt+Shift+A`).
-  Anything that shows the shortcut reads `chrome.commands.getAll()` and must
-  make sense when it is empty.
-- **A worker reply's `error` is a code, never a sentence.** The pages put
-  it into words through `errorText` in `src/lib/view.js`; a new code a page
-  can show gets a key there, in both locales, or it reads as "Something
-  went wrong". A thrown error other than a `YtError` is logged in the worker
-  and answered as `failed`.
-- **A new runtime message is popup-only until listed.** The worker refuses any
-  message from a content script unless its type is in
-  `CONTENT_SCRIPT_MESSAGES`, so a new message sent from `src/content/` fails
-  with `not allowed` until it is added there. Add it only if a compromised
-  youtube.com page could not misuse it.
-- **`WHATS_NEW_VERSION` is bumped by hand and is not the manifest version.**
-  It says which release the What's new page is about, so bumping the manifest
-  for a fixes-only patch does not ask everyone to look at an unchanged page.
-  Change it in the same commit that rewrites the page's content, and change
-  the copy in both locales.
-- **`queue.ended` is gated on the tab id and the video id.** The worker
-  honours it only when `sender.tab.id` is the tab it wrote into
-  `queuePlay` and `msg.v` is the video it handed that tab. Any other tab
-  or id is ignored, so a compromised youtube.com page cannot drain the
-  queue or redirect some other tab.
-- **The content script listens for `ended` in the capture phase on
-  `document`.** A media `ended` event does not bubble, but capture still
-  sees it, and it keeps working across YouTube's in-page navigations
-  without tracking which `<video>` is current. Guard it: `event.target`
-  must be `findVideo()`, and the id sent is `readVideoId()`, not
-  anything from the event. Ads and preview players fire `ended` too.
-- **YouTube's queue is the `TLPQ…` playlist panel, and its rows are the
-  truth.** `#movie_player.getPlaylist()` goes stale (it kept four ids after
-  Clear) and `getPlaylistId()` is null where the queue was made. The
-  playing row is the `selected` one, or the row with no
-  `playlistSetVideoId` before the queue has played into its own videos;
-  rows above it are already played and are not queued. Edits need the set
-  id, so it stays inside `inject.js` and never reaches the worker. A scripted move or
-  remove reaches the server but the panel shows it only after
-  `yt-refresh-playlist-command`. Measured in `docs/youtube.md`.
-- **The mirror syncs by ops, never by copying lists.** Copying let a stale
-  page snapshot that arrived during our own edit wipe adds and bring back
-  removes. `src/lib/queue-sync.js` keeps a shadow and the ops in flight;
-  a snapshot with an older `seq` loses, one from a non-watch page changes
-  nothing, and one with no queue (`listId ''` without `cleared`) can only
-  add. Only
-  `queue.snapshot` from the mirrored tab id is honoured.
-- **`render()` draws only the open tab.** A hidden tab's DOM is whatever it
-  was when it was last open, and `activate()` draws a tab as it opens. Code
-  that reads a hidden tab's elements after `render()` reads stale ones, and
-  `scripts/shots/stub.js` waits on the Player tab's first draw for that reason.
-- **`popupOpened` moves `lastSeenAt` before it replies.** The popup's "new"
-  dots need the value from the previous visit, so the reply carries
-  `previousLastSeenAt` and the popup holds it for as long as it is open.
-  Reading `pollState.lastSeenAt` from that same reply marks nothing as new.
-- **The popup loads images only from hosts in the manifest's `img-src`.**
-  A picture from any other host is blocked without an error in the page;
-  `test/skeleton.test.js` checks the policy against `thumbUrl` and
-  `isAvatarUrl`, so a new image host goes into both.
-- **Stop at YouTube's pushback.** A 429 or a redirect to `google.com/sorry`
-  ends the sweep and sets `pollState.backoffUntil`; nothing fetches until then,
-  manual refresh included. A new request path in `src/lib/yt.js` must throw
-  through `landedOnBlockPage`, or a block turns into captchas on the user's
-  own YouTube.
-- **A list of hundreds of channels costs per check, not per add.** Each
-  channel brings 15 uploads; a check classifies only the ones new enough to
-  stay in the capped feed (`feedFloor`), and a channel's `lastVideoAt` never
-  goes down, because it is what keeps old rows quiet when a removed channel
-  makes room for them. A check also calls an extension API every 25 seconds:
-  Chrome stops a worker that only has fetches in flight.
-  A check writes the feed and that batch's channel patches every 25
-  channels (`SWEEP_BATCH`), and alerts once at the end, only for rows
-  still in the feed; a channel's `seeded` can therefore be stored before
-  its check's alert goes out.
-- **Installed copies link to `site/uninstall.html` forever.** The worker's
-  `UNINSTALL_PAGE` is set in every install, so renaming or moving that page,
-  or turning off GitHub Pages, breaks the link for everyone who already has
-  the extension. Its Send needs the feedback worker live and
-  `TURNSTILE_SITE_KEY` set in `site/feedback.js`; without them Send stays
-  off, so neither goes to `main` before the worker is deployed.
-- **Compressed bytes differ between Node builds.** Homebrew's Node links system
-  zlib and packs the same tree to a different zip hash than a Node with its own
-  zlib. Compare files or pixels, never deflate output, across machines.
-- **Store screenshots are only as good as the frame the stub caught.** Open
-  every image `npm run shots` writes before it ships; an empty frame went out
-  in 1.0.0 and is far smaller on disk than its siblings.
+## Hard rules
+
+Most tripwires live as comments at the line they protect. The reasons for these rules are in
+`docs/agent-notes/`.
+
+- Product decisions in `docs/agent-notes/product-decisions.md` are settled. Read that file before
+  changing UI or behaviour. Change one only when the owner asks.
+- No `confirm()` or `alert()` in a popup. Use inline confirm rows.
+- Never notify on the seed. A new channel's backfill is marked as already alerted, silently.
+- Every read-change-write of stored lists goes through its lock (`withListLock` for channels and
+  feed). A job must never call a helper that takes the same lock.
+- Stop at YouTube's pushback. A new request path in `src/lib/yt.js` must throw through
+  `landedOnBlockPage`.
+- `DOMParser` does not exist in the service worker. All YouTube fetches pass `credentials: 'omit'`.
+- Persist a durable flag the moment it changes. MV3 can kill the worker at any time.
+- A worker reply's `error` is a code, never a sentence. A new code a page can show gets a key
+  for `errorText`, in both locales.
+- A message sent from `src/content/` must be added to `CONTENT_SCRIPT_MESSAGES`, and only if a
+  compromised youtube.com page could not misuse it.
+- `WHATS_NEW_VERSION` is bumped by hand and is not the manifest version.
+- Never rename or move `site/uninstall.html`. Installed copies link to it forever.
+- A test must exercise behaviour. Popup behaviour goes in `test/popup-run.js`.
+- Files stay LF. CRLF breaks tests.
+
+## Read before changing
+
+Read the matching file in `docs/agent-notes/` before changing that area.
+
+| Area | File |
+| --- | --- |
+| UI and product behaviour | `product-decisions.md` |
+| YouTube requests, parsing, account import | `youtube-fetching.md` |
+| Worker, storage, alarms, alerts | `worker-and-storage.md` |
+| Up next, content scripts, audio-mode cover | `queue-and-content.md` |
+| Popup, site pages, tests, screenshots, packing | `popup-and-tools.md` |
+| Releases and store state | `release-state.md` |

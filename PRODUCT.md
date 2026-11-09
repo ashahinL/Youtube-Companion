@@ -30,7 +30,7 @@ No account, no tracking. Nothing is signed in by us: no API key, no OAuth, publi
 - One list: the Watchlist is the subscription list. Groups, favourites, mute, search, and Shorts hiding narrow or shape the feed.
 - Alerts: one notification per channel per check, never one per video.
 - Hard technical limits: no `DOMParser` in the service worker; the popup shows images only from hosts in the manifest's `img-src`; no `confirm()` or `alert()` in the popup (use inline confirm rows); the audio overlay and `site/` keep their own look; theme (System, Light, Dark) applies to the popup, welcome and What's new pages.
-- Full product decisions live in `CLAUDE.md` and are not repeated here.
+- Full product decisions live in `docs/agent-notes/product-decisions.md` and are not repeated here.
 
 ## Brand Commitments
 

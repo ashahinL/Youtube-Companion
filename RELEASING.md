@@ -81,8 +81,7 @@ and wait in line again. Do that only for a fix that cannot wait.
 4. **Set the version** in `manifest.json` and `package.json`.
 5. **Date the changelog.** Rename `## Unreleased` to `## X.Y.Z — YYYY-MM-DD`
    and start a new empty `## Unreleased` above it.
-6. **Update where things stand.** The "Where things stand" section of
-   `CLAUDE.md`, and in `store/LISTING.md` the store table, the package's
+6. **Update where things stand.** `docs/agent-notes/release-state.md`, and in `store/LISTING.md` the store table, the package's
    entry count / size / SHA-256, and **the two descriptions**. Read this
    version's changelog bullet by bullet against them: a feature nobody can
    read about on the listing may as well not have shipped. 2.0.0 nearly went
